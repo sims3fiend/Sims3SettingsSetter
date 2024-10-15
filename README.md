@@ -39,8 +39,7 @@ Some interesting things you can do with the settings:
 - Set max lots higher than 8 AND increase the radius so it actually shows (will crash if set too high ~35+, need to investigate) by changing values in Streaming  
 - Play in a game where the sun never sets or rises by editing Sky Common -> Sunset/Sunrise Time
 - Change shadow settings (same thing as LD's shadow asi thing), extending shadows (they will still look hideous, writing a post about why currently) in Shadow Settings
-- Change various light settings to get the perfect look for your game (ugly screenshot here). Some popular mods edit these values for their looks (presets soon?)
-- Do whatever... this is...?
+- Change various light settings to get the perfect look for your game. Some popular mods edit these values for their looks (presets soon?)
 
 
 ### Game Config
