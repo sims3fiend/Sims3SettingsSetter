@@ -23,6 +23,9 @@
 typedef unsigned int(__fastcall* RetrieveConfigValue_t)(int param_1_00, int dummy, short* param_2, int* param_3, void** param_4);
 typedef unsigned char(__cdecl* GetConfigBoolWithKeyConstruction_t)(int* param_1, unsigned char param_2);
 typedef HRESULT(__stdcall* EndScene_t)(LPDIRECT3DDEVICE9 pDevice);
+typedef HRESULT(__stdcall* Reset_t)(LPDIRECT3DDEVICE9 pDevice, D3DPRESENT_PARAMETERS* pPresentationParameters);
+// for later :) typedef HRESULT(__stdcall* Present_t)(LPDIRECT3DDEVICE9 pDevice, const RECT* pSourceRect, const RECT* pDestRect, HWND hDestWindowOverride, const RGNDATA* pDirtyRegion);
+
 
 
 typedef void(__fastcall* FUN_006e7b60_t)(int param_1);
@@ -85,6 +88,8 @@ std::string DumpMemory(const void* ptr, size_t size);
 unsigned int __fastcall HookedRetrieveConfigValue(int param_1_00, int dummy, short* param_2, int* param_3, void** param_4);
 unsigned char __cdecl HookedGetConfigBoolWithKeyConstruction(int* param_1, unsigned char param_2);
 HRESULT __stdcall HookedEndScene(LPDIRECT3DDEVICE9 pDevice);
+HRESULT __stdcall HookedReset(LPDIRECT3DDEVICE9 pDevice, D3DPRESENT_PARAMETERS* pPresentationParameters);
+
 
 
 // Function to initialize the hook (using Detours)
@@ -97,6 +102,8 @@ void CleanupDetours();
 extern RetrieveConfigValue_t original_RetrieveConfigValue;
 extern GetConfigBoolWithKeyConstruction_t original_GetConfigBoolWithKeyConstruction;
 extern EndScene_t original_EndScene;
+extern Reset_t original_Reset;
+//extern Present_t original_Present;
 
 
 typedef void(__cdecl* FUN_007235b0_t)(int);

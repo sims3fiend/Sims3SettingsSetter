@@ -27,7 +27,8 @@
 #include <array>
 #include <bit>
 #include <optional>
-
+//imgui stuff for d3d9 crap omgggggggg so bad
+#include "imgui_impl_dx9.h" 
 
 #include <Windows.h>
 //#include <DbgHelp.h>
@@ -59,6 +60,7 @@ FUN_0096dc30_t original_FUN_0096dc30 = nullptr;
 //FUN_0079a160_t original_FUN_0079a160 = nullptr;
 
 EndScene_t original_EndScene = nullptr;
+Reset_t original_Reset = nullptr;
 GetConfigBoolWithKeyConstruction_t original_GetConfigBoolWithKeyConstruction = nullptr;
 RetrieveConfigValue_t original_RetrieveConfigValue = nullptr;
 
@@ -130,12 +132,28 @@ std::string WideToNarrow(const std::wstring& wide) {
     return narrow;
 }
 
+HRESULT __stdcall HookedReset(LPDIRECT3DDEVICE9 pDevice, D3DPRESENT_PARAMETERS* pPresentationParameters) {
+    Log("HookedReset called");
+    ImGui_ImplDX9_InvalidateDeviceObjects();
+    HRESULT hr = original_Reset(pDevice, pPresentationParameters);
+    if (SUCCEEDED(hr)) {
+        ImGui_ImplDX9_CreateDeviceObjects();
+    }
+    else {
+        Log("Reset failed: " + std::to_string(hr));
+    }
+    return hr;
+}
+
 HRESULT __stdcall HookedEndScene(LPDIRECT3DDEVICE9 pDevice) {
+    if (pDevice->TestCooperativeLevel() != D3D_OK)
+        return original_EndScene(pDevice);
+
     if (!IsGUIInitialized()) {
         InitializeGUI(pDevice);
     }
     RenderGUI(pDevice);
-    //ScriptSettings::Instance().AutosaveConfig();
+
     return original_EndScene(pDevice);
 }
 
@@ -717,6 +735,7 @@ bool InitializeDetours() {
 
     void** vTable = *reinterpret_cast<void***>(pDevice);
     original_EndScene = reinterpret_cast<EndScene_t>(vTable[42]);
+    original_Reset = reinterpret_cast<Reset_t>(vTable[16]);
 
     pDevice->Release();
     pD3D->Release();
@@ -724,7 +743,8 @@ bool InitializeDetours() {
     // Check that critical function pointers are valid
     if (!original_RetrieveConfigValue ||
         !original_GetConfigBoolWithKeyConstruction ||
-        !original_EndScene) {
+        !original_EndScene ||
+        !original_Reset) {
         Log("Failed to get addresses of one or more original functions");
         return false;
     }
@@ -749,6 +769,7 @@ bool InitializeDetours() {
         !AttachDetour(&(PVOID&)original_FUN_007235b0, HookedFUN_007235b0, "FUN_007235b0") ||
         !AttachDetour(&(PVOID&)original_FUN_00c128c0, HookedFUN_00c128c0, "FUN_00c128c0") ||
         !AttachDetour(&(PVOID&)original_EndScene, HookedEndScene, "EndScene") ||
+        !AttachDetour(&(PVOID&)original_Reset, HookedReset, "Reset") ||
         !AttachDetour(&(PVOID&)original_FUN_006ef780, HookedFUN_006ef780, "FUN_006ef780") ||
         !AttachDetour(&(PVOID&)original_FUN_00572490, HookedFUN_00572490, "FUN_00572490") ||
         !AttachDetour(&(PVOID&)original_FUN_00d6cc30, HookedFUN_00d6cc30, "FUN_00d6cc30") ||
@@ -789,6 +810,7 @@ void CleanupDetours() {
     DetourDetach(&(PVOID&)original_FUN_007235b0, HookedFUN_007235b0);
     DetourDetach(&(PVOID&)original_FUN_00c128c0, HookedFUN_00c128c0);
     DetourDetach(&(PVOID&)original_EndScene, HookedEndScene);
+    DetourDetach(&(PVOID&)original_Reset, HookedReset);
     DetourDetach(&(PVOID&)original_FUN_006ef780, HookedFUN_006ef780);
     DetourDetach(&(PVOID&)original_FUN_00572490, HookedFUN_00572490);
     DetourDetach(&(PVOID&)original_FUN_00d6cc30, HookedFUN_00d6cc30);

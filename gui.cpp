@@ -69,10 +69,12 @@ void ApplySavedSettings(const std::string& funcName, const std::string& section,
     }
 }
 
-WNDPROC oWndProc = NULL;
-HWND hWnd = NULL;
-bool imguiInitialized = false;
-bool showImGui = false;
+static bool imguiInitialized = false;
+static bool showImGui = false;
+static HWND hWnd = NULL;
+static WNDPROC oWndProc = NULL;
+
+D3DPRESENT_PARAMETERS g_d3dpp;
 
 extern IMGUI_IMPL_API LRESULT ImGui_ImplWin32_WndProcHandler(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
 
@@ -118,8 +120,13 @@ void InitializeGUI(LPDIRECT3DDEVICE9 pDevice) {
     imguiInitialized = true;
 }
 
-
 void RenderGUI(LPDIRECT3DDEVICE9 pDevice) {
+    HRESULT hr = pDevice->TestCooperativeLevel();
+    if (hr != D3D_OK) {
+        // Device is lost, skip rendering
+        return;
+    }
+
     ImGui_ImplDX9_NewFrame();
     ImGui_ImplWin32_NewFrame();
     ImGui::NewFrame();
@@ -133,11 +140,12 @@ void RenderGUI(LPDIRECT3DDEVICE9 pDevice) {
     ImGui_ImplDX9_RenderDrawData(ImGui::GetDrawData());
 }
 
-
 void CleanupGUI() {
     Log("Cleaning up GUI");
     if (imguiInitialized) {
+        ImGui_ImplDX9_Shutdown();
         ImGui_ImplWin32_Shutdown();
+        ImGui::DestroyContext();
         if (oWndProc && hWnd) {
             SetWindowLongPtr(hWnd, GWLP_WNDPROC, (LONG_PTR)oWndProc);
         }
