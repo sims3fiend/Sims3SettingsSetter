@@ -143,9 +143,7 @@ void RenderGUI(LPDIRECT3DDEVICE9 pDevice) {
 void CleanupGUI() {
     Log("Cleaning up GUI");
     if (imguiInitialized) {
-        ImGui_ImplDX9_Shutdown();
         ImGui_ImplWin32_Shutdown();
-        ImGui::DestroyContext();
         if (oWndProc && hWnd) {
             SetWindowLongPtr(hWnd, GWLP_WNDPROC, (LONG_PTR)oWndProc);
         }

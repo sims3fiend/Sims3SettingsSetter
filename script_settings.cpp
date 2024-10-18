@@ -19,6 +19,14 @@ ScriptSettings::ScriptSettings() {
     LoadPresetsFromDirectory();
 }
 
+bool ScriptSettings::CaseInsensitiveCompare(const std::string& a, const std::string& b) {
+    return std::equal(a.begin(), a.end(), b.begin(), b.end(),
+        [](char a, char b) {
+            return std::tolower(static_cast<unsigned char>(a)) ==
+                std::tolower(static_cast<unsigned char>(b));
+        });
+}
+
 void ScriptSettings::AddOrUpdateSetting(const std::string& section, const std::string& key,
     const std::variant<bool, std::string>& value, uintptr_t address, bool saved) {
     std::string fullKey = section + "." + key;
@@ -253,29 +261,49 @@ bool ScriptSettings::SavePreset(const Preset& preset) {
 }
 
 bool ScriptSettings::LoadPreset(const Preset& preset) {
+    // Existing implementation
+    for (const auto& [key, value] : preset.settings) {
+        size_t dotPos = key.find('.');
+        if (dotPos != std::string::npos) {
+            std::string section = key.substr(0, dotPos);
+            std::string settingKey = key.substr(dotPos + 1);
+            SetSettingValue(section, settingKey, value);
+            SetSettingSaved(section, settingKey, true);
+        }
+    }
+    Log("Successfully loaded preset: " + preset.name);
+    return true;
+}
+
+bool ScriptSettings::LoadPreset(const std::string& presetName) {
+    // First, try to find the preset by exact name match
     auto it = std::find_if(presets.begin(), presets.end(),
-        [&](const Preset& p) { return p.name == preset.name; });
+        [&](const Preset& p) { return p.name == presetName; });
+
+    // If not found, try case-insensitive search and partial matches
     if (it == presets.end()) {
-        Log("Preset not found: " + preset.name);
+        it = std::find_if(presets.begin(), presets.end(),
+            [&](const Preset& p) {
+                return CaseInsensitiveCompare(p.name, presetName) ||
+                    p.name.find(presetName) != std::string::npos ||
+                    presetName.find(p.name) != std::string::npos;
+            });
+    }
+
+    if (it == presets.end()) {
+        Log("Preset not found: " + presetName);
         return false;
     }
 
     Preset loadedPreset;
-    fs::path filepath = GetPresetFilePath(preset.name);
+    fs::path filepath = GetPresetFilePath(it->name);  // Use the actual filename from the found preset
     if (LoadPresetFromIni(loadedPreset, filepath.string())) {
-        for (const auto& [fullKey, value] : loadedPreset.settings) {
-            size_t dotPos = fullKey.find('.');
-            if (dotPos != std::string::npos) {
-                std::string section = fullKey.substr(0, dotPos);
-                std::string key = fullKey.substr(dotPos + 1);
-                SetSettingValue(section, key, value);
-                SetSettingSaved(section, key, true);
-            }
-        }
-        return true;
+        return LoadPreset(loadedPreset);  // Use the existing LoadPreset(const Preset&) function so I don't have to rewrite :)
     }
+    Log("Failed to load preset from file: " + filepath.string());
     return false;
 }
+
 
 std::vector<Preset> ScriptSettings::GetAllPresets() const {
     return presets;

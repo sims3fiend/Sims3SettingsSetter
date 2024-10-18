@@ -36,6 +36,8 @@ public:
     // Preset management
     bool SavePreset(const Preset& preset);
     bool LoadPreset(const Preset& preset);
+    //h-heh
+    bool LoadPreset(const std::string& presetName);
     std::vector<Preset> GetAllPresets() const;
     bool RemovePreset(const std::string& presetName);
     const std::filesystem::path& GetPresetsDirectory() const { return presetsDirectory; }
@@ -49,6 +51,7 @@ private:
 
     void LoadPresetsFromDirectory();
     std::filesystem::path GetPresetFilePath(const std::string& presetName) const;
+    static bool CaseInsensitiveCompare(const std::string& a, const std::string& b);
 
     std::chrono::steady_clock::time_point lastAutosaveTime;
     std::unordered_map<std::string, SettingEntry> settings;
