@@ -46,3 +46,5 @@ ipch/
 *.ilk
 *.exe
 *.dll
+.*/
+.tmp*

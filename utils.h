@@ -1,127 +1,96 @@
 #pragma once
-
 #include <string>
-#include <unordered_map>
-#include <functional>
-#include <cstdint>
-#include <optional>
-#include <variant>
-#include <stdexcept>
+#include <windows.h>
+#include <vector>
+#include <sstream>
+#include <fstream>
+#include <mutex>
+#include <ctime>
+#include <iomanip>
 
-
-// Enum for different setting types
-enum class SettingType {
-    Float,
-    Integer,
-    UnsignedInteger,
-    Boolean,
-    Pointer,
-    FloatArray2,
-    FloatArray3,
-    //xxm registers
-    FloatArray4,
-    WideString,
-    Unknown
-};
-
-enum class AddressType {
-    Offset,
-    Static,
-    PointerChain
-};
-
-// Struct to hold setting information
-struct SettingInfo {
-    std::string name;
-    SettingType type;
-    AddressType addressType;
-    uint32_t address;
-    std::function<std::string(const void*)> logFunction;
-    size_t size;
-    std::optional<std::pair<double, double>> minMax = std::nullopt;
-    bool isAvailable = false;
-    //PLEASE PLEASE PLEASE IGNORE THIS PLEASE AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
-    std::vector<uint32_t> pointerOffsets;
-    bool initialAddressRelative = true;
-};
-
-// Namespace for helper functions
-namespace LoggingHelpers {
-    std::string logFloat(const void* ptr);
-    std::string logInteger(const void* ptr);
-    std::string logUnsignedInteger(const void* ptr);
-    std::string logBoolean(const void* ptr);
-    std::string logPointerAndValue(const void* ptr);
-    std::string logMatrixPointer(const void* ptr);
-    std::string logFloatArray2(const void* ptr);
-    std::string logFloatArray3(const void* ptr);
-    std::string logFloatArray4(const void* ptr);
-    std::string logWideString(const void* ptr);
-    std::string logStaticPointer(const void* ptr);
-    std::string logUnknown(const void* ptr, size_t size);
-    std::string WideToNarrow(const std::wstring& wstr);
-    std::function<std::string(const void*)> createStaticPointerLogger(uint32_t staticAddress);
-};
-
-uintptr_t CalculateAddress(const SettingInfo& setting, uintptr_t baseAddress);
-//bats lashes... blank stare.
-uintptr_t CalculateAddress(const SettingInfo& setting, uintptr_t baseAddress);
-bool ReadMemorySafe(const void* src, void* dest, size_t size);
-bool WriteMemorySafe(void* dest, const void* src, size_t size);
-bool IsSafeToRead(const void* ptr, size_t size);
-bool IsSafeToWrite(void* ptr, size_t size);
-
-template<typename T>
-T ReadValue(const SettingInfo& setting, uintptr_t baseAddress) {
-    uintptr_t address = CalculateAddress(setting, baseAddress);
-    T value;
-    if (!ReadMemorySafe(reinterpret_cast<void*>(address), &value, sizeof(T))) {
-        throw std::runtime_error("Failed to read memory safely in ReadValue.");
+namespace Utils {
+    inline std::wstring Utf8ToWide(const std::string& str) {
+        if (str.empty()) return std::wstring();
+        int size_needed = MultiByteToWideChar(CP_UTF8, 0, str.c_str(), (int)str.size(), nullptr, 0);
+        std::wstring wstrTo(size_needed, 0);
+        MultiByteToWideChar(CP_UTF8, 0, str.c_str(), (int)str.size(), &wstrTo[0], size_needed);
+        return wstrTo;
     }
-    return value;
-}
 
-template<typename T>
-void WriteValue(const SettingInfo& setting, uintptr_t baseAddress, T value) {
-    uintptr_t address = CalculateAddress(setting, baseAddress);
-    if (!WriteMemorySafe(reinterpret_cast<void*>(address), &value, sizeof(T))) {
-        throw std::runtime_error("Failed to write memory safely in WriteValue.");
+    inline std::string WideToUtf8(const std::wstring& wstr) {
+        if (wstr.empty()) return std::string();
+        int size_needed = WideCharToMultiByte(CP_UTF8, 0, wstr.c_str(), (int)wstr.size(), nullptr, 0, nullptr, nullptr);
+        std::string strTo(size_needed, 0);
+        WideCharToMultiByte(CP_UTF8, 0, wstr.c_str(), (int)wstr.size(), &strTo[0], size_needed, nullptr, nullptr);
+        return strTo;
     }
-}
 
-std::variant<bool, int, float, std::string> ReadSettingValue(const SettingInfo& settingInfo, uintptr_t baseAddress);
-
-// Function to edit a setting
-void EditSetting(const std::string& settingName, const std::unordered_map<std::string, SettingInfo>& settingsMap, uintptr_t baseAddress, const std::variant<bool, int, float, std::string>& newValue);
-
-// Function to log settings
-std::string LogSettings(const std::unordered_map<std::string, SettingInfo>& settings, uintptr_t baseAddress);
-
-
-// Function to log all settings
-void LogAllSettings(uintptr_t baseAddress);
-
-// Logging control functions
-void InitializeLogging();
-void Log(const std::string& message);
-void CleanupLogging();
-
-std::string Trim(const std::string& s);
-std::string SanitizeFileName(const std::string& name);
-
-// Declare the settings maps
-
-//new and coherent hopefully lmao
-extern std::unordered_map<std::string, SettingInfo> animationSettings;
-extern std::unordered_map<std::string, SettingInfo> worldLightingSettings;
-extern std::unordered_map<std::string, SettingInfo> skyCommonSettings;
-extern std::unordered_map<std::string, SettingInfo> shadowsSettings;
-extern std::unordered_map<std::string, SettingInfo> weatherSettings;
-extern std::unordered_map<std::string, SettingInfo> streamingSettings;
-extern std::unordered_map<std::string, SettingInfo> visualEffectsSettings;
-extern std::unordered_map<std::string, SettingInfo> routingDebugSettings;
-extern std::unordered_map<std::string, SettingInfo> routingWorldRouterTuningSettings;
-extern std::unordered_map<std::string, SettingInfo> routingLotTransitionTuningSettings;
-extern std::unordered_map<std::string, SettingInfo> routingWorldBuilderSettings;
-extern std::unordered_map<std::string, SettingInfo> cameraSettings;
-extern std::unordered_map<std::string, SettingInfo> streamingLODSettings;
+    inline std::vector<std::string> SplitString(const std::string& str, char delim) {
+        std::vector<std::string> result;
+        std::stringstream ss(str);
+        std::string item;
+        while (std::getline(ss, item, delim)) {
+            result.push_back(item);
+        }
+        return result;
+    }
+    
+    // Simple logger class for writing to a file
+    class Logger {
+    private:
+        static Logger* s_instance;
+        std::ofstream m_logFile;
+        std::mutex m_mutex;
+        bool m_enabled;
+        
+        Logger() : m_enabled(false) {}
+        
+    public:
+        static Logger& Get() {
+            if (!s_instance) {
+                s_instance = new Logger();
+            }
+            return *s_instance;
+        }
+        
+        bool Initialize(const std::string& filename) {
+            std::lock_guard<std::mutex> lock(m_mutex);
+            m_logFile.open(filename, std::ios::out | std::ios::trunc);
+            m_enabled = m_logFile.is_open();
+            
+            if (m_enabled) {
+                // Write header with timestamp
+                auto t = std::time(nullptr);
+                auto tm = *std::localtime(&t);
+                m_logFile << "S3SS Log - Started at " 
+                          << std::put_time(&tm, "%Y-%m-%d %H:%M:%S") << std::endl;
+                m_logFile << "----------------------------------------" << std::endl;
+            }
+            
+            return m_enabled;
+        }
+        
+        void Log(const std::string& message) {
+            if (!m_enabled) return;
+            
+            std::lock_guard<std::mutex> lock(m_mutex);
+            m_logFile << message << std::endl;
+            m_logFile.flush();
+            
+            // Also output to debug console for development
+            OutputDebugStringA((message + "\n").c_str());
+        }
+        
+        void Close() {
+            std::lock_guard<std::mutex> lock(m_mutex);
+            if (m_logFile.is_open()) {
+                m_logFile.close();
+            }
+            m_enabled = false;
+        }
+        
+        ~Logger() {
+            Close();
+        }
+    };
+} 
