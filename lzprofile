@@ -1,0 +1,371 @@
+Address	Source Line	Assembly	CPU Time: Total	CPU Time: Self
+0x4eb3b0	0	Block 1:		
+0x4eb3b0	0	sub esp, 0x10		
+0x4eb3b3	0	mov ecx, dword ptr [esp+0x1c]		
+0x4eb3b7	0	test ecx, ecx		
+0x4eb3b9	0	push ebx		
+0x4eb3ba	0	push ebp		
+0x4eb3bb	0	push esi		
+0x4eb3bc	0	mov esi, dword ptr [esp+0x20]		
+0x4eb3c0	0	push edi		
+0x4eb3c1	0	mov dword ptr [esp+0x1c], 0x0		
+0x4eb3c9	0	jz 0x4eb741 <Block 67>		
+0x4eb3cf	0	Block 2:		
+0x4eb3cf	0	mov edi, dword ptr [esp+0x30]		
+0x4eb3d3	0	cmp edi, 0x2		
+0x4eb3d6	0	mov eax, dword ptr [esp+0x28]		
+0x4eb3da	0	mov dword ptr [esp+0x14], eax		
+0x4eb3de	0	jb 0x4eb710 <Block 61>		
+0x4eb3e4	0	Block 3:		
+0x4eb3e4	0	movzx eax, byte ptr [ecx]		
+0x4eb3e7	0	movzx edx, byte ptr [ecx+0x1]		
+0x4eb3eb	0	add ecx, 0x1		
+0x4eb3ee	0	shl eax, 0x8		
+0x4eb3f1	0	add eax, edx		
+0x4eb3f3	0	add edi, 0xfffffffe		
+0x4eb3f6	0	add ecx, 0x1		
+0x4eb3f9	0	test eax, 0x8000		
+0x4eb3fe	0	jz 0x4eb433 <Block 9>		
+0x4eb400	0	Block 4:		
+0x4eb400	0	test eax, 0x100		
+0x4eb405	0	jz 0x4eb416 <Block 7>		
+0x4eb407	0	Block 5:		
+0x4eb407	0	cmp edi, 0x4		
+0x4eb40a	0	jb 0x4eb710 <Block 61>		
+0x4eb410	0	Block 6:		
+0x4eb410	0	sub edi, 0x4		
+0x4eb413	0	add ecx, 0x4		
+0x4eb416	0	Block 7:		
+0x4eb416	0	cmp edi, 0x4		
+0x4eb419	0	jb 0x4eb710 <Block 61>		
+0x4eb41f	0	Block 8:		
+0x4eb41f	0	movzx eax, byte ptr [ecx]		
+0x4eb422	0	movzx edx, byte ptr [ecx+0x1]		
+0x4eb426	0	add ecx, 0x1		
+0x4eb429	0	shl eax, 0x8		
+0x4eb42c	0	sub edi, 0x4		
+0x4eb42f	0	add eax, edx		
+0x4eb431	0	jmp 0x4eb458 <Block 14>		
+0x4eb433	0	Block 9:		
+0x4eb433	0	test eax, 0x100		
+0x4eb438	0	jz 0x4eb449 <Block 12>		
+0x4eb43a	0	Block 10:		
+0x4eb43a	0	cmp edi, 0x3		
+0x4eb43d	0	jb 0x4eb710 <Block 61>		
+0x4eb443	0	Block 11:		
+0x4eb443	0	sub edi, 0x3		
+0x4eb446	0	add ecx, 0x3		
+0x4eb449	0	Block 12:		
+0x4eb449	0	cmp edi, 0x3		
+0x4eb44c	0	jb 0x4eb710 <Block 61>		
+0x4eb452	0	Block 13:		
+0x4eb452	0	movzx eax, byte ptr [ecx]		
+0x4eb455	0	sub edi, 0x3		
+0x4eb458	0	Block 14:		
+0x4eb458	0	movzx edx, byte ptr [ecx+0x1]		
+0x4eb45c	0	add ecx, 0x1		
+0x4eb45f	0	shl eax, 0x8		
+0x4eb462	0	add eax, edx		
+0x4eb464	0	movzx edx, byte ptr [ecx+0x1]		
+0x4eb468	0	add ecx, 0x1		
+0x4eb46b	0	shl eax, 0x8		
+0x4eb46e	0	add eax, edx		
+0x4eb470	0	add ecx, 0x1		
+0x4eb473	0	cmp edi, 0x1		
+0x4eb476	0	mov dword ptr [esp+0x1c], eax		
+0x4eb47a	0	jb 0x4eb710 <Block 61>		
+0x4eb480	0	Block 15:		
+0x4eb480	0	mov al, byte ptr [ecx]		
+0x4eb482	0	mov ebx, dword ptr [esp+0x14]		
+0x4eb486	0	sub edi, 0x1		
+0x4eb489	0	add ecx, 0x1		
+0x4eb48c	0	test al, al		
+0x4eb48e	0	js 0x4eb546 <Block 30>		
+0x4eb494	0	Block 16:		
+0x4eb494	0	cmp edi, 0x1		
+0x4eb497	0	jb 0x4eb710 <Block 61>	0.3%	169.199ms
+0x4eb49d	0	Block 17:		
+0x4eb49d	0	mov dl, byte ptr [ecx]		
+0x4eb49f	0	movzx ebp, al		
+0x4eb4a2	0	mov byte ptr [esp+0x2c], dl		
+0x4eb4a6	0	mov edx, ebp		
+0x4eb4a8	0	and edx, 0x3		
+0x4eb4ab	0	sub edi, 0x1		
+0x4eb4ae	0	add ecx, 0x1		
+0x4eb4b1	0	cmp edx, ebx		
+0x4eb4b3	0	jnbe 0x4eb710 <Block 61>		
+0x4eb4b9	0	Block 18:		
+0x4eb4b9	0	sub ebx, edx		
+0x4eb4bb	0	cmp edi, edx	0.1%	39.300ms
+0x4eb4bd	0	jb 0x4eb710 <Block 61>		
+0x4eb4c3	0	Block 19:		
+0x4eb4c3	0	sub edi, edx		
+0x4eb4c5	0	test edx, edx		
+0x4eb4c7	0	mov dword ptr [esp+0x18], edi		
+0x4eb4cb	0	jz 0x4eb4e1 <Block 22>		
+0x4eb4cd	0	Block 20:		
+0x4eb4cd	0	lea ecx, ptr [ecx]		
+0x4eb4d0	0	Block 21:		
+0x4eb4d0	0	mov al, byte ptr [ecx]	0.2%	90.678ms
+0x4eb4d2	0	sub edx, 0x1		
+0x4eb4d5	0	mov byte ptr [esi], al		
+0x4eb4d7	0	add esi, 0x1		
+0x4eb4da	0	add ecx, 0x1		
+0x4eb4dd	0	test edx, edx		
+0x4eb4df	0	jnz 0x4eb4d0 <Block 21>		
+0x4eb4e1	0	Block 22:		
+0x4eb4e1	0	mov eax, ebp		
+0x4eb4e3	0	and eax, 0x60		
+0x4eb4e6	0	add eax, eax		
+0x4eb4e8	0	add eax, eax		
+0x4eb4ea	0	add eax, eax		
+0x4eb4ec	0	mov edx, esi		
+0x4eb4ee	0	sub edx, eax		
+0x4eb4f0	0	movzx eax, byte ptr [esp+0x2c]		
+0x4eb4f5	0	sub edx, eax		
+0x4eb4f7	0	sub edx, 0x1		
+0x4eb4fa	0	cmp edx, dword ptr [esp+0x24]		
+0x4eb4fe	0	jb 0x4eb710 <Block 61>	0.3%	159.857ms
+0x4eb504	0	Block 23:		
+0x4eb504	0	cmp edx, esi		
+0x4eb506	0	jnb 0x4eb710 <Block 61>		
+0x4eb50c	0	Block 24:		
+0x4eb50c	0	shr ebp, 0x2		
+0x4eb50f	0	and ebp, 0x7		
+0x4eb512	0	add ebp, 0x3		
+0x4eb515	0	cmp ebp, ebx		
+0x4eb517	0	jnbe 0x4eb710 <Block 61>		
+0x4eb51d	0	Block 25:		
+0x4eb51d	0	sub ebx, ebp		
+0x4eb51f	0	test ebp, ebp		
+0x4eb521	0	mov dword ptr [esp+0x14], ebx		
+0x4eb525	0	jz 0x4eb703 <Block 60>		
+0x4eb52b	0	Block 26:		
+0x4eb52b	0	jmp 0x4eb530 <Block 28>		
+0x4eb52d	0	Block 27:		
+0x4eb52d	0	lea ecx, ptr [ecx]		
+0x4eb530	0	Block 28:		
+0x4eb530	0	mov al, byte ptr [edx]		
+0x4eb532	0	sub ebp, 0x1	1.1%	564.966ms
+0x4eb535	0	mov byte ptr [esi], al		
+0x4eb537	0	add esi, 0x1		
+0x4eb53a	0	add edx, 0x1		
+0x4eb53d	0	test ebp, ebp		
+0x4eb53f	0	jnz 0x4eb530 <Block 28>		
+0x4eb541	0	Block 29:		
+0x4eb541	0	jmp 0x4eb703 <Block 60>		
+0x4eb546	0	Block 30:		
+0x4eb546	0	test al, 0x40		
+0x4eb548	0	jnz 0x4eb60b <Block 43>		
+0x4eb54e	0	Block 31:		
+0x4eb54e	0	cmp edi, 0x2		
+0x4eb551	0	jb 0x4eb710 <Block 61>	0.1%	43.789ms
+0x4eb557	0	Block 32:		
+0x4eb557	0	movzx edx, byte ptr [ecx]		
+0x4eb55a	0	mov byte ptr [esp+0x2c], dl		
+0x4eb55e	0	movzx edx, byte ptr [ecx+0x1]		
+0x4eb562	0	movzx ebp, byte ptr [esp+0x2c]		
+0x4eb567	0	add ecx, 0x1	0.0%	24.891ms
+0x4eb56a	0	mov byte ptr [esp+0x13], dl		
+0x4eb56e	0	mov edx, ebp		
+0x4eb570	0	shr edx, 0x6		
+0x4eb573	0	sub edi, 0x2		
+0x4eb576	0	add ecx, 0x1		
+0x4eb579	0	cmp edx, ebx		
+0x4eb57b	0	jnbe 0x4eb710 <Block 61>		
+0x4eb581	0	Block 33:		
+0x4eb581	0	sub ebx, edx		
+0x4eb583	0	cmp edi, edx		
+0x4eb585	0	mov dword ptr [esp+0x14], ebx		
+0x4eb589	0	jb 0x4eb710 <Block 61>		
+0x4eb58f	0	Block 34:		
+0x4eb58f	0	sub edi, edx		
+0x4eb591	0	test edx, edx		
+0x4eb593	0	mov dword ptr [esp+0x18], edi		
+0x4eb597	0	jz 0x4eb5b1 <Block 37>		
+0x4eb599	0	Block 35:		
+0x4eb599	0	lea esp, ptr [esp]		
+0x4eb5a0	0	Block 36:		
+0x4eb5a0	0	mov bl, byte ptr [ecx]		
+0x4eb5a2	0	sub edx, 0x1		
+0x4eb5a5	0	mov byte ptr [esi], bl		
+0x4eb5a7	0	add esi, 0x1		
+0x4eb5aa	0	add ecx, 0x1		
+0x4eb5ad	0	test edx, edx		
+0x4eb5af	0	jnz 0x4eb5a0 <Block 36>		
+0x4eb5b1	0	Block 37:		
+0x4eb5b1	0	movzx edi, byte ptr [esp+0x13]		
+0x4eb5b6	0	and ebp, 0x3f	0.2%	119.068ms
+0x4eb5b9	0	shl ebp, 0x8		
+0x4eb5bc	0	mov edx, esi		
+0x4eb5be	0	sub edx, ebp		
+0x4eb5c0	0	sub edx, edi		
+0x4eb5c2	0	sub edx, 0x1		
+0x4eb5c5	0	cmp edx, dword ptr [esp+0x24]	0.1%	72.200ms
+0x4eb5c9	0	jb 0x4eb710 <Block 61>		
+0x4eb5cf	0	Block 38:		
+0x4eb5cf	0	cmp edx, esi		
+0x4eb5d1	0	jnb 0x4eb710 <Block 61>		
+0x4eb5d7	0	Block 39:		
+0x4eb5d7	0	and eax, 0x3f		
+0x4eb5da	0	add eax, 0x4		
+0x4eb5dd	0	mov edi, eax		
+0x4eb5df	0	cmp edi, dword ptr [esp+0x14]		
+0x4eb5e3	0	jnbe 0x4eb710 <Block 61>		
+0x4eb5e9	0	Block 40:		
+0x4eb5e9	0	sub dword ptr [esp+0x14], edi		
+0x4eb5ed	0	test edi, edi		
+0x4eb5ef	0	jz 0x4eb703 <Block 60>		
+0x4eb5f5	0	Block 41:		
+0x4eb5f5	0	mov al, byte ptr [edx]		
+0x4eb5f7	0	sub edi, 0x1	0.2%	119.632ms
+0x4eb5fa	0	mov byte ptr [esi], al		
+0x4eb5fc	0	add esi, 0x1	0.7%	388.990ms
+0x4eb5ff	0	add edx, 0x1		
+0x4eb602	0	test edi, edi		
+0x4eb604	0	jnz 0x4eb5f5 <Block 41>		
+0x4eb606	0	Block 42:		
+0x4eb606	0	jmp 0x4eb703 <Block 60>		
+0x4eb60b	0	Block 43:		
+0x4eb60b	0	test al, 0x20		
+0x4eb60d	0	jnz 0x4eb6c8 <Block 55>	0.8%	433.104ms
+0x4eb613	0	Block 44:		
+0x4eb613	0	cmp edi, 0x3		
+0x4eb616	0	jb 0x4eb710 <Block 61>		
+0x4eb61c	0	Block 45:		
+0x4eb61c	0	mov bl, byte ptr [ecx]		
+0x4eb61e	0	movzx edx, byte ptr [ecx+0x1]		
+0x4eb622	0	add ecx, 0x1		
+0x4eb625	0	add ecx, 0x1		
+0x4eb628	0	mov byte ptr [esp+0x13], dl		
+0x4eb62c	0	movzx edx, byte ptr [ecx]		
+0x4eb62f	0	movzx ebp, al		
+0x4eb632	0	mov byte ptr [esp+0x2c], dl		
+0x4eb636	0	mov edx, ebp		
+0x4eb638	0	and edx, 0x3		
+0x4eb63b	0	sub edi, 0x3		
+0x4eb63e	0	add ecx, 0x1		
+0x4eb641	0	cmp edx, dword ptr [esp+0x14]		
+0x4eb645	0	jnbe 0x4eb710 <Block 61>		
+0x4eb64b	0	Block 46:		
+0x4eb64b	0	sub dword ptr [esp+0x14], edx		
+0x4eb64f	0	cmp edi, edx		
+0x4eb651	0	jb 0x4eb710 <Block 61>		
+0x4eb657	0	Block 47:		
+0x4eb657	0	sub edi, edx		
+0x4eb659	0	test edx, edx		
+0x4eb65b	0	mov dword ptr [esp+0x18], edi		
+0x4eb65f	0	jz 0x4eb672 <Block 49>	0.4%	204.697ms
+0x4eb661	0	Block 48:		
+0x4eb661	0	mov al, byte ptr [ecx]		
+0x4eb663	0	sub edx, 0x1	1.2%	631.702ms
+0x4eb666	0	mov byte ptr [esi], al		
+0x4eb668	0	add esi, 0x1		
+0x4eb66b	0	add ecx, 0x1		
+0x4eb66e	0	test edx, edx		
+0x4eb670	0	jnz 0x4eb661 <Block 48>		
+0x4eb672	0	Block 49:		
+0x4eb672	0	xor eax, eax		
+0x4eb674	0	mov edx, ebp		
+0x4eb676	0	and edx, 0x10		
+0x4eb679	0	mov ah, bl		
+0x4eb67b	0	shl edx, 0xc		
+0x4eb67e	0	mov edi, esi		
+0x4eb680	0	sub edi, edx		
+0x4eb682	0	movzx edx, byte ptr [esp+0x13]		
+0x4eb687	0	sub edi, eax		
+0x4eb689	0	sub edi, edx		
+0x4eb68b	0	sub edi, 0x1		
+0x4eb68e	0	cmp edi, dword ptr [esp+0x24]		
+0x4eb692	0	jb 0x4eb710 <Block 61>		
+0x4eb694	0	Block 50:		
+0x4eb694	0	cmp edi, esi		
+0x4eb696	0	jnb 0x4eb710 <Block 61>		
+0x4eb698	0	Block 51:		
+0x4eb698	0	movzx eax, byte ptr [esp+0x2c]		
+0x4eb69d	0	and ebp, 0xc		
+0x4eb6a0	0	shl ebp, 0x6		
+0x4eb6a3	0	lea ebp, ptr [eax+ebp*1+0x5]		
+0x4eb6a7	0	cmp ebp, dword ptr [esp+0x14]		
+0x4eb6ab	0	jnbe 0x4eb710 <Block 61>		
+0x4eb6ad	0	Block 52:		
+0x4eb6ad	0	sub dword ptr [esp+0x14], ebp		
+0x4eb6b1	0	test ebp, ebp		
+0x4eb6b3	0	jz 0x4eb703 <Block 60>		
+0x4eb6b5	0	Block 53:		
+0x4eb6b5	0	mov dl, byte ptr [edi]		
+0x4eb6b7	0	sub ebp, 0x1	1.0%	518.223ms
+0x4eb6ba	0	mov byte ptr [esi], dl	0.1%	54.798ms
+0x4eb6bc	0	add esi, 0x1	0.2%	108.601ms
+0x4eb6bf	0	add edi, 0x1		
+0x4eb6c2	0	test ebp, ebp		
+0x4eb6c4	0	jnz 0x4eb6b5 <Block 53>	0.3%	148.919ms
+0x4eb6c6	0	Block 54:		
+0x4eb6c6	0	jmp 0x4eb703 <Block 60>		
+0x4eb6c8	0	Block 55:		
+0x4eb6c8	0	movzx edx, al		
+0x4eb6cb	0	and edx, 0x1f		
+0x4eb6ce	0	lea edx, ptr [edx*4+0x4]		
+0x4eb6d5	0	cmp edx, 0x70	1.1%	554.579ms
+0x4eb6d8	0	jnbe 0x4eb71a <Block 62>		
+0x4eb6da	0	Block 56:		
+0x4eb6da	0	cmp edx, ebx		
+0x4eb6dc	0	jnbe 0x4eb710 <Block 61>		
+0x4eb6de	0	Block 57:		
+0x4eb6de	0	sub ebx, edx		
+0x4eb6e0	0	cmp edi, edx		
+0x4eb6e2	0	mov dword ptr [esp+0x14], ebx		
+0x4eb6e6	0	jb 0x4eb710 <Block 61>		
+0x4eb6e8	0	Block 58:		
+0x4eb6e8	0	sub edi, edx		
+0x4eb6ea	0	test edx, edx		
+0x4eb6ec	0	mov dword ptr [esp+0x18], edi		
+0x4eb6f0	0	jz 0x4eb703 <Block 60>		
+0x4eb6f2	0	Block 59:		
+0x4eb6f2	0	mov al, byte ptr [ecx]	0.1%	55.613ms
+0x4eb6f4	0	sub edx, 0x1	0.4%	191.774ms
+0x4eb6f7	0	mov byte ptr [esi], al		
+0x4eb6f9	0	add esi, 0x1	0.4%	198.888ms
+0x4eb6fc	0	add ecx, 0x1		
+0x4eb6ff	0	test edx, edx		
+0x4eb701	0	jnz 0x4eb6f2 <Block 59>		
+0x4eb703	0	Block 60:		
+0x4eb703	0	mov edi, dword ptr [esp+0x18]	0.1%	71.408ms
+0x4eb707	0	cmp edi, 0x1	0.5%	273.599ms
+0x4eb70a	0	jnb 0x4eb480 <Block 15>		
+0x4eb710	0	Block 61:		
+0x4eb710	0	pop edi		
+0x4eb711	0	pop esi		
+0x4eb712	0	pop ebp		
+0x4eb713	0	xor eax, eax		
+0x4eb715	0	pop ebx		
+0x4eb716	0	add esp, 0x10		
+0x4eb719	0	ret 		
+0x4eb71a	0	Block 62:		
+0x4eb71a	0	and eax, 0x3		
+0x4eb71d	0	cmp eax, ebx		
+0x4eb71f	0	jnbe 0x4eb710 <Block 61>		
+0x4eb721	0	Block 63:		
+0x4eb721	0	cmp edi, eax		
+0x4eb723	0	jb 0x4eb710 <Block 61>		
+0x4eb725	0	Block 64:		
+0x4eb725	0	test eax, eax		
+0x4eb727	0	jz 0x4eb741 <Block 67>		
+0x4eb729	0	Block 65:		
+0x4eb729	0	lea esp, ptr [esp]		
+0x4eb730	0	Block 66:		
+0x4eb730	0	mov dl, byte ptr [ecx]		
+0x4eb732	0	sub eax, 0x1		
+0x4eb735	0	mov byte ptr [esi], dl		
+0x4eb737	0	add esi, 0x1		
+0x4eb73a	0	add ecx, 0x1		
+0x4eb73d	0	test eax, eax		
+0x4eb73f	0	jnz 0x4eb730 <Block 66>		
+0x4eb741	0	Block 67:		
+0x4eb741	0	mov eax, dword ptr [esp+0x1c]		
+0x4eb745	0	pop edi		
+0x4eb746	0	pop esi		
+0x4eb747	0	pop ebp		
+0x4eb748	0	pop ebx		
+0x4eb749	0	add esp, 0x10		
+0x4eb74c	0	ret 		

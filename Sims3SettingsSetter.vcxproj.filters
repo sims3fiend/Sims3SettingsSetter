@@ -2,12 +2,6 @@
 <Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <ItemGroup>
     <ClCompile Include="dllmain.cpp" />
-    <ClCompile Include="gui.cpp" />
-    <ClCompile Include="hooks.cpp" />
-    <ClCompile Include="pch.cpp" />
-    <ClCompile Include="renderer.cpp" />
-    <ClCompile Include="script_settings.cpp" />
-    <ClCompile Include="utils.cpp" />
     <ClCompile Include="imgui\imgui.cpp">
       <Filter>imgui</Filter>
     </ClCompile>
@@ -26,16 +20,19 @@
     <ClCompile Include="imgui\imgui_impl_win32.cpp">
       <Filter>imgui</Filter>
     </ClCompile>
-    <ClCompile Include="preset.cpp" />
+    <ClCompile Include="gui.cpp" />
+    <ClCompile Include="hooks.cpp" />
+    <ClCompile Include="settings.cpp" />
+    <ClCompile Include="d3d9_hook.cpp" />
+    <ClCompile Include="preset_manager.cpp" />
+    <ClCompile Include="pattern_scan.cpp" />
+    <ClCompile Include="vtable_manager.cpp" />
+    <ClCompile Include="intersection_patch.cpp" />
+    <ClCompile Include="optimization.cpp" />
+    <ClCompile Include="qol.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="framework.h" />
-    <ClInclude Include="gui.h" />
-    <ClInclude Include="hooks.h" />
-    <ClInclude Include="pch.h" />
-    <ClInclude Include="renderer.h" />
-    <ClInclude Include="script_settings.h" />
-    <ClInclude Include="utils.h" />
     <ClInclude Include="imgui\imconfig.h">
       <Filter>imgui</Filter>
     </ClInclude>
@@ -54,8 +51,20 @@
     <ClInclude Include="imgui\imstb_textedit.h">
       <Filter>imgui</Filter>
     </ClInclude>
-    <ClInclude Include="preset.h" />
     <ClInclude Include="config_value_cache.h" />
+    <ClInclude Include="gui.h" />
+    <ClInclude Include="settings.h" />
+    <ClInclude Include="utils.h" />
+    <ClInclude Include="d3d9_hook.h" />
+    <ClInclude Include="settings_gui.h" />
+    <ClInclude Include="preset_manager.h" />
+    <ClInclude Include="util.h" />
+    <ClInclude Include="pattern_scan.h" />
+    <ClInclude Include="vtable_manager.h" />
+    <ClInclude Include="intersection_patch.h" />
+    <ClInclude Include="optimization.h" />
+    <ClInclude Include="qol.h" />
+    <ClInclude Include="small_patches.h" />
   </ItemGroup>
   <ItemGroup>
     <Filter Include="imgui">
