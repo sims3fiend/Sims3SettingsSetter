@@ -124,6 +124,9 @@ public:
     bool IsInitialized() const { return m_initialized; }
     void SetInitialized(bool initialized) { m_initialized = initialized; }
 
+    // Manual initialization method
+    void ManualInitialize();
+
 private:
     SettingsManager() : m_initialized(false) {}
     std::unordered_map<std::wstring, std::unique_ptr<Setting>> m_settings;

@@ -5,6 +5,7 @@
 #include "imgui_impl_win32.h"
 #include "imgui_impl_dx9.h"
 #include "settings_gui.h"
+#include "qol.h"
 
 // I HATE IMGUI I HATE IMGUI I HATE IMGUI
 
@@ -101,8 +102,8 @@ LRESULT CALLBACK HookedWndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lPara
     if (ImGui_ImplWin32_WndProcHandler(hWnd, uMsg, wParam, lParam))
         return true;
 
-    // Handle Insert key to toggle UI
-    if (uMsg == WM_KEYDOWN && wParam == VK_INSERT) {
+    // Handle configurable key to toggle UI
+    if (uMsg == WM_KEYDOWN && wParam == UISettings::Get().GetUIToggleKey()) {
         SettingsGui::m_visible = !SettingsGui::m_visible;
         return 0;
     }

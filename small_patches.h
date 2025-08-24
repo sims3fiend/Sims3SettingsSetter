@@ -1,8 +1,9 @@
 #pragma once
 #include "optimization.h"
 #include <windows.h>
-//https://www.youtube.com/watch?v=lKntlVofKqU
-//literally my fav song
+
+//https://www.youtube.com/watch?v=XJgh_D379jU
+//meeeeeeee
 
 // Class for simple memory patches that modify game code
 class LotVisibilityPatch : public OptimizationPatch {

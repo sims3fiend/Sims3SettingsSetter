@@ -138,12 +138,12 @@ const std::unordered_map<std::wstring, std::unique_ptr<Setting>>& SettingsManage
 bool SettingsManager::SaveConfig(const std::string& filename, std::string* error) const {
     try {
         // Debug logging
-        OutputDebugStringA("=== Begin SettingsManager::SaveConfig ===\n");
+        Utils::Logger::Get().Log("[SettingsManager] Begin SaveConfig");
         
         std::ofstream file(filename);
         if (!file.is_open()) {
             if (error) *error = "Failed to open file for writing: " + filename;
-            OutputDebugStringA("Failed to open settings file for writing\n");
+            Utils::Logger::Get().Log("[SettingsManager] Failed to open settings file for writing: " + filename);
             return false;
         }
 
@@ -155,31 +155,27 @@ bool SettingsManager::SaveConfig(const std::string& filename, std::string* error
         file << "; Format: [SettingName]\nValue=value\n\n";
 
         int savedCount = 0;
-        OutputDebugStringA(("Total settings count: " + std::to_string(m_settings.size()) + "\n").c_str());
+        // Too verbose for user-facing logs: suppress per-setting debug counts
         
         for (const auto& [name, setting] : m_settings) {
             // Debug log current setting status
             std::string settingName = Utils::WideToUtf8(name);
-            std::string debugMsg = "Checking setting: " + settingName + 
-                " - IsOverridden: " + (setting->IsOverridden() ? "Yes" : "No") +
-                ", HasUnsavedChanges: " + (setting->HasUnsavedChanges() ? "Yes" : "No") + "\n";
-            OutputDebugStringA(debugMsg.c_str());
             
             // Skip settings that aren't meant to be saved
             if (!setting->IsOverridden() && !setting->HasUnsavedChanges()) {
-                OutputDebugStringA(("Skipping " + settingName + " - not marked for saving\n").c_str());
+                // skip log
                 continue;
             }
 
             // Also skip if override was explicitly cleared
             if (!setting->IsOverridden() && setting->HasUnsavedChanges()) {
                 setting->SetUnsavedChanges(false); // Clear the unsaved flag
-                OutputDebugStringA(("Clearing unsaved flag for " + settingName + "\n").c_str());
+                // skip log
                 continue;
             }
 
             // Log saving this setting
-            OutputDebugStringA(("Saving setting: " + settingName + "\n").c_str());
+            // skip per-setting log
             savedCount++;
             
             file << "[" << settingName << "]\n";
@@ -221,7 +217,7 @@ bool SettingsManager::SaveConfig(const std::string& filename, std::string* error
             setting->SetOverridden(true);
         }
 
-        OutputDebugStringA(("Saved " + std::to_string(savedCount) + " settings\n").c_str());
+        Utils::Logger::Get().Log("[SettingsManager] Saved " + std::to_string(savedCount) + " settings");
 
         // Save modified config values
         int configCount = 0;
@@ -235,26 +231,26 @@ bool SettingsManager::SaveConfig(const std::string& filename, std::string* error
             }
         }
         
-        OutputDebugStringA(("Saved " + std::to_string(configCount) + " config values\n").c_str());
-        OutputDebugStringA("=== End SettingsManager::SaveConfig ===\n");
+        Utils::Logger::Get().Log("[SettingsManager] Saved " + std::to_string(configCount) + " config values");
+        Utils::Logger::Get().Log("[SettingsManager] End SaveConfig");
         
         return true;
     }
     catch (const std::exception& e) {
         if (error) *error = "Error saving config: " + std::string(e.what());
-        OutputDebugStringA(("Error saving config: " + std::string(e.what()) + "\n").c_str());
+        Utils::Logger::Get().Log(std::string("[SettingsManager] Error saving config: ") + e.what());
         return false;
     }
 }
 
 bool SettingsManager::LoadConfig(const std::string& filename, std::string* error) {
     try {
-        OutputDebugStringA(("[SettingsManager] Loading from: " + filename + "\n").c_str());
+        Utils::Logger::Get().Log("[SettingsManager] Loading from: " + filename);
         
         std::ifstream file(filename);
         if (!file.is_open()) {
             if (error) *error = "Failed to open file: " + filename;
-            OutputDebugStringA(("[SettingsManager] Failed to open file: " + filename + "\n").c_str());
+            Utils::Logger::Get().Log("[SettingsManager] Failed to open file: " + filename);
             return false;
         }
 
@@ -265,7 +261,7 @@ bool SettingsManager::LoadConfig(const std::string& filename, std::string* error
         bool inConfigSection = false;
         ConfigValueInfo currentConfigInfo;
         
-        OutputDebugStringA("[SettingsManager] Beginning to parse config file\n");
+        // omit verbose parse begin log
         
         while (std::getline(file, line)) {
             // Skip comments and empty lines
@@ -284,11 +280,11 @@ bool SettingsManager::LoadConfig(const std::string& filename, std::string* error
                         currentConfigInfo = ConfigValueInfo();
                         // Mark as modified since it's coming from saved file
                         currentConfigInfo.isModified = true;
-                        OutputDebugStringA(("[SettingsManager] Found config section: " + section + "\n").c_str());
+                        // omit verbose per-section log
                     } else {
                         inConfigSection = false;
                         currentSetting = Utils::Utf8ToWide(section);
-                        OutputDebugStringA(("[SettingsManager] Found setting section: " + section + "\n").c_str());
+                        // omit verbose per-section log
                     }
                 }
                 continue;
@@ -312,8 +308,7 @@ bool SettingsManager::LoadConfig(const std::string& filename, std::string* error
                         }
                         AddConfigValue(currentSetting, currentConfigInfo);
                         configCount++;
-                        OutputDebugStringA(("[SettingsManager] Applied config value: " + 
-                                           Utils::WideToUtf8(currentSetting) + " = " + value + "\n").c_str());
+                        // omit verbose per-value log
                     }
                 } else if (key == "Value") {
                     // Try to apply immediately if setting exists
@@ -321,8 +316,7 @@ bool SettingsManager::LoadConfig(const std::string& filename, std::string* error
                     if (setting) {
                         try {
                             settingsCount++;
-                            OutputDebugStringA(("[SettingsManager] Applying setting: " + 
-                                              Utils::WideToUtf8(currentSetting) + " = " + value + "\n").c_str());
+                            // omit verbose per-setting log
                             
                             std::visit([&](auto&& defaultVal) {
                                 using T = std::decay_t<decltype(defaultVal)>;
@@ -360,13 +354,11 @@ bool SettingsManager::LoadConfig(const std::string& filename, std::string* error
                             }, setting->GetDefaultValue());
                         }
                         catch (const std::exception& e) {
-                            OutputDebugStringA(("Error parsing value for " + Utils::WideToUtf8(currentSetting) + 
-                                ": " + e.what() + "\n").c_str());
+                            Utils::Logger::Get().Log(std::string("[SettingsManager] Error parsing value for ") + Utils::WideToUtf8(currentSetting) + ": " + e.what());
                         }
                     } else {
                         // If setting doesn't exist yet, try to parse and store the value
-                        OutputDebugStringA(("[SettingsManager] Storing pending value for: " + 
-                                           Utils::WideToUtf8(currentSetting) + "\n").c_str());
+                        // omit verbose pending value log
                         try {
                             // Try each possible type
                             if (value == "true" || value == "false") {
@@ -389,26 +381,24 @@ bool SettingsManager::LoadConfig(const std::string& filename, std::string* error
                                     try {
                                         StorePendingSavedValue(currentSetting, std::stoi(value));
                                     } catch (...) {
-                                        OutputDebugStringA(("[SettingsManager] Could not parse value: " + value + "\n").c_str());
+                                        Utils::Logger::Get().Log("[SettingsManager] Could not parse value: " + value);
                                     }
                                 }
                             }
                         } catch (const std::exception& e) {
-                            OutputDebugStringA(("Failed to parse pending value for " + Utils::WideToUtf8(currentSetting) + 
-                                ": " + e.what() + "\n").c_str());
+                            Utils::Logger::Get().Log(std::string("[SettingsManager] Failed to parse pending value for ") + Utils::WideToUtf8(currentSetting) + ": " + e.what());
                         }
                     }
                 }
             }
         }
 
-        OutputDebugStringA(("[SettingsManager] Applied " + std::to_string(settingsCount) + 
-                           " settings and " + std::to_string(configCount) + " config values\n").c_str());
+        Utils::Logger::Get().Log("[SettingsManager] Applied " + std::to_string(settingsCount) + " settings and " + std::to_string(configCount) + " config values");
         return true;
     }
     catch (const std::exception& e) {
         if (error) *error = "Error loading config: " + std::string(e.what());
-        OutputDebugStringA(("[SettingsManager] Error loading config: " + std::string(e.what()) + "\n").c_str());
+        Utils::Logger::Get().Log(std::string("[SettingsManager] Error loading config: ") + e.what());
         return false;
     }
 }
@@ -463,7 +453,7 @@ void SettingsManager::ApplyPendingSavedValue(const std::wstring& name) {
     auto it = m_pendingSavedValues.find(name);
     if (it != m_pendingSavedValues.end()) {
         if (auto* setting = GetSetting(name)) {
-            OutputDebugStringA(("Applying pending saved value for: " + Utils::WideToUtf8(name) + "\n").c_str());
+            // omit verbose per-setting apply log
             setting->SetValue(it->second.value);
             setting->SetOverridden(it->second.isOverridden);
             m_pendingSavedValues.erase(it);
@@ -663,4 +653,27 @@ void SettingsManager::ResetAllSettings() {
     }
     
     OutputDebugStringA("Reset all settings to default values\n");
+} 
+
+void SettingsManager::ManualInitialize() {
+    if (m_initialized) {
+        OutputDebugStringA("Settings already initialized, ignoring manual initialization request\n");
+        return;
+    }
+    
+    OutputDebugStringA("Manual initialization requested by user\n");
+    
+    // Set initialized flag
+    m_initialized = true;
+    
+    // Save default settings to a file
+    std::string error;
+    if (!SaveDefaultValues("S3SS_defaults.ini", &error)) {
+        Utils::Logger::Get().Log("Failed to save default settings during manual init: " + error);
+    }
+    else {
+        Utils::Logger::Get().Log("Successfully saved default settings during manual init");
+    }
+    
+    OutputDebugStringA("Manual initialization completed\n");
 } 

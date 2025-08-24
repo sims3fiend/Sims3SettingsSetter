@@ -11,6 +11,7 @@
 #include "qol.h"
 #include "small_patches.h"
 #include "intersection_patch.h"
+#include "cpu_optimization.h"
 
 //I hate ImGui I hate ImGui I hate ImGui
 //https://www.youtube.com/watch?v=lKntlVofKqU
@@ -70,7 +71,11 @@ namespace SettingsGui {
                         bool success = SettingsManager::Get().SaveConfig("S3SS.ini", &error);
                         // Also save optimization settings
                         success &= OptimizationManager::Get().SaveState("S3SS.ini");
-                        if (!success) {
+                        // Ensure UI settings are in the file (append if needed)
+                        UISettings::Get().EnsureInINI("S3SS.ini");
+                        if (success) {
+                            UISettings::Get().MarkAsSaved();
+                        } else {
                             Utils::Logger::Get().Log("Failed to save settings: " + error);
                         }
                     }
@@ -147,6 +152,21 @@ namespace SettingsGui {
                         ImGui::Separator();
                         ImGui::TextWrapped("Other tabs are still available.");
                         ImGui::PopStyleColor();
+                        
+                        ImGui::Separator();
+                        
+                        // Manual initialization button
+                        ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 0.4f, 0.4f, 1.0f));
+                        ImGui::TextWrapped("If settings don't initialize automatically  you can manually initialize them:");
+                        ImGui::PopStyleColor();
+                        
+                        ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 1.0f, 0.0f, 1.0f));
+                        ImGui::TextWrapped("WARNING: Only press this button when you are IN-GAME and past the loading screen, NOT in the main menu!");
+                        ImGui::PopStyleColor();
+                        
+                        if (ImGui::Button("Manual Initialize Settings")) {
+                            SettingsManager::Get().ManualInitialize();
+                        }
                     }
                     else {
                         //cute little message owo
@@ -254,6 +274,38 @@ namespace SettingsGui {
                             }
                             if (ImGui::IsItemHovered()) {
                                 ImGui::SetTooltip("Optimizes intersection calculations with SIMD instructions\nImproves performance for initial navmesh creation and pathfinding (negligible)");
+                            }
+                        }
+                        
+                        ImGui::PopID();
+                    }
+
+                    // Display CPUOptimizationPatch next
+                    for (const auto& patch : patches) {
+                        ImGui::PushID(patchIndex++);
+                        
+                        if (auto cpuOptPatch = dynamic_cast<CPUOptimizationPatch*>(patch.get())) {
+                            bool cpuEnabled = cpuOptPatch->IsEnabled();
+                            if (ImGui::Checkbox("CPU Thread Optimization", &cpuEnabled)) {
+                                if (cpuEnabled) cpuOptPatch->Install(); else cpuOptPatch->Uninstall();
+                            }
+                            if (ImGui::IsItemHovered()) {
+                                ImGui::SetTooltip("Optimizes thread placement for modern CPUs\n- Intel Hybrid (P/E-cores): Prioritizes Performance cores\n- AMD: Distributes threads across the first few cores (usually one CCX)\nAssigns game threads to appropriate cores based on CPU");
+                            }
+                            
+                            // If enabled, show CPU information
+                            if (cpuEnabled) {
+                                ImGui::Indent();
+                                const auto& cpuInfo = cpuOptPatch->GetCPUInformation();
+                                
+                                ImGui::TextDisabled("CPU: %s", cpuInfo.brand);
+                                ImGui::TextDisabled("Cores: %d, Hybrid: %s", 
+                                    cpuInfo.logicalProcessors, 
+                                    cpuInfo.isHybrid ? "Yes" : "No");
+                                    
+                                ImGui::TextDisabled("Threads optimized: %d", cpuOptPatch->GetThreadCount());
+                                
+                                ImGui::Unindent();
                             }
                         }
                         
@@ -449,8 +501,66 @@ namespace SettingsGui {
                         }
                     }
 
+                    ImGui::Separator();
+
+                    // UI Settings section
+                    if (ImGui::CollapsingHeader("UI Settings")) {
+                        // Toggle key setting
+                        static bool waitingForKey = false;
+                        UINT currentKey = UISettings::Get().GetUIToggleKey();
+                        std::string keyName = UISettings::Get().GetKeyName(currentKey);
+                        
+                        ImGui::Text("UI Toggle Key: %s", keyName.c_str());
+                        ImGui::SameLine();
+                        
+                        if (waitingForKey) {
+                            ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(1.0f, 0.5f, 0.0f, 1.0f));
+                            if (ImGui::Button("Press any key...")) {
+                                waitingForKey = false;
+                            }
+                            ImGui::PopStyleColor();
+                            
+                            // Check for key press
+                            for (int key = VK_F1; key <= VK_F12; key++) {
+                                if (GetAsyncKeyState(key) & 0x8000) {
+                                    UISettings::Get().SetUIToggleKey(key);
+                                    waitingForKey = false;
+                                    // Auto-save when changed
+                                    UISettings::Get().EnsureInINI("S3SS.ini");
+                                    UISettings::Get().MarkAsSaved();
+                                    break;
+                                }
+                            }
+                            // Check other common keys
+                            static const UINT commonKeys[] = {
+                                VK_INSERT, VK_DELETE, VK_HOME, VK_END, VK_PRIOR, VK_NEXT,
+                                VK_PAUSE, VK_SCROLL, VK_OEM_3, VK_OEM_MINUS, VK_OEM_PLUS,
+                                VK_OEM_4, VK_OEM_6, VK_OEM_5, VK_OEM_1, VK_OEM_7
+                            };
+                            for (UINT key : commonKeys) {
+                                if (GetAsyncKeyState(key) & 0x8000) {
+                                    UISettings::Get().SetUIToggleKey(key);
+                                    waitingForKey = false;
+                                    // Auto-save when changed
+                                    UISettings::Get().EnsureInINI("S3SS.ini");
+                                    UISettings::Get().MarkAsSaved();
+                                    break;
+                                }
+                            }
+                        } else {
+                            if (ImGui::Button("Change")) {
+                                waitingForKey = true;
+                            }
+                        }
+                        
+                        if (ImGui::IsItemHovered()) {
+                            ImGui::SetTooltip("Click to change the key used to toggle this UI\nDefault: Insert\nChanges are saved automatically");
+                        }
+                    }
+
                     ImGui::EndTabItem();
                 }
+
 
                 ImGui::EndTabBar();
             }

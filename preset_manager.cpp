@@ -34,7 +34,7 @@ void PresetManager::Initialize() {
         EnsureDefaultPreset();
     }
     catch (const std::exception& e) {
-        OutputDebugStringA(("Failed to initialize preset system: " + std::string(e.what()) + "\n").c_str());
+        Utils::Logger::Get().Log(std::string("[PresetManager] Failed to initialize preset system: ") + e.what());
     }
 }
 
@@ -73,7 +73,7 @@ bool PresetManager::LoadPresetWithStrategy(const std::string& name, PresetLoadSt
             return false;
         }
         
-        OutputDebugStringA(("Loading preset from: " + presetPath.string() + "\n").c_str());
+        Utils::Logger::Get().Log("[PresetManager] Loading preset from: " + presetPath.string());
         
         if (strategy == PresetLoadStrategy::Overwrite) {
             // First try to load values from defaults file if it exists
@@ -81,9 +81,9 @@ bool PresetManager::LoadPresetWithStrategy(const std::string& name, PresetLoadSt
             if (fs::exists(defaultsPath)) {
                 std::string loadError;
                 if (SettingsManager::Get().LoadDefaultValues(defaultsPath, &loadError)) {
-                    OutputDebugStringA("Loaded default values from S3SS_defaults.ini\n");
+                    Utils::Logger::Get().Log("[PresetManager] Loaded default values from S3SS_defaults.ini");
                 } else {
-                    OutputDebugStringA(("Warning: Failed to load defaults file: " + loadError + "\n").c_str());
+                    Utils::Logger::Get().Log("[PresetManager] Warning: Failed to load defaults file: " + loadError);
                 }
             }
             
@@ -98,7 +98,7 @@ bool PresetManager::LoadPresetWithStrategy(const std::string& name, PresetLoadSt
                 setting->SetUnsavedChanges(true);  // Mark as needing update
             }
             
-            OutputDebugStringA("Reset all settings to defaults before loading preset\n");
+            Utils::Logger::Get().Log("[PresetManager] Reset all settings to defaults before loading preset");
         }
         
         // Now load the preset on top of current settings
@@ -124,20 +124,19 @@ bool PresetManager::LoadPresetWithStrategy(const std::string& name, PresetLoadSt
             saveSuccess &= OptimizationManager::Get().SaveState("S3SS.ini");
             
             if (!saveSuccess) {
-                OutputDebugStringA(("Warning: Auto-save after preset load failed: " + saveError + "\n").c_str());
+                Utils::Logger::Get().Log("[PresetManager] Warning: Auto-save after preset load failed: " + saveError);
             } else {
-                OutputDebugStringA("Auto-saved settings after loading preset\n");
+                Utils::Logger::Get().Log("[PresetManager] Auto-saved settings after loading preset");
             }
         } else {
-            OutputDebugStringA(("Failed to load settings from preset: " + 
-                              (error ? *error : "unknown error") + "\n").c_str());
+            Utils::Logger::Get().Log("[PresetManager] Failed to load settings from preset: " + (error ? *error : std::string("unknown error")));
         }
         
         return success;
     }
     catch (const std::exception& e) {
         if (error) *error = "Error loading preset: " + std::string(e.what());
-        OutputDebugStringA(("Exception while loading preset: " + std::string(e.what()) + "\n").c_str());
+        Utils::Logger::Get().Log(std::string("[PresetManager] Exception while loading preset: ") + e.what());
         return false;
     }
 }
@@ -173,7 +172,7 @@ std::vector<PresetManager::PresetInfo> PresetManager::GetAvailablePresets() {
         }
     }
     catch (const std::exception& e) {
-        OutputDebugStringA(("Error getting presets: " + std::string(e.what()) + "\n").c_str());
+        Utils::Logger::Get().Log(std::string("[PresetManager] Error getting presets: ") + e.what());
     }
     
     return presets;
@@ -185,7 +184,7 @@ void PresetManager::EnsureDefaultPreset() {
     if (!fs::exists(defaultPreset)) {
         std::string error;
         if (!SavePreset(DEFAULT_PRESET_NAME, "Default settings configuration", &error)) {
-            OutputDebugStringA(("Failed to create default preset: " + error + "\n").c_str());
+            Utils::Logger::Get().Log("[PresetManager] Failed to create default preset: " + error);
         }
     }
 } 

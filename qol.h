@@ -1,6 +1,7 @@
 #pragma once
 #include <Windows.h>
 #include <string>
+#include <mutex>
 
 enum class WarningStyle {
     Overlay,
@@ -42,4 +43,54 @@ private:
     const float m_WARNING_DISPLAY_DURATION;
     WarningStyle m_warningStyle;
     bool m_warningDismissed;
+};
+
+// UI Settings for S3SS itself (not game settings)
+class UISettings {
+public:
+    static UISettings& Get() {
+        static UISettings instance;
+        return instance;
+    }
+
+    // UI Toggle Key
+    UINT GetUIToggleKey() const { 
+        std::lock_guard<std::mutex> lock(m_mutex);
+        return m_uiToggleKey; 
+    }
+    
+    void SetUIToggleKey(UINT key) { 
+        std::lock_guard<std::mutex> lock(m_mutex);
+        m_uiToggleKey = key; 
+        m_hasUnsavedChanges = true;
+    }
+
+    // Save/Load
+    bool SaveToINI(const std::string& filename) const;
+    bool LoadFromINI(const std::string& filename);
+    
+    // Ensure settings exist in INI (called after main save)
+    bool EnsureInINI(const std::string& filename) const { return SaveToINI(filename); }
+
+    bool HasUnsavedChanges() const {
+        std::lock_guard<std::mutex> lock(m_mutex);
+        return m_hasUnsavedChanges;
+    }
+
+    void MarkAsSaved() {
+        std::lock_guard<std::mutex> lock(m_mutex);
+        m_hasUnsavedChanges = false;
+    }
+
+    // Helper to get key name for display
+    static std::string GetKeyName(UINT vkCode);
+
+private:
+    UISettings() : 
+        m_uiToggleKey(VK_INSERT),
+        m_hasUnsavedChanges(false) {}
+
+    mutable std::mutex m_mutex;
+    UINT m_uiToggleKey;
+    bool m_hasUnsavedChanges;
 }; 

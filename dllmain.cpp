@@ -22,7 +22,7 @@
 //Avert thine gaze, I said I was going to make the code clean and I lied
 //https://www.youtube.com/watch?v=C6iAzyhm0p0
 
-enum class SettingType {
+enum class SettingType { //TODO check these please :) maybe the dll thing has them better defined
     Int32 = 0,
     Uint32 = 1, 
     Float = 2,
@@ -207,6 +207,7 @@ class VariableRegistryHook : public SettingsHook {
         original(thisPtr, param2, ptr, name, type, param5, param6, param7, param8, param9);
 
         // Check if this is the "MT Time Step" setting, which is typically one of the last settings to be registered
+        // BZZTTTT wrong, someone reported it never getting initialized, dunno why so we added a manual button to initialize it... should check that it has stuff tho I guess
         if (name && wcscmp(name, L"MT Time Step") == 0) {
             // This is a good time to mark settings as initialized and save defaults
             auto& settingsManager = SettingsManager::Get();
@@ -595,7 +596,7 @@ DWORD g_ThreadId = 0;
 DWORD WINAPI HookThread(LPVOID lpParameter) {
     try {
         // Initialize logger
-        if (!Utils::Logger::Get().Initialize("hook_log.txt")) {
+        if (!Utils::Logger::Get().Initialize("S3SS_LOG.txt")) {
             OutputDebugStringA("Failed to initialize logger\n");
         }
         
@@ -607,6 +608,17 @@ DWORD WINAPI HookThread(LPVOID lpParameter) {
             std::string("[Optimization] CPU Features - SSE4.1: ") + 
             (cpuFeatures.hasSSE41 ? "Yes" : "No") + 
             ", FMA: " + (cpuFeatures.hasFMA ? "Yes" : "No"));
+
+        // Load UI settings first
+        UISettings::Get().LoadFromINI("S3SS.ini");
+        
+        // If settings need to be saved (file doesn't exist or missing QoL section), save them
+        if (UISettings::Get().HasUnsavedChanges()) {
+            UISettings::Get().SaveToINI("S3SS.ini");
+            UISettings::Get().MarkAsSaved();
+        }
+        
+        Utils::Logger::Get().Log("UI settings initialized");
 
         // Initialize optimization patches
         try {

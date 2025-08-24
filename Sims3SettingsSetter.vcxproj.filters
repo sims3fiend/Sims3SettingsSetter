@@ -20,19 +20,20 @@
     <ClCompile Include="imgui\imgui_impl_win32.cpp">
       <Filter>imgui</Filter>
     </ClCompile>
+    <ClCompile Include="cpu_optimization.cpp" />
+    <ClCompile Include="d3d9_hook.cpp" />
     <ClCompile Include="gui.cpp" />
     <ClCompile Include="hooks.cpp" />
-    <ClCompile Include="settings.cpp" />
-    <ClCompile Include="d3d9_hook.cpp" />
-    <ClCompile Include="preset_manager.cpp" />
-    <ClCompile Include="pattern_scan.cpp" />
-    <ClCompile Include="vtable_manager.cpp" />
     <ClCompile Include="intersection_patch.cpp" />
     <ClCompile Include="optimization.cpp" />
+    <ClCompile Include="pattern_scan.cpp" />
+    <ClCompile Include="pch.cpp" />
+    <ClCompile Include="preset_manager.cpp" />
     <ClCompile Include="qol.cpp" />
+    <ClCompile Include="settings.cpp" />
+    <ClCompile Include="vtable_manager.cpp" />
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="framework.h" />
     <ClInclude Include="imgui\imconfig.h">
       <Filter>imgui</Filter>
     </ClInclude>
@@ -51,20 +52,22 @@
     <ClInclude Include="imgui\imstb_textedit.h">
       <Filter>imgui</Filter>
     </ClInclude>
+    <ClInclude Include="framework.h" />
     <ClInclude Include="config_value_cache.h" />
-    <ClInclude Include="gui.h" />
-    <ClInclude Include="settings.h" />
-    <ClInclude Include="utils.h" />
+    <ClInclude Include="cpu_optimization.h" />
     <ClInclude Include="d3d9_hook.h" />
-    <ClInclude Include="settings_gui.h" />
-    <ClInclude Include="preset_manager.h" />
-    <ClInclude Include="util.h" />
-    <ClInclude Include="pattern_scan.h" />
-    <ClInclude Include="vtable_manager.h" />
+    <ClInclude Include="gui.h" />
     <ClInclude Include="intersection_patch.h" />
     <ClInclude Include="optimization.h" />
+    <ClInclude Include="pattern_scan.h" />
+    <ClInclude Include="pch.h" />
+    <ClInclude Include="preset_manager.h" />
     <ClInclude Include="qol.h" />
+    <ClInclude Include="settings.h" />
+    <ClInclude Include="settings_gui.h" />
     <ClInclude Include="small_patches.h" />
+    <ClInclude Include="utils.h" />
+    <ClInclude Include="vtable_manager.h" />
   </ItemGroup>
   <ItemGroup>
     <Filter Include="imgui">
