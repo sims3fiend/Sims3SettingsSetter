@@ -1,6 +1,7 @@
 #include "vtable_manager.h"
 #include <Psapi.h>
 #include "utils.h"
+#include "logger.h"
 
 //need to make this less specific to debug since I'll probably want to use this for other things
 static bool IsWithinModule(uintptr_t address, HMODULE module) {
@@ -79,43 +80,43 @@ bool VTableManager::Initialize() {
     // Find constructor using pattern
     uintptr_t ctorAddr = Pattern::Scan(constructorPattern);
     if(!ctorAddr) {
-        Utils::Logger::Get().Log("[VTableManager] Constructor pattern not found");
+        LOG_ERROR("[VTableManager] Constructor pattern not found");
         return false;
     }
 
     // Extract VTABLE address from constructor MOV instruction
     vtableBase = *reinterpret_cast<uintptr_t*>(ctorAddr + 5);
     if(!vtableBase) {
-        Utils::Logger::Get().Log("[VTableManager] Invalid base address");
+        LOG_ERROR("[VTableManager] Invalid base address");
         return false;
     }
 
     // Multi-layer validation
     validated = ValidateVTable(vtableBase);
     if(!validated) {
-        Utils::Logger::Get().Log("[VTableManager] Validation failed");
+        LOG_ERROR("[VTableManager] Validation failed");
         vtableBase = 0;
         return false;
     }
 
-    Utils::Logger::Get().Log("[VTableManager] Initialized successfully");
+    LOG_INFO("[VTableManager] Initialized successfully");
     return true;
 }
 
 void* VTableManager::GetFunctionAddress(const char* debugStr, uintptr_t offset) {
     if(!validated || !vtableBase) {
-        Utils::Logger::Get().Log("[VTableManager] Not initialized");
+        LOG_ERROR("[VTableManager] Not initialized");
         return nullptr;
     }
 
     uintptr_t funcAddr = *reinterpret_cast<uintptr_t*>(vtableBase + offset);
     if(!IsExecutableAddress(funcAddr)) {
-        Utils::Logger::Get().Log("[VTableManager] Invalid function at offset " + std::to_string(offset));
+        LOG_ERROR("[VTableManager] Invalid function at offset " + std::to_string(offset));
         return nullptr;
     }
 
     if (!IsWithinModule(funcAddr, GetModuleHandle(nullptr))) {
-        Utils::Logger::Get().Log("[VTableManager] Function outside main module at offset " + std::to_string(offset));
+        LOG_ERROR("[VTableManager] Function outside main module at offset " + std::to_string(offset));
         return nullptr;
     }
 
@@ -128,10 +129,10 @@ void* VTableManager::GetFunctionAddress(const char* debugStr, uintptr_t offset) 
             varLiteral = FindAsciiStringAddress("Debug/VarMan");
         }
         if (varLiteral && !FunctionReferencesPointer(funcAddr, 0x200, varLiteral)) {
-            Utils::Logger::Get().Log("[VTableManager] Warning: VariableRegistry slot did not reference expected literal near prologue.");
+            LOG_WARNING("[VTableManager] VariableRegistry slot did not reference expected literal near prologue.");
         }
     }
 
-    Utils::Logger::Get().Log(std::string("[VTableManager] Resolved ") + debugStr + " at 0x" + std::to_string(funcAddr));
+    LOG_DEBUG(std::string("[VTableManager] Resolved ") + debugStr + " at 0x" + std::to_string(funcAddr));
     return reinterpret_cast<void*>(funcAddr);
 } 

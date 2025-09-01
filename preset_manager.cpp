@@ -1,5 +1,6 @@
 #include "preset_manager.h"
 #include "utils.h"
+#include "logger.h"
 #include "optimization.h"
 #include <fstream>
 #include <sstream>
@@ -34,7 +35,7 @@ void PresetManager::Initialize() {
         EnsureDefaultPreset();
     }
     catch (const std::exception& e) {
-        Utils::Logger::Get().Log(std::string("[PresetManager] Failed to initialize preset system: ") + e.what());
+        LOG_ERROR(std::string("[PresetManager] Failed to initialize preset system: ") + e.what());
     }
 }
 
@@ -73,7 +74,7 @@ bool PresetManager::LoadPresetWithStrategy(const std::string& name, PresetLoadSt
             return false;
         }
         
-        Utils::Logger::Get().Log("[PresetManager] Loading preset from: " + presetPath.string());
+        LOG_INFO("[PresetManager] Loading preset from: " + presetPath.string());
         
         if (strategy == PresetLoadStrategy::Overwrite) {
             // First try to load values from defaults file if it exists
@@ -81,9 +82,9 @@ bool PresetManager::LoadPresetWithStrategy(const std::string& name, PresetLoadSt
             if (fs::exists(defaultsPath)) {
                 std::string loadError;
                 if (SettingsManager::Get().LoadDefaultValues(defaultsPath, &loadError)) {
-                    Utils::Logger::Get().Log("[PresetManager] Loaded default values from S3SS_defaults.ini");
+                    LOG_INFO("[PresetManager] Loaded default values from S3SS_defaults.ini");
                 } else {
-                    Utils::Logger::Get().Log("[PresetManager] Warning: Failed to load defaults file: " + loadError);
+                    LOG_WARNING("[PresetManager] Failed to load defaults file: " + loadError);
                 }
             }
             
@@ -98,14 +99,14 @@ bool PresetManager::LoadPresetWithStrategy(const std::string& name, PresetLoadSt
                 setting->SetUnsavedChanges(true);  // Mark as needing update
             }
             
-            Utils::Logger::Get().Log("[PresetManager] Reset all settings to defaults before loading preset");
+            LOG_INFO("[PresetManager] Reset all settings to defaults before loading preset");
         }
         
         // Now load the preset on top of current settings
         bool success = SettingsManager::Get().LoadConfig(presetPath.string(), error);
         
         if (success) {
-            OutputDebugStringA("Successfully loaded settings from preset\n");
+            LOG_INFO("Successfully loaded settings from preset");
             
             // Force UI update by marking settings as changed
             auto& settingsManager = SettingsManager::Get();
@@ -124,19 +125,19 @@ bool PresetManager::LoadPresetWithStrategy(const std::string& name, PresetLoadSt
             saveSuccess &= OptimizationManager::Get().SaveState("S3SS.ini");
             
             if (!saveSuccess) {
-                Utils::Logger::Get().Log("[PresetManager] Warning: Auto-save after preset load failed: " + saveError);
+                LOG_WARNING("[PresetManager] Auto-save after preset load failed: " + saveError);
             } else {
-                Utils::Logger::Get().Log("[PresetManager] Auto-saved settings after loading preset");
+                LOG_INFO("[PresetManager] Auto-saved settings after loading preset");
             }
         } else {
-            Utils::Logger::Get().Log("[PresetManager] Failed to load settings from preset: " + (error ? *error : std::string("unknown error")));
+            LOG_ERROR("[PresetManager] Failed to load settings from preset: " + (error ? *error : std::string("unknown error")));
         }
         
         return success;
     }
     catch (const std::exception& e) {
         if (error) *error = "Error loading preset: " + std::string(e.what());
-        Utils::Logger::Get().Log(std::string("[PresetManager] Exception while loading preset: ") + e.what());
+        LOG_ERROR(std::string("[PresetManager] Exception while loading preset: ") + e.what());
         return false;
     }
 }
@@ -172,7 +173,7 @@ std::vector<PresetManager::PresetInfo> PresetManager::GetAvailablePresets() {
         }
     }
     catch (const std::exception& e) {
-        Utils::Logger::Get().Log(std::string("[PresetManager] Error getting presets: ") + e.what());
+        LOG_ERROR(std::string("[PresetManager] Error getting presets: ") + e.what());
     }
     
     return presets;
@@ -184,7 +185,7 @@ void PresetManager::EnsureDefaultPreset() {
     if (!fs::exists(defaultPreset)) {
         std::string error;
         if (!SavePreset(DEFAULT_PRESET_NAME, "Default settings configuration", &error)) {
-            Utils::Logger::Get().Log("[PresetManager] Failed to create default preset: " + error);
+            LOG_ERROR("[PresetManager] Failed to create default preset: " + error);
         }
     }
 } 

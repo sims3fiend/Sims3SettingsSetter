@@ -8,6 +8,7 @@
 #include "d3d9_hook.h"
 #include "settings.h"
 #include "preset_manager.h"
+#include "logger.h"
 #include "pattern_scan.h"
 #include "vtable_manager.h"
 #include "optimization.h"
@@ -24,7 +25,7 @@
 
 enum class SettingType { //TODO check these please :) maybe the dll thing has them better defined
     Int32 = 0,
-    Uint32 = 1, 
+    Uint32 = 1,
     Float = 2,
     String = 3,
     Bool = 4,
@@ -100,7 +101,7 @@ protected:
             << "  Min: " << std::fixed << min << "\n"
             << "  Max: " << max << "\n"
             << "  Step: " << step << "\n";
-        OutputDebugStringA(log.str().c_str());
+        LOG_DEBUG(log.str());
 
         auto setting = std::make_unique<Setting>(targetAddr, metadata, defaultValue);
         SettingsManager::Get().RegisterSetting(name, std::move(setting));
@@ -119,86 +120,88 @@ Utils::Logger* Utils::Logger::s_instance = nullptr;
 
 // VariableRegistryHook
 class VariableRegistryHook : public SettingsHook {
-    typedef void(__thiscall* FuncType)(void* thisPtr, int param2, void* ptr, 
-        const wchar_t* name, int type, int param5, int param6, float param7, 
+    typedef void(__thiscall* FuncType)(void* thisPtr, int param2, void* ptr,
+        const wchar_t* name, int type, int param5, int param6, float param7,
         float param8, float param9);
     static inline VariableRegistryHook* instance = nullptr;
 
-    static void __fastcall HookFunc(void* thisPtr, void* edx, int param2, void* ptr, 
-        const wchar_t* name, int type, int param5, int param6, float param7, 
+    static void __fastcall HookFunc(void* thisPtr, void* edx, int param2, void* ptr,
+        const wchar_t* name, int type, int param5, int param6, float param7,
         float param8, float param9) {
-        
+
         // Determine actual type based on the parameters
         SettingType actualType;
         if (type == static_cast<int>(RegistrationType::ViaCommonHandler)) {
             if (param5 == 100000 && param6 == 1) {
                 actualType = static_cast<SettingType>(param2);
-            } else {
+            }
+            else {
                 actualType = SettingType::Unknown;
             }
-        } else {
+        }
+        else {
             actualType = static_cast<SettingType>(type);
         }
 
         // Value reading logic
         if (ptr && IsSafeToRead<void*>(ptr)) {
             switch (actualType) {
-                case SettingType::Int32: {
-                    int value = *static_cast<int*>(ptr);
-                    instance->RegisterSetting(ptr, name, value,
-                        static_cast<float>(param5), static_cast<float>(param6), param9);
-                    break;
+            case SettingType::Int32: {
+                int value = *static_cast<int*>(ptr);
+                instance->RegisterSetting(ptr, name, value,
+                    static_cast<float>(param5), static_cast<float>(param6), param9);
+                break;
+            }
+            case SettingType::Uint32: {
+                unsigned int value = *static_cast<unsigned int*>(ptr);
+
+                // Check if min/max are reversed for uint32 types
+                float minVal = static_cast<float>(param5);
+                float maxVal = static_cast<float>(param6);
+
+                // If min > max, swap them to prevent std::clamp errors
+                if (minVal > maxVal) {
+                    std::swap(minVal, maxVal);
                 }
-                case SettingType::Uint32: {
-                    unsigned int value = *static_cast<unsigned int*>(ptr);
-                    
-                    // Check if min/max are reversed for uint32 types
-                    float minVal = static_cast<float>(param5);
-                    float maxVal = static_cast<float>(param6);
-                    
-                    // If min > max, swap them to prevent std::clamp errors
-                    if (minVal > maxVal) {
-                        std::swap(minVal, maxVal);
-                    }
-                    
-                    instance->RegisterSetting(ptr, name, value, minVal, maxVal, param9);
-                    break;
-                }
-                case SettingType::Float: {
-                    float value = *static_cast<float*>(ptr);
-                    instance->RegisterSetting(ptr, name, value, param7, param8, param9);
-                    break;
-                }
-                case SettingType::String: {
-                    // Not registered for GUI because there aren't any
-                    break;
-                }
-                case SettingType::Bool: {
-                    bool value = *static_cast<bool*>(ptr);
-                    instance->RegisterSetting(ptr, name, value);
-                    break;
-                }
-                case SettingType::Vector2: {
-                    float* values = static_cast<float*>(ptr);
-                    instance->RegisterSetting(ptr, name, Vector2{values[0], values[1]}, param7, param8, param9);
-                    break;
-                }
-                case SettingType::Vector3: {
-                    float* values = static_cast<float*>(ptr);
-                    instance->RegisterSetting(ptr, name, Vector3{values[0], values[1], values[2]}, 
-                                           param7, param8, param9);
-                    break;
-                }
-                case SettingType::Vector4: {
-                    float* values = static_cast<float*>(ptr);
-                    instance->RegisterSetting(ptr, name, Vector4{values[0], values[1], values[2], values[3]}, 
-                                           param7, param8, param9);
-                    break;
-                }
-                default: {
-                    // Unknown type, don't register
-                    break;
-                }
+
+                instance->RegisterSetting(ptr, name, value, minVal, maxVal, param9);
+                break;
+            }
+            case SettingType::Float: {
+                float value = *static_cast<float*>(ptr);
+                instance->RegisterSetting(ptr, name, value, param7, param8, param9);
+                break;
+            }
+            case SettingType::String: {
+                // Not registered for GUI because there aren't any
+                break;
+            }
+            case SettingType::Bool: {
+                bool value = *static_cast<bool*>(ptr);
+                instance->RegisterSetting(ptr, name, value);
+                break;
+            }
+            case SettingType::Vector2: {
+                float* values = static_cast<float*>(ptr);
+                instance->RegisterSetting(ptr, name, Vector2{ values[0], values[1] }, param7, param8, param9);
+                break;
+            }
+            case SettingType::Vector3: {
+                float* values = static_cast<float*>(ptr);
+                instance->RegisterSetting(ptr, name, Vector3{ values[0], values[1], values[2] },
+                    param7, param8, param9);
+                break;
+            }
+            case SettingType::Vector4: {
+                float* values = static_cast<float*>(ptr);
+                instance->RegisterSetting(ptr, name, Vector4{ values[0], values[1], values[2], values[3] },
+                    param7, param8, param9);
+                break;
+            }
+            default: {
+                // Unknown type, don't register
+                break;
+            }
             }
         }
 
@@ -211,18 +214,18 @@ class VariableRegistryHook : public SettingsHook {
         if (name && wcscmp(name, L"MT Time Step") == 0) {
             // This is a good time to mark settings as initialized and save defaults
             auto& settingsManager = SettingsManager::Get();
-            
+
             if (!settingsManager.IsInitialized()) {
-                Utils::Logger::Get().Log("All settings appear to be registered, saving default values");
+                LOG_INFO("All settings appear to be registered, saving default values");
                 settingsManager.SetInitialized(true);
-                
+
                 // Save default settings to a file
                 std::string error;
                 if (!settingsManager.SaveDefaultValues("S3SS_defaults.ini", &error)) {
-                    Utils::Logger::Get().Log("Failed to save default settings: " + error);
+                    LOG_ERROR("Failed to save default settings: " + error);
                 }
                 else {
-                    Utils::Logger::Get().Log("Successfully saved default settings");
+                    LOG_INFO("Successfully saved default settings");
                 }
             }
         }
@@ -302,7 +305,7 @@ class ConfigRetrievalHook : public SettingsHook {
                     if (it != configValues.end() && it->second.isModified) {
                         // We have a saved override, use our value instead
                         const std::wstring& savedValue = it->second.currentValue;
-                        
+
                         // Use ConfigValueCache to get a persistent buffer for this value
                         wchar_t* newBuffer = ConfigValueCache::Instance().GetBuffer(fullKey, savedValue);
                         if (newBuffer) {
@@ -323,11 +326,12 @@ class ConfigRetrievalHook : public SettingsHook {
                         std::wstring originalValue = *outValue;
                         wchar_t* cachedBuffer = ConfigValueCache::Instance().GetBuffer(fullKey, originalValue);
                         *outValue = cachedBuffer;
-                        
+
                         info.currentValue = originalValue;
                         info.bufferSize = wcslen(*outValue) + 1;
                         info.valueType = DetectValueType(*outValue);
-                    } else {
+                    }
+                    else {
                         // For non-existent values, store empty value but reasonable buffer size
                         info.currentValue = L"";
                         info.bufferSize = 256;  // Default reasonable size
@@ -346,7 +350,7 @@ class ConfigRetrievalHook : public SettingsHook {
                 }
             }
             catch (const std::exception& e) {
-                Utils::Logger::Get().Log("Exception in ConfigRetrievalHook: " + std::string(e.what()));
+                LOG_ERROR("Exception in ConfigRetrievalHook: " + std::string(e.what()));
             }
         }
 
@@ -355,15 +359,15 @@ class ConfigRetrievalHook : public SettingsHook {
 
     static ConfigValueType DetectValueType(const wchar_t* value) {
         if (!value || !*value) return ConfigValueType::Unknown;
-        
+
         // Try to detect type based on value format
         std::wstring str = value;
-        
+
         // Check for boolean
         if (str == L"true" || str == L"false" || str == L"0" || str == L"1") {
             return ConfigValueType::Boolean;
         }
-        
+
         // Check if it's a number
         try {
             size_t pos;
@@ -372,7 +376,7 @@ class ConfigRetrievalHook : public SettingsHook {
             if (pos == str.length()) {
                 return ConfigValueType::Integer;
             }
-            
+
             // Try float
             std::stof(str, &pos);
             if (pos == str.length()) {
@@ -382,7 +386,7 @@ class ConfigRetrievalHook : public SettingsHook {
         catch (...) {
             // Not a number
         }
-        
+
         // Check if it contains any non-ASCII characters
         bool hasWideChar = false;
         for (wchar_t c : str) {
@@ -391,7 +395,7 @@ class ConfigRetrievalHook : public SettingsHook {
                 break;
             }
         }
-        
+
         return hasWideChar ? ConfigValueType::WideString : ConfigValueType::String;
     }
 
@@ -433,16 +437,16 @@ class CustomDebugVarHook : public SettingsHook {
 
     static void __fastcall HookFunc(void* thisPtr, void* edx, int param2, int param3, wchar_t* name,
         int param5, int param6, float param7, float param8, float param9) {
-        
+
         // Log raw parameters
         std::stringstream rawLog;
-        rawLog << "CustomDebugVar Raw - param2: " << param2 
-               << ", param3: 0x" << std::hex << param3
-               << ", param5: " << std::dec << param5 
-               << ", param6: " << param6 
-               << ", range: [" << param7 << " to " << param8 << "]"
-               << ", step: " << param9 << "\n";
-        OutputDebugStringA(rawLog.str().c_str());
+        rawLog << "CustomDebugVar Raw - param2: " << param2
+            << ", param3: 0x" << std::hex << param3
+            << ", param5: " << std::dec << param5
+            << ", param6: " << param6
+            << ", range: [" << param7 << " to " << param8 << "]"
+            << ", step: " << param9 << "\n";
+        LOG_DEBUG(rawLog.str());
 
         // param3 is the direct address of the value
         void* valueAddr = reinterpret_cast<void*>(param3);
@@ -450,58 +454,58 @@ class CustomDebugVarHook : public SettingsHook {
         // Log basic info
         std::stringstream log;
         instance->LogBasicInfo(log, thisPtr, valueAddr, name);
-        OutputDebugStringA(log.str().c_str());
+        LOG_DEBUG(log.str());
 
         // Register the setting
         if (valueAddr && name) {
             //param2 is the type which relates to FUN_005a1340
             SettingType type = static_cast<SettingType>(param2);
-            
+
             std::stringstream regLog;
-            regLog << "Registering setting type " << static_cast<int>(type) 
-                  << " at address 0x" << std::hex << valueAddr << "\n";
-            OutputDebugStringA(regLog.str().c_str());
-            
+            regLog << "Registering setting type " << static_cast<int>(type)
+                << " at address 0x" << std::hex << valueAddr << "\n";
+            LOG_DEBUG(regLog.str());
+
             switch (type) {
-                case SettingType::Int32:
-                    instance->RegisterSetting(valueAddr, name, 
-                        *reinterpret_cast<int*>(valueAddr), 
-                        static_cast<float>(param5), static_cast<float>(param6), param9);
-                    break;
-                case SettingType::Uint32:
-                    instance->RegisterSetting(valueAddr, name, 
-                        *reinterpret_cast<unsigned int*>(valueAddr),
-                        static_cast<float>(param5), static_cast<float>(param6), param9);
-                    break;
-                case SettingType::Float:
-                    instance->RegisterSetting(valueAddr, name, 
-                        *reinterpret_cast<float*>(valueAddr), param7, param8, param9);
-                    break;
-                case SettingType::Bool:
-                    instance->RegisterSetting(valueAddr, name, 
-                        *reinterpret_cast<bool*>(valueAddr));
-                    break;
-                case SettingType::Vector2: {
-                    float* values = reinterpret_cast<float*>(valueAddr);
-                    instance->RegisterSetting(valueAddr, name,
-                        Vector2{values[0], values[1]}, param7, param8, param9);
-                    break;
-                }
-                case SettingType::Vector3: {
-                    float* values = reinterpret_cast<float*>(valueAddr);
-                    instance->RegisterSetting(valueAddr, name,
-                        Vector3{values[0], values[1], values[2]}, param7, param8, param9);
-                    break;
-                }
-                case SettingType::Vector4: {
-                    float* values = reinterpret_cast<float*>(valueAddr);
-                    instance->RegisterSetting(valueAddr, name,
-                        Vector4{values[0], values[1], values[2], values[3]}, param7, param8, param9);
-                    break;
-                }
-                default:
-                    OutputDebugStringA(("Unknown setting type: " + std::to_string(param2) + "\n").c_str());
-                    break;
+            case SettingType::Int32:
+                instance->RegisterSetting(valueAddr, name,
+                    *reinterpret_cast<int*>(valueAddr),
+                    static_cast<float>(param5), static_cast<float>(param6), param9);
+                break;
+            case SettingType::Uint32:
+                instance->RegisterSetting(valueAddr, name,
+                    *reinterpret_cast<unsigned int*>(valueAddr),
+                    static_cast<float>(param5), static_cast<float>(param6), param9);
+                break;
+            case SettingType::Float:
+                instance->RegisterSetting(valueAddr, name,
+                    *reinterpret_cast<float*>(valueAddr), param7, param8, param9);
+                break;
+            case SettingType::Bool:
+                instance->RegisterSetting(valueAddr, name,
+                    *reinterpret_cast<bool*>(valueAddr));
+                break;
+            case SettingType::Vector2: {
+                float* values = reinterpret_cast<float*>(valueAddr);
+                instance->RegisterSetting(valueAddr, name,
+                    Vector2{ values[0], values[1] }, param7, param8, param9);
+                break;
+            }
+            case SettingType::Vector3: {
+                float* values = reinterpret_cast<float*>(valueAddr);
+                instance->RegisterSetting(valueAddr, name,
+                    Vector3{ values[0], values[1], values[2] }, param7, param8, param9);
+                break;
+            }
+            case SettingType::Vector4: {
+                float* values = reinterpret_cast<float*>(valueAddr);
+                instance->RegisterSetting(valueAddr, name,
+                    Vector4{ values[0], values[1], values[2], values[3] }, param7, param8, param9);
+                break;
+            }
+            default:
+                LOG_WARNING("Unknown setting type: " + std::to_string(param2));
+                break;
             }
         }
 
@@ -534,7 +538,7 @@ class HookManager {
 public:
     void Initialize() {
         if (!vtm.Initialize()) {
-            OutputDebugStringA("HookManager: Failed to initialize VTABLE\n");
+            LOG_ERROR("HookManager: Failed to initialize VTABLE");
             return;
         }
 
@@ -549,7 +553,7 @@ public:
             hooks.emplace_back(new ConfigRetrievalHook());
         }
         catch (const std::exception& e) {
-            OutputDebugStringA(("ConfigRetrievalHook Error: " + std::string(e.what()) + "\n").c_str());
+            LOG_ERROR("ConfigRetrievalHook Error: " + std::string(e.what()));
         }
 
         // Commit all hooks
@@ -582,7 +586,7 @@ private:
     void AddHook(const char* name, uintptr_t offset) {
         if (auto addr = vtm.GetFunctionAddress(name, offset)) {
             hooks.emplace_back(new T(addr));
-            OutputDebugStringA(("HookManager: Added " + std::string(name) + " hook\n").c_str());
+            LOG_INFO("HookManager: Added " + std::string(name) + " hook");
         }
     }
 };
@@ -596,85 +600,88 @@ DWORD g_ThreadId = 0;
 DWORD WINAPI HookThread(LPVOID lpParameter) {
     try {
         // Initialize logger
-        if (!Utils::Logger::Get().Initialize("S3SS_LOG.txt")) {
+        if (!Logger::Handler::Initialize("S3SS_LOG.txt")) {
             OutputDebugStringA("Failed to initialize logger\n");
         }
-        
-        Utils::Logger::Get().Log("Hook thread started");
+        Logger::Handler::SetFileLogging(true);
+#ifdef _DEBUG
+        Logger::Handler::SetDebugMode(true);
+#endif
+
+        LOG_INFO("Hook thread started");
 
         // Initialize CPU feature detection
         const auto& cpuFeatures = CPUFeatures::Get();
-        Utils::Logger::Get().Log(
-            std::string("[Optimization] CPU Features - SSE4.1: ") + 
-            (cpuFeatures.hasSSE41 ? "Yes" : "No") + 
+        LOG_INFO("[Optimization] CPU Features - SSE4.1: " +
+            std::string(cpuFeatures.hasSSE41 ? "Yes" : "No") +
             ", FMA: " + (cpuFeatures.hasFMA ? "Yes" : "No"));
 
         // Load UI settings first
         UISettings::Get().LoadFromINI("S3SS.ini");
-        
+
         // If settings need to be saved (file doesn't exist or missing QoL section), save them
         if (UISettings::Get().HasUnsavedChanges()) {
             UISettings::Get().SaveToINI("S3SS.ini");
             UISettings::Get().MarkAsSaved();
         }
-        
-        Utils::Logger::Get().Log("UI settings initialized");
+
+        LOG_INFO("UI settings initialized");
 
         // Initialize optimization patches
         try {
             auto& optimizationManager = OptimizationManager::Get();
-            Utils::Logger::Get().Log("Optimization patches registered");
-            
+            LOG_INFO("Optimization patches registered");
+
             // Load saved optimization states
             std::string error;
             if (!optimizationManager.LoadState("S3SS.ini")) {
-                Utils::Logger::Get().Log("Failed to load optimization states at startup");
+                LOG_WARNING("Failed to load optimization states at startup");
             }
             else {
-                Utils::Logger::Get().Log("Successfully loaded optimization states");
+                LOG_INFO("Successfully loaded optimization states");
             }
         }
         catch (const std::exception& e) {
-            Utils::Logger::Get().Log("Failed to initialize optimization patches: " + std::string(e.what()));
+            LOG_ERROR("Failed to initialize optimization patches: " + std::string(e.what()));
         }
 
         // Initialize settings hooks
         try {
             g_hookManager.Initialize();
-            Utils::Logger::Get().Log("Settings hooks initialized");
+            LOG_INFO("Settings hooks initialized");
 
             // Load saved settings
             std::string error;
             if (!SettingsManager::Get().LoadConfig("S3SS.ini", &error)) {
-                Utils::Logger::Get().Log("Failed to load settings at startup: " + error);
+                LOG_WARNING("Failed to load settings at startup: " + error);
             }
             else {
-                Utils::Logger::Get().Log("Successfully loaded settings");
+                LOG_INFO("Successfully loaded settings");
             }
 
             // Load QoL settings
             MemoryMonitor::Get().LoadSettings("S3SS.ini");
-            Utils::Logger::Get().Log("Successfully loaded QoL settings");
+            LOG_INFO("Successfully loaded QoL settings");
         }
         catch (const std::exception& e) {
-            Utils::Logger::Get().Log("Failed to initialize settings hooks: " + std::string(e.what()));
+            LOG_ERROR("Failed to initialize settings hooks: " + std::string(e.what()));
             return FALSE;
         }
 
         // Initialize D3D hooks
         if (!InitializeD3D9Hook()) {
-            Utils::Logger::Get().Log("Failed to initialize D3D9 hook");
+            LOG_ERROR("Failed to initialize D3D9 hook");
             return FALSE;
         }
 
-        Utils::Logger::Get().Log("Starting message loop");
+        LOG_INFO("Starting message loop");
 
         // Message loop with timeout to prevent stack overflow
         MSG msg;
         while (true) {
             if (PeekMessage(&msg, NULL, 0, 0, PM_REMOVE)) {
                 if (msg.message == WM_QUIT) {
-                    Utils::Logger::Get().Log("Received WM_QUIT, exiting hook thread");
+                    LOG_INFO("Received WM_QUIT, exiting hook thread");
                     return 0;
                 }
 
@@ -687,7 +694,7 @@ DWORD WINAPI HookThread(LPVOID lpParameter) {
             else {
                 // Update memory monitor
                 MemoryMonitor::Get().Update();
-                
+
                 // Sleep when no messages
                 Sleep(10);
             }
@@ -696,11 +703,11 @@ DWORD WINAPI HookThread(LPVOID lpParameter) {
         return 0;
     }
     catch (const std::exception& e) {
-        Utils::Logger::Get().Log("Exception in HookThread: " + std::string(e.what()));
+        LOG_ERROR("Exception in HookThread: " + std::string(e.what()));
         return 1;
     }
     catch (...) {
-        Utils::Logger::Get().Log("Unknown exception in HookThread");
+        LOG_ERROR("Unknown exception in HookThread");
         return 1;
     }
 }
@@ -710,33 +717,34 @@ BOOL APIENTRY DllMain(HMODULE hModule, DWORD reason, LPVOID lpReserved)
     switch (reason) {
     case DLL_PROCESS_ATTACH: {
         DisableThreadLibraryCalls(hModule);
-        
+
         // Check if we're in the correct process
         char processName[MAX_PATH];
         GetModuleFileNameA(NULL, processName, MAX_PATH);
-        
+
         // Extract just the filename from the path
         char* fileName = strrchr(processName, '\\');
         if (fileName) {
             fileName++; // Skip the backslash
-        } else {
+        }
+        else {
             fileName = processName;
         }
-        
+
         // Check if it's one of the expected executables
         if (_stricmp(fileName, "TS3.exe") != 0 && _stricmp(fileName, "TS3W.exe") != 0) {
-            OutputDebugStringA("S3SS: Error - Not injected into TS3.exe or TS3W.exe. Injection aborted.\n");
+            LOG_CRITICAL("S3SS: Error - Not injected into TS3.exe or TS3W.exe. Injection aborted.");
             return FALSE;
         }
-        
-        OutputDebugStringA(("S3SS: Successfully injected into " + std::string(fileName) + "\n").c_str());
-        
+
+        LOG_INFO("S3SS: Successfully injected into " + std::string(fileName));
+
         g_ThreadHandle = CreateThread(NULL, 0, HookThread, NULL, 0, &g_ThreadId);
         if (g_ThreadHandle == NULL) {
             char errorMsg[256];
             FormatMessageA(FORMAT_MESSAGE_FROM_SYSTEM, NULL, GetLastError(),
                 MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), errorMsg, 255, NULL);
-            OutputDebugStringA(("Failed to create hook thread: " + std::string(errorMsg)).c_str());
+            LOG_CRITICAL("Failed to create hook thread: " + std::string(errorMsg));
             return FALSE;
         }
         break;
@@ -765,9 +773,9 @@ BOOL APIENTRY DllMain(HMODULE hModule, DWORD reason, LPVOID lpReserved)
             }
 
             g_hookManager.Cleanup();
-            
+
             // Close logger
-            Utils::Logger::Get().Close();
+            Logger::Handler::Close();
         }
         break;
     }

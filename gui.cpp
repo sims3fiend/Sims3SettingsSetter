@@ -3,6 +3,7 @@
 #include "imgui_impl_win32.h"
 #include "imgui_impl_dx9.h"
 #include "utils.h"
+#include "logger.h"
 #include "settings_gui.h"
 #include <map>
 #include <sstream>
@@ -76,7 +77,7 @@ namespace SettingsGui {
                         if (success) {
                             UISettings::Get().MarkAsSaved();
                         } else {
-                            Utils::Logger::Get().Log("Failed to save settings: " + error);
+                            LOG_ERROR("Failed to save settings: " + error);
                         }
                     }
                     if (ImGui::MenuItem("Load Settings")) {
@@ -85,7 +86,7 @@ namespace SettingsGui {
                         // Also load optimization settings
                         success &= OptimizationManager::Get().LoadState("S3SS.ini");
                         if (!success) {
-                            Utils::Logger::Get().Log("Failed to load settings: " + error);
+                            LOG_ERROR("Failed to load settings: " + error);
                         }
                     }
                     
@@ -113,7 +114,7 @@ namespace SettingsGui {
                                     success &= OptimizationManager::Get().SaveState(presetPath);
                                 }
                                 if (!success) {
-                                    Utils::Logger::Get().Log("Failed to save preset: " + error);
+                                    LOG_ERROR("Failed to save preset: " + error);
                                 }
                             }
                         }
@@ -127,7 +128,7 @@ namespace SettingsGui {
                                 // Instead of loading immediately, set the pending preset and show dialog
                                 m_pendingPresetToLoad = preset.name;
                                 m_showPresetLoadDialog = true;
-                                Utils::Logger::Get().Log("Selected preset: " + preset.name + ", showing dialog");
+                                LOG_INFO("Selected preset: " + preset.name + ", showing dialog");
                             }
                             if (ImGui::IsItemHovered() && !preset.description.empty()) {
                                 ImGui::SetTooltip("%s", preset.description.c_str());
@@ -182,7 +183,7 @@ namespace SettingsGui {
                         ImGui::BeginChild("SettingsList", ImVec2(0, 0), true);
                         {
                             if (m_needsSort) {
-                                OutputDebugStringA("Resorting settings categories...\n");
+                                LOG_DEBUG("Resorting settings categories...");
                                 m_needsSort = false;
                             }
 
@@ -905,7 +906,7 @@ namespace SettingsGui {
         // First, make sure the popup is open
         if (!ImGui::IsPopupOpen("Load Preset")) {
             ImGui::OpenPopup("Load Preset");
-            Utils::Logger::Get().Log("Opening preset load dialog");
+            LOG_INFO("Opening preset load dialog");
         }
         
         if (ImGui::BeginPopupModal("Load Preset", &m_showPresetLoadDialog, 
@@ -943,7 +944,7 @@ namespace SettingsGui {
                 }
                 
                 if (!success) {
-                    Utils::Logger::Get().Log("Failed to load preset: " + error);
+                    LOG_ERROR("Failed to load preset: " + error);
                 }
                 
                 m_showPresetLoadDialog = false;
@@ -964,7 +965,7 @@ namespace SettingsGui {
                 }
                 
                 if (!success) {
-                    Utils::Logger::Get().Log("Failed to load preset: " + error);
+                    LOG_ERROR("Failed to load preset: " + error);
                 }
                 
                 m_showPresetLoadDialog = false;

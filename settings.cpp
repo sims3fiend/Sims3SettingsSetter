@@ -8,6 +8,7 @@
 #include <ctime>
 #include "utils.h"
 #include "config_value_cache.h"
+#include "logger.h"
 
 // Helper function to write a vector to string
 template<typename T>
@@ -138,12 +139,12 @@ const std::unordered_map<std::wstring, std::unique_ptr<Setting>>& SettingsManage
 bool SettingsManager::SaveConfig(const std::string& filename, std::string* error) const {
     try {
         // Debug logging
-        Utils::Logger::Get().Log("[SettingsManager] Begin SaveConfig");
+        LOG_DEBUG("[SettingsManager] Begin SaveConfig");
         
         std::ofstream file(filename);
         if (!file.is_open()) {
             if (error) *error = "Failed to open file for writing: " + filename;
-            Utils::Logger::Get().Log("[SettingsManager] Failed to open settings file for writing: " + filename);
+            LOG_ERROR("[SettingsManager] Failed to open settings file for writing: " + filename);
             return false;
         }
 
@@ -217,7 +218,7 @@ bool SettingsManager::SaveConfig(const std::string& filename, std::string* error
             setting->SetOverridden(true);
         }
 
-        Utils::Logger::Get().Log("[SettingsManager] Saved " + std::to_string(savedCount) + " settings");
+        LOG_INFO("[SettingsManager] Saved " + std::to_string(savedCount) + " settings");
 
         // Save modified config values
         int configCount = 0;
@@ -231,26 +232,26 @@ bool SettingsManager::SaveConfig(const std::string& filename, std::string* error
             }
         }
         
-        Utils::Logger::Get().Log("[SettingsManager] Saved " + std::to_string(configCount) + " config values");
-        Utils::Logger::Get().Log("[SettingsManager] End SaveConfig");
+        LOG_INFO("[SettingsManager] Saved " + std::to_string(configCount) + " config values");
+        LOG_DEBUG("[SettingsManager] End SaveConfig");
         
         return true;
     }
     catch (const std::exception& e) {
         if (error) *error = "Error saving config: " + std::string(e.what());
-        Utils::Logger::Get().Log(std::string("[SettingsManager] Error saving config: ") + e.what());
+        LOG_ERROR(std::string("[SettingsManager] Error saving config: ") + e.what());
         return false;
     }
 }
 
 bool SettingsManager::LoadConfig(const std::string& filename, std::string* error) {
     try {
-        Utils::Logger::Get().Log("[SettingsManager] Loading from: " + filename);
+        LOG_INFO("[SettingsManager] Loading from: " + filename);
         
         std::ifstream file(filename);
         if (!file.is_open()) {
             if (error) *error = "Failed to open file: " + filename;
-            Utils::Logger::Get().Log("[SettingsManager] Failed to open file: " + filename);
+            LOG_ERROR("[SettingsManager] Failed to open file: " + filename);
             return false;
         }
 
@@ -354,7 +355,7 @@ bool SettingsManager::LoadConfig(const std::string& filename, std::string* error
                             }, setting->GetDefaultValue());
                         }
                         catch (const std::exception& e) {
-                            Utils::Logger::Get().Log(std::string("[SettingsManager] Error parsing value for ") + Utils::WideToUtf8(currentSetting) + ": " + e.what());
+                            LOG_WARNING(std::string("[SettingsManager] Error parsing value for ") + Utils::WideToUtf8(currentSetting) + ": " + e.what());
                         }
                     } else {
                         // If setting doesn't exist yet, try to parse and store the value
@@ -381,24 +382,24 @@ bool SettingsManager::LoadConfig(const std::string& filename, std::string* error
                                     try {
                                         StorePendingSavedValue(currentSetting, std::stoi(value));
                                     } catch (...) {
-                                        Utils::Logger::Get().Log("[SettingsManager] Could not parse value: " + value);
+                                        LOG_WARNING("[SettingsManager] Could not parse value: " + value);
                                     }
                                 }
                             }
                         } catch (const std::exception& e) {
-                            Utils::Logger::Get().Log(std::string("[SettingsManager] Failed to parse pending value for ") + Utils::WideToUtf8(currentSetting) + ": " + e.what());
+                            LOG_WARNING(std::string("[SettingsManager] Failed to parse pending value for ") + Utils::WideToUtf8(currentSetting) + ": " + e.what());
                         }
                     }
                 }
             }
         }
 
-        Utils::Logger::Get().Log("[SettingsManager] Applied " + std::to_string(settingsCount) + " settings and " + std::to_string(configCount) + " config values");
+        LOG_INFO("[SettingsManager] Applied " + std::to_string(settingsCount) + " settings and " + std::to_string(configCount) + " config values");
         return true;
     }
     catch (const std::exception& e) {
         if (error) *error = "Error loading config: " + std::string(e.what());
-        Utils::Logger::Get().Log(std::string("[SettingsManager] Error loading config: ") + e.what());
+        LOG_ERROR(std::string("[SettingsManager] Error loading config: ") + e.what());
         return false;
     }
 }
@@ -612,8 +613,8 @@ bool SettingsManager::LoadDefaultValues(const std::string& filename, std::string
                         }
                     }
                     catch (const std::exception& e) {
-                        OutputDebugStringA(("Error parsing default value for " + 
-                            Utils::WideToUtf8(currentSetting) + ": " + e.what() + "\n").c_str());
+                        LOG_WARNING("Error parsing default value for " + 
+                            Utils::WideToUtf8(currentSetting) + ": " + e.what());
                     }
                 }
             }
@@ -637,7 +638,7 @@ void SettingsManager::ResetSettingToDefault(const std::wstring& name) {
         settingIt->second->SetUnsavedChanges(true);
         settingIt->second->SetOverridden(true);
         
-        OutputDebugStringA(("Reset setting " + Utils::WideToUtf8(name) + " to default value\n").c_str());
+        LOG_DEBUG("Reset setting " + Utils::WideToUtf8(name) + " to default value");
     }
 }
 
@@ -652,16 +653,16 @@ void SettingsManager::ResetAllSettings() {
         }
     }
     
-    OutputDebugStringA("Reset all settings to default values\n");
+    LOG_INFO("Reset all settings to default values");
 } 
 
 void SettingsManager::ManualInitialize() {
     if (m_initialized) {
-        OutputDebugStringA("Settings already initialized, ignoring manual initialization request\n");
+        LOG_DEBUG("Settings already initialized, ignoring manual initialization request");
         return;
     }
     
-    OutputDebugStringA("Manual initialization requested by user\n");
+    LOG_INFO("Manual initialization requested by user");
     
     // Set initialized flag
     m_initialized = true;
@@ -669,11 +670,11 @@ void SettingsManager::ManualInitialize() {
     // Save default settings to a file
     std::string error;
     if (!SaveDefaultValues("S3SS_defaults.ini", &error)) {
-        Utils::Logger::Get().Log("Failed to save default settings during manual init: " + error);
+        LOG_ERROR("Failed to save default settings during manual init: " + error);
     }
     else {
-        Utils::Logger::Get().Log("Successfully saved default settings during manual init");
+        LOG_INFO("Successfully saved default settings during manual init");
     }
     
-    OutputDebugStringA("Manual initialization completed\n");
+    LOG_INFO("Manual initialization completed");
 } 

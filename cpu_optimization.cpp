@@ -2,7 +2,9 @@
 #include <detours.h>
 #include <intrin.h>
 #include "utils.h"
+#include "logger.h"
 #include <sstream>
+#include <cstring>
 
 // Initialize static instance
 CPUOptimizationPatch* CPUOptimizationPatch::instance = nullptr;
@@ -11,21 +13,29 @@ CPUOptimizationPatch* CPUOptimizationPatch::instance = nullptr;
 CPUOptimizationPatch::CPUOptimizationPatch() 
     : OptimizationPatch("CPUOptimization", nullptr) {
     instance = this;
+    InitializeCriticalSection(&threadsLock);
+    threads.reserve(MAX_THREADS);
     
     // Initialize CPU information
     GetCPUInfo();
+    
+    // Build CPU topology (P-cores / L3 groups)
+    BuildTopology();
     
     // Get the original function address
     originalSetThreadIdealProcessor = 
         (SetThreadIdealProcessorFn)GetProcAddress(GetModuleHandle(L"kernel32.dll"), "SetThreadIdealProcessor");
     
     if (!originalSetThreadIdealProcessor) {
-        Utils::Logger::Get().Log("Failed to find SetThreadIdealProcessor function");
+        LOG_ERROR("Failed to find SetThreadIdealProcessor function");
     }
 }
 
 // Destructor
 CPUOptimizationPatch::~CPUOptimizationPatch() {
+    // Ensure hook is uninstalled before destruction to avoid callbacks on a dead instance
+    Uninstall();
+    DeleteCriticalSection(&threadsLock);
     instance = nullptr;
 }
 
@@ -36,9 +46,10 @@ void CPUOptimizationPatch::GetCPUInfo() {
     
     // Get vendor string
     __cpuid(regs, 0);
-    *reinterpret_cast<int*>(cpuInfo.vendor) = regs[1];
-    *(reinterpret_cast<int*>(cpuInfo.vendor + 4)) = regs[3]; // Correct offset
-    *(reinterpret_cast<int*>(cpuInfo.vendor + 8)) = regs[2]; // Correct offset
+    // Vendor is 12 chars from EBX, EDX, ECX
+    std::memcpy(cpuInfo.vendor + 0, &regs[1], 4);
+    std::memcpy(cpuInfo.vendor + 4, &regs[3], 4);
+    std::memcpy(cpuInfo.vendor + 8, &regs[2], 4);
     cpuInfo.vendor[12] = '\0';
     
     // Get CPU brand string
@@ -46,9 +57,13 @@ void CPUOptimizationPatch::GetCPUInfo() {
     __cpuid(regs, 0x80000000);
     unsigned int maxExtFunc = regs[0]; // Get highest extended function supported
     if (maxExtFunc >= 0x80000004) {
-        __cpuid(reinterpret_cast<int*>(cpuInfo.brand), 0x80000002);
-        __cpuid(reinterpret_cast<int*>(cpuInfo.brand + 16), 0x80000003);
-        __cpuid(reinterpret_cast<int*>(cpuInfo.brand + 32), 0x80000004);
+        int brandRegs[4];
+        __cpuid(brandRegs, 0x80000002);
+        std::memcpy(cpuInfo.brand + 0, brandRegs, 16);
+        __cpuid(brandRegs, 0x80000003);
+        std::memcpy(cpuInfo.brand + 16, brandRegs, 16);
+        __cpuid(brandRegs, 0x80000004);
+        std::memcpy(cpuInfo.brand + 32, brandRegs, 16);
         cpuInfo.brand[48] = '\0'; // Ensure null termination
     }
     
@@ -81,13 +96,23 @@ void CPUOptimizationPatch::GetCPUInfo() {
        << "Family: " << cpuInfo.family << ", Model: " << cpuInfo.model << "\n"
        << "Logical Processors: " << cpuInfo.logicalProcessors << "\n"
        << "Hybrid Architecture: " << (cpuInfo.isHybrid ? "Yes" : "No");
-    Utils::Logger::Get().Log(ss.str());
+    LOG_INFO(ss.str());
 }
 
 // Check if this is a hybrid CPU architecture
 bool CPUOptimizationPatch::IsHybridCPU() {
-    // Intel Alder Lake+ CPU (12th gen+) 
-    if (strncmp(cpuInfo.vendor, "GenuineIntel", 12) == 0) {
+    // Prefer CPUID leaf 0x1A (Hybrid Information) when available
+    if (std::strncmp(cpuInfo.vendor, "GenuineIntel", 12) == 0) {
+        int regs[4] = {0};
+        __cpuid(regs, 0);
+        unsigned int maxBasic = (unsigned int)regs[0];
+        if (maxBasic >= 0x1A) {
+            __cpuid(regs, 0x1A);
+            unsigned int coreType = (unsigned int)(regs[0] & 0xFF); // EAX[7:0] core type (1=E-core, 2=P-core)
+            // If leaf exists, assume hybrid capable; precise mapping will be built in BuildTopology
+            return coreType != 0; 
+        }
+        // Fallback to family/model heuristic for older toolchains
         return (cpuInfo.family == 6 && cpuInfo.model >= 0x97);
     }
     return false;
@@ -98,28 +123,32 @@ DWORD CPUOptimizationPatch::OptimizeThreadProcessor(DWORD requestedProcessor) {
     // Default to the requested processor
     DWORD finalProcessor = requestedProcessor;
     
-    if (cpuInfo.logicalProcessors >= 8) {
-        // Hybrid CPU optimization (Intel E-cores vs P-cores)
-        if (cpuInfo.isHybrid) {
-            // On Intel hybrid, first N cores are P-cores (depends on SKU)
-            // Approximate heuristic: first half of cores are P-cores
-            int p_core_count = cpuInfo.logicalProcessors / 2;
-            
-            // If requested processor is outside P-core range, use a P-core instead
-            if (requestedProcessor >= (DWORD)p_core_count) {
-                finalProcessor = requestedProcessor % p_core_count;  // Distribute across P-cores
-                Utils::Logger::Get().Log("Hybrid CPU: Redirecting thread from core " + 
+    if (cpuInfo.logicalProcessors >= 2) {
+        // Intel Hybrid: route to detected P-core set when available
+        if (cpuInfo.isHybrid && !pCoreIndices.empty()) {
+            bool isRequestedPCore = false;
+            for (DWORD idx : pCoreIndices) {
+                if (idx == requestedProcessor) { isRequestedPCore = true; break; }
+            }
+            if (!isRequestedPCore) {
+                DWORD mapped = pCoreIndices[requestedProcessor % pCoreIndices.size()];
+                finalProcessor = mapped;
+                LOG_DEBUG("Hybrid CPU: Redirecting thread from core " +
                     std::to_string(requestedProcessor) + " to P-core " + std::to_string(finalProcessor));
             }
         }
-        // AMD Zen architecture optimization
-        else if (strncmp(cpuInfo.vendor, "AuthenticAMD", 12) == 0) {
-            // Default to first 4 cores on AMD (typically in same CCX)
-            if (requestedProcessor >= 4) {
-                // Distribute across first 4 cores
-                finalProcessor = requestedProcessor % 4;
-                Utils::Logger::Get().Log("AMD CPU: Redistributing thread from core " + 
-                    std::to_string(requestedProcessor) + " to core " + std::to_string(finalProcessor));
+        // AMD Zen: keep within a single L3 group (approx CCX)
+        else if (std::strncmp(cpuInfo.vendor, "AuthenticAMD", 12) == 0 && !l3Groups.empty()) {
+            const std::vector<DWORD>& g0 = l3Groups[0];
+            if (!g0.empty()) {
+                bool inGroup = false;
+                for (DWORD idx : g0) { if (idx == requestedProcessor) { inGroup = true; break; } }
+                if (!inGroup) {
+                    DWORD mapped = g0[requestedProcessor % g0.size()];
+                    finalProcessor = mapped;
+                    LOG_DEBUG("AMD CPU: Redirecting thread from core " +
+                        std::to_string(requestedProcessor) + " to CCX core " + std::to_string(finalProcessor));
+                }
             }
         }
     }
@@ -130,8 +159,12 @@ DWORD CPUOptimizationPatch::OptimizeThreadProcessor(DWORD requestedProcessor) {
 // Hook for SetThreadIdealProcessor
 DWORD WINAPI CPUOptimizationPatch::HookedSetThreadIdealProcessor(HANDLE hThread, DWORD dwIdealProcessor) {
     if (!instance || !instance->originalSetThreadIdealProcessor) {
-        // Use MAXDWORD instead of DWORD_MAX
-        return MAXDWORD; // Error case
+        HMODULE hKernel = GetModuleHandle(L"kernel32.dll");
+        auto pfnOrig = hKernel ? (SetThreadIdealProcessorFn)GetProcAddress(hKernel, "SetThreadIdealProcessor") : nullptr;
+        if (pfnOrig) {
+            return pfnOrig(hThread, dwIdealProcessor);
+        }
+        return MAXDWORD; // last resort
     }
     
     // Get the thread ID
@@ -140,18 +173,25 @@ DWORD WINAPI CPUOptimizationPatch::HookedSetThreadIdealProcessor(HANDLE hThread,
     // Find optimal processor based on CPU architecture
     DWORD finalProcessor = instance->OptimizeThreadProcessor(dwIdealProcessor);
     
+    // Debug before/after mapping, don't forget to remove this :)))! Should just add a ini for this actually.... HMMMMM
+    LOG_DEBUG("SetThreadIdealProcessor: thread " + std::to_string(threadId) +
+        " requested=" + std::to_string(dwIdealProcessor) +
+        " final=" + std::to_string(finalProcessor));
+    
     // Track this thread
+    EnterCriticalSection(&instance->threadsLock);
     bool threadFound = false;
     for (auto& thread : instance->threads) {
         if (thread.threadId == threadId) {
             thread.originalProcessor = dwIdealProcessor;
             thread.finalProcessor = finalProcessor;
             threadFound = true;
+            LOG_DEBUG("Thread " + std::to_string(threadId) +
+                " ideal updated: requested=" + std::to_string(dwIdealProcessor) +
+                " final=" + std::to_string(finalProcessor));
             break;
         }
     }
-    
-    // Add new thread if not found
     if (!threadFound && instance->threads.size() < MAX_THREADS) {
         ThreadInfo info;
         info.threadId = threadId;
@@ -160,27 +200,100 @@ DWORD WINAPI CPUOptimizationPatch::HookedSetThreadIdealProcessor(HANDLE hThread,
         info.creationTime = GetTickCount();
         instance->threads.push_back(info);
         instance->threadCount++;
-        
-        // Update core usage mask
-        instance->coreUsageMask |= (1ULL << finalProcessor);
-        
-        // Log thread creation
-        Utils::Logger::Get().Log("Thread " + std::to_string(threadId) + 
-            " assigned to processor " + std::to_string(finalProcessor));
+        instance->coreUsageMask |= (static_cast<DWORD_PTR>(1) << finalProcessor);
+        LOG_DEBUG("Thread " + std::to_string(threadId) +
+            " ideal assigned: requested=" + std::to_string(dwIdealProcessor) +
+            " final=" + std::to_string(finalProcessor));
     }
+    LeaveCriticalSection(&instance->threadsLock);
     
     // Call original function with optimized processor
-    return instance->originalSetThreadIdealProcessor(hThread, finalProcessor);
+    DWORD previousIdeal = instance->originalSetThreadIdealProcessor(hThread, finalProcessor);
+    LOG_DEBUG("SetThreadIdealProcessor result: thread " + std::to_string(threadId) +
+        " previous=" + std::to_string(previousIdeal));
+    return previousIdeal;
+}
+
+// Build topology info for P-cores and AMD L3 groups
+void CPUOptimizationPatch::BuildTopology() {
+    pCoreIndices.clear();
+    l3Groups.clear();
+    hasEfficiencyInfo = false;
+
+    DetectIntelHybridViaCpuSets();
+    DetectAmdL3Groups();
+}
+
+void CPUOptimizationPatch::DetectIntelHybridViaCpuSets() {
+    if (std::strncmp(cpuInfo.vendor, "GenuineIntel", 12) != 0) return;
+
+    // Try CPUID 0x1A by pinning this thread to each logical processor (x86 limited to 32)
+    int regs[4] = {0};
+    __cpuid(regs, 0);
+    unsigned int maxBasic = (unsigned int)regs[0];
+    if (maxBasic < 0x1A) return;
+
+    HANDLE hThread = GetCurrentThread();
+    DWORD_PTR prevMask = SetThreadAffinityMask(hThread, (DWORD_PTR)-1);
+    if (prevMask == 0) {
+        // If cannot query affinity, bail
+        return;
+    }
+    // Restore immediately; we'll set per-index
+    SetThreadAffinityMask(hThread, prevMask);
+
+    for (DWORD i = 0; i < (DWORD)cpuInfo.logicalProcessors && i < (DWORD)(sizeof(DWORD_PTR) * 8); ++i) {
+        DWORD_PTR mask = (static_cast<DWORD_PTR>(1) << i);
+        DWORD_PTR old = SetThreadAffinityMask(hThread, mask);
+        if (old == 0) continue;
+        __cpuid(regs, 0x1A);
+        unsigned int coreType = (unsigned int)(regs[0] & 0xFF); // 1=E-core, 2=P-core (per Intel docs)
+        if (coreType == 2) {
+            pCoreIndices.push_back(i);
+        }
+        // restore previous
+        SetThreadAffinityMask(hThread, old);
+    }
+    if (!pCoreIndices.empty() && pCoreIndices.size() < (size_t)cpuInfo.logicalProcessors) {
+        hasEfficiencyInfo = true;
+    }
+}
+
+void CPUOptimizationPatch::DetectAmdL3Groups() {
+    if (std::strncmp(cpuInfo.vendor, "AuthenticAMD", 12) != 0) return;
+
+    DWORD length = 0;
+    GetLogicalProcessorInformationEx(RelationCache, nullptr, &length);
+    if (GetLastError() != ERROR_INSUFFICIENT_BUFFER || length == 0) return;
+
+    std::vector<unsigned char> buffer(length);
+    PSYSTEM_LOGICAL_PROCESSOR_INFORMATION_EX ptr = reinterpret_cast<PSYSTEM_LOGICAL_PROCESSOR_INFORMATION_EX>(buffer.data());
+    if (!GetLogicalProcessorInformationEx(RelationCache, ptr, &length)) return;
+
+    unsigned char* end = buffer.data() + length;
+    while (reinterpret_cast<unsigned char*>(ptr) < end) {
+        if (ptr->Relationship == RelationCache && ptr->Cache.Level == 3) {
+            std::vector<DWORD> indices;
+            KAFFINITY mask = ptr->Cache.GroupMask.Mask;
+            for (DWORD i = 0; i < (DWORD)(sizeof(KAFFINITY) * 8); ++i) {
+                if (mask & (static_cast<KAFFINITY>(1) << i)) {
+                    indices.push_back(i);
+                }
+            }
+            if (!indices.empty()) l3Groups.push_back(indices);
+        }
+        ptr = reinterpret_cast<PSYSTEM_LOGICAL_PROCESSOR_INFORMATION_EX>(reinterpret_cast<unsigned char*>(ptr) + ptr->Size);
+    }
 }
 
 // Install the patch
 bool CPUOptimizationPatch::Install() {
     if (isEnabled) return true;
     
-    Utils::Logger::Get().Log("Installing CPU optimization patch...");
+    LOG_INFO("Installing CPU optimization patch...");
     
     if (!originalSetThreadIdealProcessor) {
-        Utils::Logger::Get().Log("Cannot install CPU optimization - missing SetThreadIdealProcessor function");
+        LOG_ERROR("Cannot install CPU optimization - missing SetThreadIdealProcessor function");
         return false;
     }
     
@@ -189,19 +302,19 @@ bool CPUOptimizationPatch::Install() {
     
     LONG result = DetourAttach(&(PVOID&)originalSetThreadIdealProcessor, HookedSetThreadIdealProcessor);
     if (result != NO_ERROR) {
-        Utils::Logger::Get().Log("Failed to attach SetThreadIdealProcessor hook: " + std::to_string(result));
+        LOG_ERROR("Failed to attach SetThreadIdealProcessor hook: " + std::to_string(result));
         DetourTransactionAbort();
         return false;
     }
     
     result = DetourTransactionCommit();
     if (result != NO_ERROR) {
-        Utils::Logger::Get().Log("Failed to commit CPU optimization hook: " + std::to_string(result));
+        LOG_ERROR("Failed to commit CPU optimization hook: " + std::to_string(result));
         return false;
     }
     
     isEnabled = true;
-    Utils::Logger::Get().Log("CPU optimization patch installed successfully");
+    LOG_INFO("CPU optimization patch installed successfully");
     return true;
 }
 
@@ -209,25 +322,25 @@ bool CPUOptimizationPatch::Install() {
 bool CPUOptimizationPatch::Uninstall() {
     if (!isEnabled) return true;
     
-    Utils::Logger::Get().Log("Removing CPU optimization patch...");
+    LOG_INFO("Removing CPU optimization patch...");
     
     DetourTransactionBegin();
     DetourUpdateThread(GetCurrentThread());
     
     LONG result = DetourDetach(&(PVOID&)originalSetThreadIdealProcessor, HookedSetThreadIdealProcessor);
     if (result != NO_ERROR) {
-        Utils::Logger::Get().Log("Failed to detach SetThreadIdealProcessor hook: " + std::to_string(result));
+        LOG_ERROR("Failed to detach SetThreadIdealProcessor hook: " + std::to_string(result));
         DetourTransactionAbort();
         return false;
     }
     
     result = DetourTransactionCommit();
     if (result != NO_ERROR) {
-        Utils::Logger::Get().Log("Failed to commit CPU optimization hook removal: " + std::to_string(result));
+        LOG_ERROR("Failed to commit CPU optimization hook removal: " + std::to_string(result));
         return false;
     }
     
     isEnabled = false;
-    Utils::Logger::Get().Log("CPU optimization patch removed successfully");
+    LOG_INFO("CPU optimization patch removed successfully");
     return true;
 } 

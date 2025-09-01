@@ -1,5 +1,6 @@
 #include "qol.h"
 #include "utils.h"
+#include "logger.h"
 #include "settings.h"
 #include <Psapi.h>
 #include <fstream>
@@ -158,7 +159,7 @@ bool UISettings::SaveToINI(const std::string& filename) const {
             // Create a new file with just QoL settings
             std::ofstream newFile(filename);
             if (!newFile.is_open()) {
-                Utils::Logger::Get().Log("Failed to create " + filename);
+                LOG_ERROR("Failed to create " + filename);
                 return false;
             }
             
@@ -172,7 +173,7 @@ bool UISettings::SaveToINI(const std::string& filename) const {
             newFile << "\n";
             
             newFile.close();
-            Utils::Logger::Get().Log("Created new " + filename + " with QoL settings");
+            LOG_INFO("Created new " + filename + " with QoL settings");
             return true;
         }
         
@@ -202,7 +203,7 @@ bool UISettings::SaveToINI(const std::string& filename) const {
         // Append QoL settings to the end of the file
         std::ofstream file(filename, std::ios::app);
         if (!file.is_open()) {
-            Utils::Logger::Get().Log("Failed to open " + filename + " for appending QoL settings");
+            LOG_ERROR("Failed to open " + filename + " for appending QoL settings");
             return false;
         }
         
@@ -217,11 +218,11 @@ bool UISettings::SaveToINI(const std::string& filename) const {
         file << "\n";
         
         file.close();
-        Utils::Logger::Get().Log("Added QoL settings to " + filename);
+        LOG_INFO("Added QoL settings to " + filename);
         return true;
     }
     catch (const std::exception& e) {
-        Utils::Logger::Get().Log("Error saving QoL settings: " + std::string(e.what()));
+        LOG_ERROR("Error saving QoL settings: " + std::string(e.what()));
         return false;
     }
 }
@@ -234,7 +235,7 @@ bool UISettings::LoadFromINI(const std::string& filename) {
         if (!file.is_open()) {
             // File doesn't exist, use defaults and mark as needing save
             m_hasUnsavedChanges = true;
-            Utils::Logger::Get().Log("No " + filename + " found, will create with defaults");
+            LOG_INFO("No " + filename + " found, will create with defaults");
             return true;
         }
         
@@ -276,16 +277,16 @@ bool UISettings::LoadFromINI(const std::string& filename) {
         // If we didn't find settings, mark as needing save
         if (!foundSettings) {
             m_hasUnsavedChanges = true;
-            Utils::Logger::Get().Log("No [QoL] section found in " + filename + ", will add on next save");
+            LOG_INFO("No [QoL] section found in " + filename + ", will add on next save");
         } else {
             m_hasUnsavedChanges = false;
-            Utils::Logger::Get().Log("Loaded QoL settings from " + filename);
+            LOG_INFO("Loaded QoL settings from " + filename);
         }
         
         return true;
     }
     catch (const std::exception& e) {
-        Utils::Logger::Get().Log("Error loading QoL settings: " + std::string(e.what()));
+        LOG_ERROR("Error loading QoL settings: " + std::string(e.what()));
         return false;
     }
 }

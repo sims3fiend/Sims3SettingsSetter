@@ -1,5 +1,6 @@
 #include "intersection_patch.h"
 #include <detours.h>
+#include "logger.h"
 
 IntersectionPatch* IntersectionPatch::instance = nullptr;
 
@@ -20,11 +21,11 @@ bool IntersectionPatch::Install() {
     LONG error = DetourAttach(&originalFunc, OptimizedHook);
     if (DetourTransactionCommit() == NO_ERROR) {
         isEnabled = true;
-        OutputDebugStringA("[IntersectionPatch] Successfully installed\n");
+        LOG_INFO("[IntersectionPatch] Successfully installed");
         return true;
     }
     
-    OutputDebugStringA("[IntersectionPatch] Failed to install\n");
+    LOG_ERROR("[IntersectionPatch] Failed to install");
     return false;
 }
 

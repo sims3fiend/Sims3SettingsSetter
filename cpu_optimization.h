@@ -37,6 +37,14 @@ private:
     std::vector<ThreadInfo> threads;
     int threadCount = 0;
     DWORD_PTR coreUsageMask = 0;
+    CRITICAL_SECTION threadsLock;
+    
+    // Topology data
+    // Logical processor indices that are considered performance cores (Intel P-cores)
+    std::vector<DWORD> pCoreIndices;
+    // Logical processor indices grouped by shared L3 cache (approx CCX on AMD)
+    std::vector<std::vector<DWORD>> l3Groups;
+    bool hasEfficiencyInfo = false;
     
     // Static instance for hook callbacks
     static CPUOptimizationPatch* instance;
@@ -48,6 +56,9 @@ private:
     void GetCPUInfo();
     bool IsHybridCPU();
     DWORD OptimizeThreadProcessor(DWORD requestedProcessor);
+    void BuildTopology();
+    void DetectIntelHybridViaCpuSets();
+    void DetectAmdL3Groups();
     
 public:
     CPUOptimizationPatch();

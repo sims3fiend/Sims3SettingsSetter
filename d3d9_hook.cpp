@@ -9,6 +9,7 @@
 #include "settings_gui.h"
 #include "qol.h"
 #include "utils.h"
+#include "logger.h"
 
 // I HATE IMGUI I HATE IMGUI I HATE IMGUI
 
@@ -32,7 +33,7 @@ HRESULT __stdcall HookedEndScene(LPDIRECT3DDEVICE9 pDevice) {
     if (FAILED(coop) && coop != D3DERR_DEVICENOTRESET) {
         char buf[96];
         sprintf_s(buf, "[EndScene] Device not ready. hr=0x%08lX", (unsigned long)coop);
-        Utils::Logger::Get().Log(buf);
+        LOG_DEBUG(buf);
         g_inEndScene.store(false);
         return original_EndScene(pDevice);
     }
@@ -44,12 +45,12 @@ HRESULT __stdcall HookedEndScene(LPDIRECT3DDEVICE9 pDevice) {
             return original_EndScene(pDevice);
         }
         g_pd3dDevice = pDevice;
-        Utils::Logger::Get().Log("[EndScene] Initializing ImGui context");
+        LOG_INFO("[EndScene] Initializing ImGui context");
 
         // Get the correct window handle
         D3DDEVICE_CREATION_PARAMETERS params;
         if (FAILED(pDevice->GetCreationParameters(&params))) {
-            Utils::Logger::Get().Log("[EndScene] Failed to get device creation parameters");
+            LOG_ERROR("[EndScene] Failed to get device creation parameters");
             g_imguiInitializing.store(false);
             g_inEndScene.store(false);
             return original_EndScene(pDevice);
@@ -67,7 +68,7 @@ HRESULT __stdcall HookedEndScene(LPDIRECT3DDEVICE9 pDevice) {
             }
         }
         if (!gameWindow) {
-            Utils::Logger::Get().Log("[EndScene] No valid window handle found");
+            LOG_ERROR("[EndScene] No valid window handle found");
             g_imguiInitializing.store(false);
             g_inEndScene.store(false);
             return original_EndScene(pDevice);
@@ -88,19 +89,19 @@ HRESULT __stdcall HookedEndScene(LPDIRECT3DDEVICE9 pDevice) {
         if (!original_WndProc && wndProcErr != ERROR_SUCCESS) {
             char errBuf[128];
             sprintf_s(errBuf, "[EndScene] SetWindowLongPtr failed. GetLastError=0x%08lX", (unsigned long)wndProcErr);
-            Utils::Logger::Get().Log(errBuf);
+            LOG_ERROR(errBuf);
         }
         WNDPROC current = (WNDPROC)GetWindowLongPtr(gameWindow, GWLP_WNDPROC);
         if (current != HookedWndProc) {
-            Utils::Logger::Get().Log("[EndScene] WndProc hook verification failed");
+            LOG_WARNING("[EndScene] WndProc hook verification failed");
         }
-        Utils::Logger::Get().Log("[EndScene] Window procedure hooked successfully");
+        LOG_INFO("[EndScene] Window procedure hooked successfully");
 
         ImGui_ImplWin32_Init(gameWindow);
         ImGui_ImplDX9_Init(pDevice);
         g_imguiInitialized.store(true);
         g_imguiInitializing.store(false);
-        Utils::Logger::Get().Log("[EndScene] ImGui initialized");
+        LOG_INFO("[EndScene] ImGui initialized");
     }
 
     if (g_imguiInitialized.load()) {
@@ -116,10 +117,10 @@ HRESULT __stdcall HookedEndScene(LPDIRECT3DDEVICE9 pDevice) {
             ImGui_ImplDX9_RenderDrawData((ImDrawData*)ImGui::GetDrawData());
         }
         catch (const std::exception& e) {
-            Utils::Logger::Get().Log(std::string("[EndScene] Exception: ") + e.what());
+            LOG_ERROR(std::string("[EndScene] Exception: ") + e.what());
         }
         catch (...) {
-            Utils::Logger::Get().Log("[EndScene] Unknown exception");
+            LOG_ERROR("[EndScene] Unknown exception");
         }
     }
 
@@ -136,7 +137,7 @@ HRESULT __stdcall HookedReset(LPDIRECT3DDEVICE9 pDevice, D3DPRESENT_PARAMETERS* 
     if (FAILED(hr)) {
         char buf[96];
         sprintf_s(buf, "[Reset] IDirect3DDevice9::Reset failed. hr=0x%08lX", (unsigned long)hr);
-        Utils::Logger::Get().Log(buf);
+        LOG_DEBUG(buf);
     }
     if (SUCCEEDED(hr) && g_imguiInitialized.load()) {
         ImGui_ImplDX9_CreateDeviceObjects();
@@ -179,16 +180,16 @@ LRESULT CALLBACK HookedWndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lPara
 }
 
 bool InitializeD3D9Hook() {
-    Utils::Logger::Get().Log("[Init] Starting D3D9 hook initialization");
+    LOG_INFO("[Init] Starting D3D9 hook initialization");
     
     try {
         IDirect3D9* pD3D = Direct3DCreate9(D3D_SDK_VERSION);
         if (!pD3D) {
-            Utils::Logger::Get().Log("[Init] Failed to create D3D9 interface");
+            LOG_ERROR("[Init] Failed to create D3D9 interface");
             return false;
         }
 
-        Utils::Logger::Get().Log("[Init] Created D3D9 interface");
+        LOG_INFO("[Init] Created D3D9 interface");
 
         D3DPRESENT_PARAMETERS d3dpp = {};
         d3dpp.Windowed = TRUE;
@@ -203,7 +204,7 @@ bool InitializeD3D9Hook() {
             if (regErr != ERROR_CLASS_ALREADY_EXISTS) {
                 char errBuf[128];
                 sprintf_s(errBuf, "[Init] RegisterClass failed. GetLastError=0x%08lX", (unsigned long)regErr);
-                Utils::Logger::Get().Log(errBuf);
+                LOG_ERROR(errBuf);
                 pD3D->Release();
                 return false;
             }
@@ -221,13 +222,13 @@ bool InitializeD3D9Hook() {
         if (FAILED(hr) || !pDevice) {
             char errBuf[128];
             sprintf_s(errBuf, "[Init] Failed to create D3D device. hr=0x%08lX", (unsigned long)hr);
-            Utils::Logger::Get().Log(errBuf);
+            LOG_ERROR(errBuf);
             if (dummyWnd) DestroyWindow(dummyWnd);
             pD3D->Release();
             return false;
         }
 
-        Utils::Logger::Get().Log("[Init] Created D3D device");
+        LOG_INFO("[Init] Created D3D device");
 
         void** vTable = *reinterpret_cast<void***>(pDevice);
         original_EndScene = reinterpret_cast<EndScene_t>(vTable[42]);
@@ -237,7 +238,7 @@ bool InitializeD3D9Hook() {
         pD3D->Release();
         if (dummyWnd) DestroyWindow(dummyWnd);
 
-        Utils::Logger::Get().Log("[Init] Starting Detours transaction");
+        LOG_DEBUG("[Init] Starting Detours transaction");
 
         if (DetourTransactionBegin() != NO_ERROR ||
             DetourUpdateThread(GetCurrentThread()) != NO_ERROR ||
@@ -245,19 +246,19 @@ bool InitializeD3D9Hook() {
             DetourAttach(&(PVOID&)original_Reset, HookedReset) != NO_ERROR ||
             DetourTransactionCommit() != NO_ERROR) {
             
-            Utils::Logger::Get().Log("[Init] Failed to attach D3D hooks");
+            LOG_ERROR("[Init] Failed to attach D3D hooks");
             return false;
         }
 
-        Utils::Logger::Get().Log("[Init] D3D9 hook initialization completed successfully");
+        LOG_INFO("[Init] D3D9 hook initialization completed successfully");
         return true;
     }
     catch (const std::exception& e) {
-        Utils::Logger::Get().Log(std::string("[Init] Exception during D3D9 hook: ") + e.what());
+        LOG_ERROR(std::string("[Init] Exception during D3D9 hook: ") + e.what());
         return false;
     }
     catch (...) {
-        Utils::Logger::Get().Log("[Init] Unknown exception during D3D9 hook initialization");
+        LOG_ERROR("[Init] Unknown exception during D3D9 hook initialization");
         return false;
     }
 }
@@ -265,12 +266,12 @@ bool InitializeD3D9Hook() {
 void CleanupD3D9Hook() {
     // Restore original window procedure if it was hooked
     if (original_WndProc && g_hookedWindow) {
-        Utils::Logger::Get().Log("[Cleanup] Restoring original window procedure");
+        LOG_INFO("[Cleanup] Restoring original window procedure");
         SetWindowLongPtr(g_hookedWindow, GWLP_WNDPROC, (LONG_PTR)original_WndProc);
     }
 
     if (original_EndScene || original_Reset) {
-        Utils::Logger::Get().Log("[Cleanup] Detaching D3D hooks");
+        LOG_INFO("[Cleanup] Detaching D3D hooks");
         DetourTransactionBegin();
         DetourUpdateThread(GetCurrentThread());
         if (original_EndScene) DetourDetach(&(PVOID&)original_EndScene, HookedEndScene);

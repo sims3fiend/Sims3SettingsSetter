@@ -77,8 +77,7 @@ namespace Utils {
             m_logFile << message << std::endl;
             m_logFile.flush();
             
-            // Also output to debug console for development
-            OutputDebugStringA((message + "\n").c_str());
+            // Note: OutputDebugString is now handled by ErrorHandler to avoid duplication
         }
         
         void Close() {
