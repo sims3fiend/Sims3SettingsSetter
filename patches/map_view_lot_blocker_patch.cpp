@@ -249,6 +249,7 @@ REGISTER_PATCH(MapViewLotBlockerPatch, {
         "Hooks Camera_DisableMapViewMode at 0x0073E000",
         "Patches WorldManager_UpdateLotStreaming(spec name) at 0x00C6C290 to 'ret 10h'",
         "Blocks lot streaming when entering map view",
-        "Restores lot streaming 1 second after exiting map view (for zoom animation)"
+        "Restores lot streaming 1 second after exiting map view (for zoom animation)",
+        "There are some slight lag issues with this if you spam the map button, but overall should be fine, will address l8r"
     }
 })
