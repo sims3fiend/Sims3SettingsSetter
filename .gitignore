@@ -50,4 +50,4 @@ ipch/
 .tmp*
 *.sln
 *.vcxproj
-*.vcxproj.filters
+*.filters

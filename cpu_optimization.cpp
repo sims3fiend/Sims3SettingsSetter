@@ -1,3 +1,4 @@
+/* The game uses a weird hardcoded SetThreadIdealProcessor call in the steam and disk versions, so we use our own implemntation instead xoxo*/
 #include "cpu_optimization.h"
 #include <detours.h>
 #include <intrin.h>
@@ -5,38 +6,34 @@
 #include "logger.h"
 #include <sstream>
 #include <cstring>
+#include "patch_helpers.h"
+
+// Include ImGui for custom UI rendering
+#include "imgui/imgui.h"
 
 // Initialize static instance
 CPUOptimizationPatch* CPUOptimizationPatch::instance = nullptr;
 
 // Constructor
-CPUOptimizationPatch::CPUOptimizationPatch() 
-    : OptimizationPatch("CPUOptimization", nullptr) {
-    instance = this;
-    InitializeCriticalSection(&threadsLock);
-    threads.reserve(MAX_THREADS);
-    
-    // Initialize CPU information
-    GetCPUInfo();
-    
-    // Build CPU topology (P-cores / L3 groups)
-    BuildTopology();
-    
-    // Get the original function address
-    originalSetThreadIdealProcessor = 
-        (SetThreadIdealProcessorFn)GetProcAddress(GetModuleHandle(L"kernel32.dll"), "SetThreadIdealProcessor");
-    
-    if (!originalSetThreadIdealProcessor) {
-        LOG_ERROR("Failed to find SetThreadIdealProcessor function");
-    }
+CPUOptimizationPatch::CPUOptimizationPatch()
+    : OptimizationPatch("CPUOptimization", nullptr),
+      originalSetThreadIdealProcessor(nullptr),
+      threadsLock{0},
+      threadCount(0),
+      coreUsageMask(0),
+      hasEfficiencyInfo(false) {
+    // Don't set instance here - will be set in Install()
+    // Don't initialize anything heavy in constructor - defer to Install()
+    std::memset(&cpuInfo, 0, sizeof(cpuInfo));  // Zero-initialize cpuInfo
 }
 
 // Destructor
 CPUOptimizationPatch::~CPUOptimizationPatch() {
     // Ensure hook is uninstalled before destruction to avoid callbacks on a dead instance
     Uninstall();
-    DeleteCriticalSection(&threadsLock);
-    instance = nullptr;
+    if (instance == this) {
+        instance = nullptr;
+    }
 }
 
 // Detect CPU information
@@ -89,14 +86,7 @@ void CPUOptimizationPatch::GetCPUInfo() {
         cpuInfo.recommendedThreadCount = 8;
     }
     
-    // Log CPU information
-    std::stringstream ss;
-    ss << "CPU Information: " << cpuInfo.brand << "\n"
-       << "Vendor: " << cpuInfo.vendor << "\n"
-       << "Family: " << cpuInfo.family << ", Model: " << cpuInfo.model << "\n"
-       << "Logical Processors: " << cpuInfo.logicalProcessors << "\n"
-       << "Hybrid Architecture: " << (cpuInfo.isHybrid ? "Yes" : "No");
-    LOG_INFO(ss.str());
+    // Don't log during constructor - moved to Install() to avoid static initialization issues
 }
 
 // Check if this is a hybrid CPU architecture
@@ -264,7 +254,8 @@ void CPUOptimizationPatch::DetectAmdL3Groups() {
 
     DWORD length = 0;
     GetLogicalProcessorInformationEx(RelationCache, nullptr, &length);
-    if (GetLastError() != ERROR_INSUFFICIENT_BUFFER || length == 0) return;
+    DWORD lastError = ::GetLastError();  // Use global Windows API function
+    if (lastError != ERROR_INSUFFICIENT_BUFFER || length == 0) return;
 
     std::vector<unsigned char> buffer(length);
     PSYSTEM_LOGICAL_PROCESSOR_INFORMATION_EX ptr = reinterpret_cast<PSYSTEM_LOGICAL_PROCESSOR_INFORMATION_EX>(buffer.data());
@@ -290,12 +281,40 @@ void CPUOptimizationPatch::DetectAmdL3Groups() {
 bool CPUOptimizationPatch::Install() {
     if (isEnabled) return true;
     
-    LOG_INFO("Installing CPU optimization patch...");
+    // Set instance pointer
+    instance = this;
+    
+    // Initialize critical section
+    InitializeCriticalSection(&threadsLock);
+    threads.reserve(MAX_THREADS);
+    
+    // Initialize CPU information
+    GetCPUInfo();
+    
+    // Build CPU topology (P-cores / L3 groups)
+    BuildTopology();
+    
+    // Get the original function address
+    originalSetThreadIdealProcessor = 
+        (SetThreadIdealProcessorFn)GetProcAddress(GetModuleHandle(L"kernel32.dll"), "SetThreadIdealProcessor");
     
     if (!originalSetThreadIdealProcessor) {
         LOG_ERROR("Cannot install CPU optimization - missing SetThreadIdealProcessor function");
+        DeleteCriticalSection(&threadsLock);
+        instance = nullptr;
         return false;
     }
+    
+    // Log CPU information now (safe to do so after static initialization)
+    std::stringstream ss;
+    ss << "CPU Information: " << cpuInfo.brand << "\n"
+       << "Vendor: " << cpuInfo.vendor << "\n"
+       << "Family: " << cpuInfo.family << ", Model: " << cpuInfo.model << "\n"
+       << "Logical Processors: " << cpuInfo.logicalProcessors << "\n"
+       << "Hybrid Architecture: " << (cpuInfo.isHybrid ? "Yes" : "No");
+    LOG_INFO(ss.str());
+    
+    LOG_INFO("Installing CPU optimization patch...");
     
     DetourTransactionBegin();
     DetourUpdateThread(GetCurrentThread());
@@ -340,7 +359,30 @@ bool CPUOptimizationPatch::Uninstall() {
         return false;
     }
     
+    // Clean up
+    DeleteCriticalSection(&threadsLock);
+    if (instance == this) {
+        instance = nullptr;
+    }
+    
     isEnabled = false;
     LOG_INFO("CPU optimization patch removed successfully");
     return true;
+}
+
+// Render custom UI for the patch (requires imgui.h)
+void CPUOptimizationPatch::RenderCustomUI() {
+    #ifdef IMGUI_VERSION
+    // Only render if we have a valid ImGui context
+    if (!ImGui::GetCurrentContext()) {
+        return;
+    }
+    
+    // Display CPU information
+    ImGui::TextDisabled("CPU: %s", cpuInfo.brand);
+    ImGui::TextDisabled("Cores: %d, Hybrid: %s", 
+                       cpuInfo.logicalProcessors, 
+                       cpuInfo.isHybrid ? "Yes" : "No");
+    ImGui::TextDisabled("Threads optimized: %d", threadCount);
+    #endif
 } 

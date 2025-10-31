@@ -7,10 +7,11 @@
 #include "settings_gui.h"
 #include <map>
 #include <sstream>
+#include <unordered_map>
 #include "preset_manager.h"
 #include "optimization.h"
+#include "patch_system.h"
 #include "qol.h"
-#include "small_patches.h"
 #include "intersection_patch.h"
 #include "cpu_optimization.h"
 
@@ -239,116 +240,254 @@ namespace SettingsGui {
 
                 // Patches tab (the hell formerly known as Optimizations)
                 if (ImGui::BeginTabItem("Patches")) {
-                    ImGui::TextColored(ImVec4(1.0f, 1.0f, 0.0f, 1.0f), 
-                        "WARNING! Patches only work with the Steam version of the game!!");
+                    // Show detected game version
+                    GameVersion detectedVersion = DetectGameVersion();
+                    const char* versionStr = (detectedVersion == GameVersion::Steam) ? "Steam (ts3w.exe)" :
+                                           (detectedVersion == GameVersion::EA) ? "EA/Origin (ts3.exe)" : "Unknown";
+                    ImGui::TextColored(ImVec4(0.5f, 1.0f, 0.5f, 1.0f), "Detected Version: %s", versionStr);
+                    ImGui::TextDisabled("Incompatible patches will be greyed out and disabled");
                     ImGui::Separator();
-                    const auto& patches = OptimizationManager::Get().GetPatches();
 
-                    // Display all patches with categorization
-                    int patchIndex = 0;  // Add a unique index for each patch
+                    // Display patches with interaction, organized by category
+                    try {
+                        const auto& patches = OptimizationManager::Get().GetPatches();
 
-                    // Display LotVisibilityPatch first
-                    for (const auto& patch : patches) {
-                        ImGui::PushID(patchIndex++);
-                        
-                        if (auto lotVisibilityPatch = dynamic_cast<LotVisibilityPatch*>(patch.get())) {
-                            bool lotEnabled = lotVisibilityPatch->IsEnabled();
-                            if (ImGui::Checkbox("Lot Visibility", &lotEnabled)) {
-                                if (lotEnabled) lotVisibilityPatch->Install(); else lotVisibilityPatch->Uninstall();
-                            }
-                            if (ImGui::IsItemHovered()) {
-                                ImGui::SetTooltip("Changes how the game handles distant lots visibility so that it no longer loads them based on view\nModifies a conditional jump at 0x00c63015\nImproves performance with high lot counts especially, this is part of stutter reducerer");
+                        // Group patches by category
+                        std::map<std::string, std::vector<OptimizationPatch*>> patchesByCategory;
+                        for (const auto& patch : patches) {
+                            if (!patch) continue;
+                            const auto* meta = patch->GetMetadata();
+                            std::string category = meta ? meta->category : "General";
+                            patchesByCategory[category].push_back(patch.get());
+                        }
+
+                        // Render each category
+                        for (const auto& [category, categoryPatches] : patchesByCategory) {
+                            // Category header with count
+                            std::string headerLabel = category + " (" + std::to_string(categoryPatches.size()) + ")";
+
+                            if (ImGui::CollapsingHeader(headerLabel.c_str(), ImGuiTreeNodeFlags_DefaultOpen)) {
+                                ImGui::Indent(15.0f);
+
+                                // Render patches in this category
+                                for (auto* patch : categoryPatches) {
+                                    if (!patch) continue;
+
+                                    // Use patch pointer as unique ID to avoid collisions
+                                    ImGui::PushID(patch);
+
+                                    try {
+                                        const PatchMetadata* meta = patch->GetMetadata();
+                                        std::string name = meta && !meta->displayName.empty() ?
+                                                          meta->displayName : patch->GetName();
+                                        std::string desc = meta ? meta->description : "";
+                                        bool experimental = meta ? meta->experimental : false;
+                                        bool compatible = patch->IsCompatibleWithCurrentVersion();
+
+                                        bool enabled = patch->IsEnabled();
+                                        bool hasError = false;
+                                        try {
+                                            const std::string& errStr = patch->GetLastError();
+                                            hasError = !errStr.empty();
+                                        } catch (...) {
+                                            hasError = false;  // Ignore errors during error checking
+                                        }
+
+                                        // Color experimental patches, patches with errors, or incompatible patches
+                                        if (hasError) {
+                                            ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 0.3f, 0.3f, 1.0f));
+                                        } else if (!compatible) {
+                                            ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.5f, 0.5f, 0.5f, 1.0f));
+                                        } else if (experimental) {
+                                            ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 0.8f, 0.0f, 1.0f));
+                                        }
+
+                                        // Disable checkbox if incompatible
+                                        if (!compatible) {
+                                            ImGui::BeginDisabled();
+                                        }
+
+                                        // Use a temporary for checkbox to handle state correctly
+                                        bool checkboxState = enabled;
+                                        if (ImGui::Checkbox("##checkbox", &checkboxState)) {
+                                            if (checkboxState) {
+                                                if (!patch->Install()) {
+                                                    // Install failed, checkbox should revert to unchecked
+                                                    // The patch->IsEnabled() will be false, so next frame it'll be correct
+                                                }
+                                            } else {
+                                                if (!patch->Uninstall()) {
+                                                    // Uninstall failed, checkbox should revert to checked
+                                                    // The patch->IsEnabled() will be true, so next frame it'll be correct
+                                                }
+                                            }
+                                        }
+
+                                        if (!compatible) {
+                                            ImGui::EndDisabled();
+                                        }
+
+                                        ImGui::SameLine();
+                                        ImGui::Text("%s", name.c_str());
+
+                                        if (!compatible) {
+                                            ImGui::SameLine();
+                                            ImGui::TextDisabled("[INCOMPATIBLE]");
+                                        } else if (experimental) {
+                                            ImGui::SameLine();
+                                            ImGui::TextDisabled("[EXPERIMENTAL]");
+                                        }
+
+                                        if (hasError || !compatible || experimental) {
+                                            ImGui::PopStyleColor();
+                                        }
+
+                                        // Tooltip with description and error info
+                                        if (ImGui::IsItemHovered()) {
+                                            ImGui::BeginTooltip();
+                                            ImGui::PushTextWrapPos(400.0f);
+
+                                            // Show incompatibility warning first
+                                            if (!compatible) {
+                                                ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 0.6f, 0.0f, 1.0f));
+                                                const char* currentVersionStr = (detectedVersion == GameVersion::Steam) ? "Steam" :
+                                                                               (detectedVersion == GameVersion::EA) ? "EA/Origin" : "Unknown";
+                                                const char* requiredVersionStr = meta && meta->targetVersion == GameVersion::Steam ? "Steam" :
+                                                                                meta && meta->targetVersion == GameVersion::EA ? "EA/Origin" : "All";
+                                                ImGui::Text("INCOMPATIBLE: This patch requires %s version, but you're running %s",
+                                                          requiredVersionStr, currentVersionStr);
+                                                ImGui::PopStyleColor();
+                                                if (!desc.empty() || hasError) {
+                                                    ImGui::Separator();
+                                                }
+                                            }
+
+                                            // Show error if present
+                                            if (hasError) {
+                                                ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 0.3f, 0.3f, 1.0f));
+                                                try {
+                                                    ImGui::Text("ERROR: %s", patch->GetLastError().c_str());
+                                                } catch (...) {
+                                                    ImGui::Text("ERROR: (error message unavailable)");
+                                                }
+                                                ImGui::PopStyleColor();
+                                                if (!desc.empty()) {
+                                                    ImGui::Separator();
+                                                }
+                                            }
+
+                                            // Show description
+                                            if (!desc.empty()) {
+                                                ImGui::Text("%s", desc.c_str());
+                                            }
+
+                                            // Show technical details
+                                            if (meta && !meta->technicalDetails.empty()) {
+                                                ImGui::Separator();
+                                                ImGui::TextDisabled("Technical Details:");
+                                                for (const auto& detail : meta->technicalDetails) {
+                                                    ImGui::BulletText("%s", detail.c_str());
+                                                }
+                                            }
+
+                                            ImGui::PopTextWrapPos();
+                                            ImGui::EndTooltip();
+                                        }
+
+                                        // Render custom UI if available
+                                        if (enabled) {
+                                            ImGui::Indent();
+                                            patch->RenderCustomUI();
+                                            ImGui::Unindent();
+                                        }
+
+                                    } catch (const std::exception& e) {
+                                        ImGui::TextColored(ImVec4(1.0f, 0.0f, 0.0f, 1.0f),
+                                                          "Error with patch: %s", e.what());
+                                    } catch (...) {
+                                        ImGui::TextColored(ImVec4(1.0f, 0.0f, 0.0f, 1.0f),
+                                                          "Unknown error with patch");
+                                    }
+
+                                    ImGui::PopID();  // Pop the unique patch ID
+                                }
+
+                                ImGui::Unindent(15.0f);
                             }
                         }
-                        
-                        ImGui::PopID();
+                    } catch (...) {
+                        ImGui::TextColored(ImVec4(1.0f, 0.0f, 0.0f, 1.0f),
+                            "ERROR: Failed to load patches list");
                     }
-
-                    // Display IntersectionPatch next
+                    
+                    /*
+                    // COMMENTED OUT DUE TO IMGUI ASSERTION ERRORS
+                    // Organize patches by category
+                    std::map<std::string, std::vector<OptimizationPatch*>> patchesByCategory;
                     for (const auto& patch : patches) {
-                        ImGui::PushID(patchIndex++);
-                        
-                        if (auto intersectionPatch = dynamic_cast<IntersectionPatch*>(patch.get())) {
-                            bool intersectionEnabled = intersectionPatch->IsEnabled();
-                            if (ImGui::Checkbox("Intersection Optimization", &intersectionEnabled)) {
-                                if (intersectionEnabled) intersectionPatch->Install(); else intersectionPatch->Uninstall();
-                            }
-                            if (ImGui::IsItemHovered()) {
-                                ImGui::SetTooltip("Optimizes intersection calculations with SIMD instructions\nImproves performance for initial navmesh creation and pathfinding (negligible)");
-                            }
-                        }
-                        
-                        ImGui::PopID();
+                        const auto* meta = patch->GetMetadata();
+                        std::string category = meta ? meta->category : "General";
+                        patchesByCategory[category].push_back(patch.get());
                     }
-
-                    // Display CPUOptimizationPatch next
-                    for (const auto& patch : patches) {
-                        ImGui::PushID(patchIndex++);
-                        
-                        if (auto cpuOptPatch = dynamic_cast<CPUOptimizationPatch*>(patch.get())) {
-                            bool cpuEnabled = cpuOptPatch->IsEnabled();
-                            if (ImGui::Checkbox("CPU Thread Optimization", &cpuEnabled)) {
-                                if (cpuEnabled) cpuOptPatch->Install(); else cpuOptPatch->Uninstall();
-                            }
-                            if (ImGui::IsItemHovered()) {
-                                ImGui::SetTooltip("Optimizes thread placement for modern CPUs\n- Intel Hybrid (P/E-cores): Prioritizes Performance cores\n- AMD: Distributes threads across the first few cores (usually one CCX)\nAssigns game threads to appropriate cores based on CPU");
-                            }
+                    
+                    // Render patches by category
+                    int patchIndex = 0;
+                    for (const auto& [category, categoryPatches] : patchesByCategory) {
+                        // Category header
+                        if (ImGui::CollapsingHeader(category.c_str(), ImGuiTreeNodeFlags_DefaultOpen)) {
+                            ImGui::Indent();
                             
-                            // If enabled, show CPU information
-                            if (cpuEnabled) {
-                                ImGui::Indent();
-                                const auto& cpuInfo = cpuOptPatch->GetCPUInformation();
+                            for (auto* patch : categoryPatches) {
+                                ImGui::PushID(patchIndex++);
                                 
-                                ImGui::TextDisabled("CPU: %s", cpuInfo.brand);
-                                ImGui::TextDisabled("Cores: %d, Hybrid: %s", 
-                                    cpuInfo.logicalProcessors, 
-                                    cpuInfo.isHybrid ? "Yes" : "No");
+                                const auto* meta = patch->GetMetadata();
+                                if (!meta) {
+                                    // Fallback for patches without metadata
+                                    bool enabled = patch->IsEnabled();
+                                    if (ImGui::Checkbox(patch->GetName().c_str(), &enabled)) {
+                                        enabled ? patch->Install() : patch->Uninstall();
+                                    }
+                                } else {
+                                    // Render with metadata
+                                    bool enabled = patch->IsEnabled();
+                                    std::string displayName = meta->displayName;
+                                    if (meta->experimental) {
+                                        displayName += " [EXPERIMENTAL]";
+                                    }
                                     
-                                ImGui::TextDisabled("Threads optimized: %d", cpuOptPatch->GetThreadCount());
+                                    if (ImGui::Checkbox(displayName.c_str(), &enabled)) {
+                                        enabled ? patch->Install() : patch->Uninstall();
+                                    }
+                                    
+                                    // Tooltip with description and technical details
+                                    if (ImGui::IsItemHovered()) {
+                                        ImGui::BeginTooltip();
+                                        ImGui::PushTextWrapPos(400.0f);
+                                        ImGui::Text("%s", meta->description.c_str());
+                                        
+                                        if (!meta->technicalDetails.empty()) {
+                                            ImGui::Separator();
+                                            ImGui::TextDisabled("Technical Details:");
+                                            for (const auto& detail : meta->technicalDetails) {
+                                                ImGui::TextDisabled("  - %s", detail.c_str());
+                                            }
+                                        }
+                                        
+                                        ImGui::PopTextWrapPos();
+                                        ImGui::EndTooltip();
+                                    }
+                                    
+                                    // TEMPORARILY DISABLED: Custom UI rendering
                                 
-                                ImGui::Unindent();
-                            }
-                        }
-                        
-                        ImGui::PopID();
-                    }
-
-                    /* Rest in peace
-                    // Display FrameRatePatch before the sleep-related section
-                    for (const auto& patch : patches) {
-                        ImGui::PushID(patchIndex++);
-                        
-                        if (auto frameRatePatch = dynamic_cast<FrameRatePatch*>(patch.get())) {
-                            bool frameEnabled = frameRatePatch->IsEnabled();
-                            if (ImGui::Checkbox("Target Framerate [UNTESTED]", &frameEnabled)) {
-                                if (frameEnabled) frameRatePatch->Install(); else frameRatePatch->Uninstall();
-                            }
-                            if (ImGui::IsItemHovered()) {
-                                ImGui::SetTooltip("Modifies the game's target frame rate\nChanges the internal timing constant used for frame pacing\nWARNING: This patch is untested and may cause issues");
+                                ImGui::PopID();
                             }
                             
-                            if (frameEnabled) {
-                                ImGui::Indent();
-                                
-                                // Target FPS
-                                int targetFPS = frameRatePatch->GetTargetFPS();
-                                if (ImGui::SliderInt("Target FPS", &targetFPS, 30, 240)) {
-                                    frameRatePatch->SetTargetFPS(targetFPS);
-                                }
-                                if (ImGui::IsItemHovered()) {
-                                    ImGui::SetTooltip("Target framerate\nDefault: 30 FPS, New: %d FPS\nModifies memory address 0x0108b1a0", targetFPS);
-                                }
-                                
-                                ImGui::Unindent();
-                            }
+                            ImGui::Unindent();
                         }
-                        
-                        ImGui::PopID();
                     }
                     */
 
                     ImGui::Separator();
-
                     ImGui::EndTabItem();
                 }
 
@@ -785,6 +924,52 @@ namespace SettingsGui {
             if (ImGui::IsItemHovered()) {
                 ImGui::BeginTooltip();
                 ImGui::Text("Reset this setting to its default value\nThis will be saved to the ini file");
+                ImGui::EndTooltip();
+            }
+
+            ImGui::Separator();
+
+            // Show type information
+            const char* typeStr = "Unknown";
+            std::visit([&](auto&& value) {
+                using T = std::decay_t<decltype(value)>;
+                if constexpr (std::is_same_v<T, bool>) {
+                    typeStr = "bool";
+                } else if constexpr (std::is_same_v<T, int>) {
+                    typeStr = "int";
+                } else if constexpr (std::is_same_v<T, unsigned int>) {
+                    typeStr = "unsigned int";
+                } else if constexpr (std::is_same_v<T, float>) {
+                    typeStr = "float";
+                } else if constexpr (std::is_same_v<T, Vector2>) {
+                    typeStr = "Vector2";
+                } else if constexpr (std::is_same_v<T, Vector3>) {
+                    typeStr = "Vector3";
+                } else if constexpr (std::is_same_v<T, Vector4>) {
+                    typeStr = "Vector4";
+                }
+            }, setting->GetValue());
+
+            ImGui::TextDisabled("Type:");
+            ImGui::SameLine();
+            ImGui::Text("%s", typeStr);
+
+            // Show memory address
+            void* address = setting->GetAddress();
+            char addressStr[32];
+            sprintf_s(addressStr, "0x%08X", (uintptr_t)address);
+
+            ImGui::TextDisabled("Memory Address:");
+            ImGui::SameLine();
+            ImGui::Text("%s", addressStr);
+
+            // Copy address to clipboard button
+            if (ImGui::Button("Copy Address")) {
+                ImGui::SetClipboardText(addressStr);
+            }
+            if (ImGui::IsItemHovered()) {
+                ImGui::BeginTooltip();
+                ImGui::Text("Copy memory address to clipboard");
                 ImGui::EndTooltip();
             }
 

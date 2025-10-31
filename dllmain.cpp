@@ -17,7 +17,6 @@
 #include <iomanip>
 #include <strsafe.h>
 #include "qol.h"
-#include "small_patches.h"
 #include "config_value_cache.h"
 
 //Avert thine gaze, I said I was going to make the code clean and I lied
@@ -627,19 +626,13 @@ DWORD WINAPI HookThread(LPVOID lpParameter) {
 
         LOG_INFO("UI settings initialized");
 
-        // Initialize optimization patches
+        // Initialize optimization patches (register only, don't load states yet)
         try {
             auto& optimizationManager = OptimizationManager::Get();
             LOG_INFO("Optimization patches registered");
-
-            // Load saved optimization states
-            std::string error;
-            if (!optimizationManager.LoadState("S3SS.ini")) {
-                LOG_WARNING("Failed to load optimization states at startup");
-            }
-            else {
-                LOG_INFO("Successfully loaded optimization states");
-            }
+            
+            // NOTE: We'll load saved states AFTER D3D9 is initialized
+            // to ensure the game module is fully loaded
         }
         catch (const std::exception& e) {
             LOG_ERROR("Failed to initialize optimization patches: " + std::string(e.what()));
@@ -672,6 +665,21 @@ DWORD WINAPI HookThread(LPVOID lpParameter) {
         if (!InitializeD3D9Hook()) {
             LOG_ERROR("Failed to initialize D3D9 hook");
             return FALSE;
+        }
+        
+        // Now that D3D9 is hooked and the game is running, it's safe to load patch states
+        try {
+            LOG_INFO("Loading saved optimization states...");
+            auto& optimizationManager = OptimizationManager::Get();
+            if (!optimizationManager.LoadState("S3SS.ini")) {
+                LOG_WARNING("Failed to load optimization states");
+            }
+            else {
+                LOG_INFO("Successfully loaded optimization states");
+            }
+        }
+        catch (const std::exception& e) {
+            LOG_ERROR("Failed to load optimization states: " + std::string(e.what()));
         }
 
         LOG_INFO("Starting message loop");

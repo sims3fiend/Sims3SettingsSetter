@@ -66,6 +66,7 @@ public:
     
     bool Install() override;
     bool Uninstall() override;
+    void RenderCustomUI() override;
     
     const CPUInfo& GetCPUInformation() const { return cpuInfo; }
     int GetThreadCount() const { return threadCount; }

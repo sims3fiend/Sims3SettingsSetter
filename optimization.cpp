@@ -1,15 +1,42 @@
 #include "optimization.h"
+#include "patch_system.h"
 #include <intrin.h>
 #include <format>
 #include <detours.h>
-#include "small_patches.h"
 #include "intersection_patch.h"
 #include "cpu_optimization.h"
 #include "utils.h"
 #include "logger.h"
 
-// Forward declaration
-class MemoryPatch;
+// Metadata storage for patches (use unique_ptr to avoid pointer invalidation on reallocation)
+static std::vector<std::unique_ptr<PatchMetadata>>& GetMetadataStorage() {
+    static std::vector<std::unique_ptr<PatchMetadata>> storage;
+    return storage;
+}
+
+void OptimizationPatch::SetMetadata(const PatchMetadata& meta) {
+    // Store in static storage to ensure lifetime
+    // Using unique_ptr so pointers remain valid even if vector grows
+    GetMetadataStorage().push_back(std::make_unique<PatchMetadata>(meta));
+    metadata = GetMetadataStorage().back().get();
+}
+
+bool OptimizationPatch::IsCompatibleWithCurrentVersion() const {
+    if (!metadata) {
+        return true; // No metadata = assume compatible
+    }
+
+    GameVersion current = DetectGameVersion();
+    GameVersion target = metadata->targetVersion;
+
+    // All means it works on any version
+    if (target == GameVersion::All) {
+        return true;
+    }
+
+    // Otherwise must match exactly
+    return current == target;
+}
 
 void OptimizationPatch::MaybeSampleMinimal(LONG currentCalls) {
     auto now = std::chrono::steady_clock::now();
@@ -46,30 +73,36 @@ OptimizationManager& OptimizationManager::Get() {
     
     // Register all patches when the manager is first created
     static bool initialized = false;
-    if (!initialized) {
+    static bool initializing = false;
+    
+    if (!initialized && !initializing) {
+        initializing = true;  // Prevent re-entry
+        
         LOG_INFO("[OptimizationManager] Initializing patches...");
         
-        // Register individual patches
-        instance.RegisterPatch(std::make_unique<FrameRatePatch>());
-        
-        // Register other patches
-        instance.RegisterPatch(std::make_unique<LotVisibilityPatch>());
-        // Register the Intersection Patch
-        instance.RegisterPatch(std::make_unique<IntersectionPatch>());
-        
-        // Register the CPU optimization patch
-        instance.RegisterPatch(std::make_unique<CPUOptimizationPatch>());
-        
-        // Mark as initialized
-        initialized = true;
-        
-        // Log all registered patches
-        LOG_INFO("[OptimizationManager] Registered patches:");
-        for (const auto& patch : instance.patches) {
-            LOG_INFO("  - " + patch->GetName());
+        try {
+            // Use PatchRegistry to auto-register all patches
+            PatchRegistry::InstantiateAll();
+            
+            // Log all registered patches
+            LOG_INFO("[OptimizationManager] Registered patches:");
+            for (const auto& patch : instance.patches) {
+                LOG_INFO("  - " + patch->GetName());
+            }
+            LOG_INFO("[OptimizationManager] All patches registered");
         }
-        //BLANK STARE
-        LOG_INFO("[OptimizationManager] All patches registered");
+        catch (const std::exception& e) {
+            LOG_ERROR("[OptimizationManager] Exception during patch initialization: " + std::string(e.what()));
+        }
+        catch (...) {
+            LOG_ERROR("[OptimizationManager] Unknown exception during patch initialization");
+        }
+        
+        initialized = true;
+        initializing = false;
+    }
+    else if (initializing) {
+        LOG_ERROR("[OptimizationManager] Recursive call detected during initialization!");
     }
     
     return instance;
@@ -230,21 +263,9 @@ bool OptimizationManager::LoadState(const std::string& filename) {
                     if (patch->GetName() == currentPatchName) {
                         LOG_DEBUG("[OptimizationManager] Applying setting to patch: " + currentPatchName);
 
-                        bool success = false;
-                        // Special handling for FrameRatePatch which has custom LoadState
-                        if (FrameRatePatch* framePatch = dynamic_cast<FrameRatePatch*>(patch.get())) {
-                             // FrameRatePatch expects key and value
-                            success = framePatch->LoadState(key, value);
-                        }
-                        // Generic handling for "Enabled" key for all other patches
-                        else if (key == "Enabled") {
-                            // Other patches expect only the value for LoadState
-                            success = patch->LoadState(value);
-                        } else {
-                             // Log if a key other than "Enabled" is found for a non-FrameRate patch
-                             LOG_WARNING("[OptimizationManager] Ignoring unknown key '" + key + "' for patch '" + currentPatchName + "'");
-                             success = true; // Treat as success to continue parsing
-                        }
+                        // Pass both key and value to patch's LoadState
+                        // This allows patches to handle Enabled state and custom settings
+                        bool success = patch->LoadState(key, value);
 
                         LOG_DEBUG("[OptimizationManager] State application " +
                             std::string(success ? "succeeded" : "failed"));
