@@ -172,15 +172,15 @@ bool SettingsManager::SaveConfig(const std::string& filename, std::string* error
         for (const auto& [name, setting] : m_settings) {
             // Debug log current setting status
             std::string settingName = Utils::WideToUtf8(name);
-            
-            // Skip settings that aren't meant to be saved
-            if (!setting->IsOverridden() && !setting->HasUnsavedChanges()) {
+
+            // Only save settings that have unsaved changes
+            if (!setting->HasUnsavedChanges()) {
                 // skip log
                 continue;
             }
 
             // If override was explicitly cleared, skip saving it
-            if (!setting->IsOverridden() && setting->HasUnsavedChanges()) {
+            if (!setting->IsOverridden()) {
                 setting->SetUnsavedChanges(false); // Clear the unsaved flag
                 // skip log
                 continue;
