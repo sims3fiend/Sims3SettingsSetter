@@ -140,7 +140,6 @@
     <ClCompile Include="logger.cpp" />
     <ClCompile Include="optimization.cpp" />
     <ClCompile Include="patches\map_view_lot_blocker_patch.cpp" />
-    <ClCompile Include="patches\resolution_control.cpp" />
     <ClCompile Include="patches\smooth_patch_dupe.cpp" />
     <ClCompile Include="patches\timer_optimization_patch.cpp" />
     <ClCompile Include="pattern_scan.cpp" />
