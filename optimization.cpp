@@ -78,31 +78,31 @@ OptimizationManager& OptimizationManager::Get() {
     if (!initialized && !initializing) {
         initializing = true;  // Prevent re-entry
         
-        LOG_INFO("[OptimizationManager] Initializing patches...");
-        
+        LOG_INFO("[PatchSystem] Initializing patches...");
+
         try {
             // Use PatchRegistry to auto-register all patches
-            PatchRegistry::InstantiateAll();
-            
+            PatchRegistry::InstantiateAll(instance);
+
             // Log all registered patches
-            LOG_INFO("[OptimizationManager] Registered patches:");
+            LOG_INFO("[PatchSystem] Registered " + std::to_string(instance.patches.size()) + " patches:");
             for (const auto& patch : instance.patches) {
                 LOG_INFO("  - " + patch->GetName());
             }
-            LOG_INFO("[OptimizationManager] All patches registered");
+            LOG_INFO("[PatchSystem] Patch registration complete");
         }
         catch (const std::exception& e) {
-            LOG_ERROR("[OptimizationManager] Exception during patch initialization: " + std::string(e.what()));
+            LOG_ERROR("[PatchSystem] Exception during patch initialization: " + std::string(e.what()));
         }
         catch (...) {
-            LOG_ERROR("[OptimizationManager] Unknown exception during patch initialization");
+            LOG_ERROR("[PatchSystem] Unknown exception during patch initialization");
         }
-        
+
         initialized = true;
         initializing = false;
     }
     else if (initializing) {
-        LOG_ERROR("[OptimizationManager] Recursive call detected during initialization!");
+        LOG_ERROR("[PatchSystem] Recursive call detected during initialization!");
     }
     
     return instance;
@@ -144,24 +144,24 @@ bool OptimizationManager::SaveState(const std::string& filename) {
             }
         }
 
-        // Find and remove existing optimization section
+        // Find and remove existing patch settings section
         bool inSection = false;
         auto it = existingContent.begin();
         while (it != existingContent.end()) {
-            if (*it == "; Optimization Settings") {
+            if (*it == "; Patch Settings" || *it == "; Optimization Settings") {  // Support both old and new format
                 inSection = true;
                 it = existingContent.erase(it);
             }
-            else if (inSection && it->empty()) {
-                // Continue removing in optimization section
-                it = existingContent.erase(it);
-            }
-            else if (inSection && !it->empty() && ((*it)[0] == '[' || (*it)[0] == ';')) {
-                inSection = false;
-                it++;
-            }
             else if (inSection) {
-                it = existingContent.erase(it);
+                // Check if we've reached a new section (starts with [ or ; at beginning of line)
+                if (!it->empty() && ((*it)[0] == '[' || ((*it)[0] == ';' && it->find("; Optimization") != 0))) {
+                    // Found a new section, stop removing
+                    inSection = false;
+                    it++;
+                } else {
+                    // Still in optimization section, remove this line
+                    it = existingContent.erase(it);
+                }
             }
             else {
                 it++;
@@ -171,7 +171,7 @@ bool OptimizationManager::SaveState(const std::string& filename) {
         // Write back file with updated content
         std::ofstream outFile(filename);
         if (!outFile.is_open()) {
-            LOG_ERROR("[OptimizationManager] Failed to open file for saving: " + filename);
+            LOG_ERROR("[PatchSystem] Failed to open file for saving: " + filename);
             return false;
         }
 
@@ -185,8 +185,8 @@ bool OptimizationManager::SaveState(const std::string& filename) {
             outFile << "\n";
         }
 
-        // Write optimization settings
-        outFile << "; Optimization Settings\n";
+        // Write patch settings section
+        outFile << "; Patch Settings\n";
         for (const auto& patch : patches) {
             patch->SaveState(outFile);
         }
@@ -194,34 +194,34 @@ bool OptimizationManager::SaveState(const std::string& filename) {
         return true;
     }
     catch (const std::exception& e) {
-        LOG_ERROR(std::string("[OptimizationManager] Error saving state: ") + e.what());
+        LOG_ERROR(std::string("[PatchSystem] Error saving state: ") + e.what());
         return false;
     }
 }
 
 bool OptimizationManager::LoadState(const std::string& filename) {
     try {
-        LOG_DEBUG("[OptimizationManager] Attempting to load from: " + filename);
-        
+        LOG_DEBUG("[PatchSystem] Attempting to load from: " + filename);
+
         std::ifstream file(filename);
         if (!file.is_open()) {
-            LOG_ERROR("[OptimizationManager] Failed to open file for loading: " + filename);
+            LOG_ERROR("[PatchSystem] Failed to open file for loading: " + filename);
             return false;
         }
 
-        //young widower seeking optimization settings section enquire within
+        // Look for patch settings section
         std::string line;
         bool foundOptSection = false;
         while (std::getline(file, line)) {
-            if (line == "; Optimization Settings") {
+            if (line == "; Patch Settings" || line == "; Optimization Settings") { // Support old format too
                 foundOptSection = true;
-                LOG_DEBUG("[OptimizationManager] Found optimization settings section");
+                LOG_DEBUG("[PatchSystem] Found patch settings section");
                 break;
             }
         }
 
         if (!foundOptSection) {
-            LOG_DEBUG("[OptimizationManager] No optimization section found in file");
+            LOG_DEBUG("[PatchSystem] No patch section found in file");
             return true; // Not an error, just no settings
         }
 
@@ -231,16 +231,15 @@ bool OptimizationManager::LoadState(const std::string& filename) {
         while (std::getline(file, line)) {
             // Skip empty lines and comments
             if (line.empty() || line[0] == ';') {
-                // OutputDebugStringA(("[OptimizationManager] Skipping line: " + line + "\n").c_str()); // uncomment to see what's being skipped
                 continue;
             }
 
             // Check for optimization section header like [Optimization_FrameRate]
-            if (line[0] == '[' && line.back() == ']') {
+            if (!line.empty() && line[0] == '[' && line.back() == ']') {
                 size_t start = line.find('_'); // Find the underscore after "Optimization"
                 if (start != std::string::npos && start + 1 < line.length() - 1) {
                     currentPatchName = line.substr(start + 1, line.length() - start - 2); // Extract patch name
-                    LOG_DEBUG("[OptimizationManager] Found patch section: " + currentPatchName);
+                    LOG_DEBUG("[PatchSystem] Found patch section: " + currentPatchName);
                     foundAnyOptimizations = true;
                 } else {
                     currentPatchName.clear(); // Invalid section header
@@ -255,19 +254,19 @@ bool OptimizationManager::LoadState(const std::string& filename) {
                 std::string key = line.substr(0, equalPos);
                 std::string value = line.substr(equalPos + 1);
 
-                LOG_DEBUG("[OptimizationManager] Found setting for [" + currentPatchName + "] - Key: " + key + ", Value: " + value);
+                LOG_DEBUG("[PatchSystem] Found setting for [" + currentPatchName + "] - Key: " + key + ", Value: " + value);
 
                 // Find the patch by name and apply the setting
                 bool foundPatch = false;
                 for (auto& patch : patches) { // Iterate directly through the patches vector
                     if (patch->GetName() == currentPatchName) {
-                        LOG_DEBUG("[OptimizationManager] Applying setting to patch: " + currentPatchName);
+                        LOG_DEBUG("[PatchSystem] Applying setting to patch: " + currentPatchName);
 
                         // Pass both key and value to patch's LoadState
                         // This allows patches to handle Enabled state and custom settings
                         bool success = patch->LoadState(key, value);
 
-                        LOG_DEBUG("[OptimizationManager] State application " +
+                        LOG_DEBUG("[PatchSystem] State application " +
                             std::string(success ? "succeeded" : "failed"));
 
                         foundPatch = true;
@@ -276,36 +275,36 @@ bool OptimizationManager::LoadState(const std::string& filename) {
                 }
 
                 if (!foundPatch) {
-                    LOG_WARNING("[OptimizationManager] No matching patch found for section: " +
+                    LOG_WARNING("[PatchSystem] No matching patch found for section: " +
                         currentPatchName);
                 }
             }
         }
 
         if (!foundAnyOptimizations) {
-            LOG_DEBUG("[OptimizationManager] No optimization sections found in file");
+            LOG_DEBUG("[PatchSystem] No patch sections found in file");
         }
 
         return true;
     }
     catch (const std::exception& e) {
-        LOG_ERROR(std::string("[OptimizationManager] Error loading state: ") + e.what());
+        LOG_ERROR(std::string("[PatchSystem] Error loading state: ") + e.what());
         return false;
     }
 }
 
-// Update the RegisterPatch method to remove references to removed patches
+// Register a new patch in the system
 void OptimizationManager::RegisterPatch(std::unique_ptr<OptimizationPatch> patch) {
     // Check if a patch with the same name already exists
     std::string patchName = patch->GetName();
     for (const auto& existingPatch : patches) {
         if (existingPatch->GetName() == patchName) {
-            LOG_WARNING("[OptimizationManager] Patch already registered: " + patchName);
+            LOG_WARNING("[PatchSystem] Patch already registered: " + patchName);
             return; // Skip this patch since it's already registered
         }
     }
-    
+
     // If we get here, this is a new patch
     patches.push_back(std::move(patch));
-    LOG_DEBUG("[OptimizationManager] Registered patch: " + patchName);
+    LOG_DEBUG("[PatchSystem] Registered patch: " + patchName);
 } 

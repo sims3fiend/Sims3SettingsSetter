@@ -138,7 +138,7 @@ public:
 
     // Add methods for serialization
     virtual void SaveState(std::ofstream& file) const {
-        file << "[Optimization_" << patchName << "]\n";
+        file << "[Optimization_" << patchName << "]\n";  // Keep old format for backward compatibility, will remove later
         file << "Enabled=" << (isEnabled ? "true" : "false") << "\n";
 
         // Save all registered settings
@@ -184,7 +184,7 @@ struct CPUFeatures {
     static const CPUFeatures& Get();
 };
 
-// Manager for all optimization patches
+// Manager for all game patches (keeps the name for backward compatibility, remove later)
 class OptimizationManager {
     std::vector<std::unique_ptr<OptimizationPatch>> patches;
 

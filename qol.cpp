@@ -82,10 +82,9 @@ void MemoryMonitor::LoadSettings(const std::string& filename) {
     std::wstring enabledName = L"QoL:MemoryMonitor:Enabled";
     std::wstring thresholdName = L"QoL:MemoryMonitor:WarningThreshold";
     std::wstring styleName = L"QoL:MemoryMonitor:WarningStyle";
-    
-    auto& configValues = const_cast<std::unordered_map<std::wstring, ConfigValueInfo>&>(
-        settingsManager.GetConfigValues());
-    
+
+    const auto& configValues = settingsManager.GetConfigValues();
+
     if (configValues.find(enabledName) == configValues.end()) {
         ConfigValueInfo info;
         info.category = L"QoL";
@@ -170,6 +169,7 @@ bool UISettings::SaveToINI(const std::string& filename) const {
             // Write QoL section
             newFile << "[QoL]\n";
             newFile << "UIToggleKey=" << m_uiToggleKey << "\n";
+            newFile << "DisableHooks=" << (m_disableHooks ? "true" : "false") << "\n";
             newFile << "\n";
             
             newFile.close();
@@ -215,6 +215,7 @@ bool UISettings::SaveToINI(const std::string& filename) const {
         // Append QoL section
         file << "[QoL]\n";
         file << "UIToggleKey=" << m_uiToggleKey << "\n";
+        file << "DisableHooks=" << (m_disableHooks ? "true" : "false") << "\n";
         file << "\n";
         
         file.close();
@@ -264,9 +265,12 @@ bool UISettings::LoadFromINI(const std::string& filename) {
                 if (equalPos != std::string::npos) {
                     std::string key = line.substr(0, equalPos);
                     std::string value = line.substr(equalPos + 1);
-                    
+
                     if (key == "UIToggleKey") {
                         m_uiToggleKey = static_cast<UINT>(std::stoul(value));
+                    }
+                    else if (key == "DisableHooks") {
+                        m_disableHooks = (value == "true" || value == "1");
                     }
                 }
             }

@@ -54,14 +54,26 @@ public:
     }
 
     // UI Toggle Key
-    UINT GetUIToggleKey() const { 
+    UINT GetUIToggleKey() const {
         std::lock_guard<std::mutex> lock(m_mutex);
-        return m_uiToggleKey; 
+        return m_uiToggleKey;
     }
-    
-    void SetUIToggleKey(UINT key) { 
+
+    void SetUIToggleKey(UINT key) {
         std::lock_guard<std::mutex> lock(m_mutex);
-        m_uiToggleKey = key; 
+        m_uiToggleKey = key;
+        m_hasUnsavedChanges = true;
+    }
+
+    // Disable Hooks Setting
+    bool GetDisableHooks() const {
+        std::lock_guard<std::mutex> lock(m_mutex);
+        return m_disableHooks;
+    }
+
+    void SetDisableHooks(bool disable) {
+        std::lock_guard<std::mutex> lock(m_mutex);
+        m_disableHooks = disable;
         m_hasUnsavedChanges = true;
     }
 
@@ -86,11 +98,13 @@ public:
     static std::string GetKeyName(UINT vkCode);
 
 private:
-    UISettings() : 
+    UISettings() :
         m_uiToggleKey(VK_INSERT),
+        m_disableHooks(false),
         m_hasUnsavedChanges(false) {}
 
     mutable std::mutex m_mutex;
     UINT m_uiToggleKey;
+    bool m_disableHooks;
     bool m_hasUnsavedChanges;
 }; 

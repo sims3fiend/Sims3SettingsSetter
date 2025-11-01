@@ -77,13 +77,13 @@ public:
     }
 
     // Create all registered patches and add them to OptimizationManager
-    static void InstantiateAll() {
+    static void InstantiateAll(OptimizationManager& manager) {
         for (auto& entry : GetEntries()) {
             auto patch = entry.factory();
             if (patch) {
                 // Store metadata in the patch
                 patch->SetMetadata(entry.metadata);
-                OptimizationManager::Get().RegisterPatch(std::move(patch));
+                manager.RegisterPatch(std::move(patch));
             }
         }
     }

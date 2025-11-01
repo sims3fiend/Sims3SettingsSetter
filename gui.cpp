@@ -70,24 +70,38 @@ namespace SettingsGui {
                 if (ImGui::BeginMenu("File")) {
                     if (ImGui::MenuItem("Save Settings")) {
                         std::string error;
-                        bool success = SettingsManager::Get().SaveConfig("S3SS.ini", &error);
+                        bool settingsSuccess = SettingsManager::Get().SaveConfig("S3SS.ini", &error);
                         // Also save optimization settings
-                        success &= OptimizationManager::Get().SaveState("S3SS.ini");
+                        bool optimizationSuccess = OptimizationManager::Get().SaveState("S3SS.ini");
                         // Ensure UI settings are in the file (append if needed)
                         UISettings::Get().EnsureInINI("S3SS.ini");
-                        if (success) {
+
+                        if (settingsSuccess && optimizationSuccess) {
                             UISettings::Get().MarkAsSaved();
+                            LOG_INFO("Settings saved successfully");
+                        } else if (settingsSuccess && !optimizationSuccess) {
+                            UISettings::Get().MarkAsSaved();  // Settings did save
+                            LOG_WARNING("Settings saved but optimization state save failed");
+                        } else if (!settingsSuccess && optimizationSuccess) {
+                            LOG_WARNING("Optimization state saved but settings save failed: " + error);
                         } else {
-                            LOG_ERROR("Failed to save settings: " + error);
+                            LOG_ERROR("Failed to save both settings and optimization state: " + error);
                         }
                     }
                     if (ImGui::MenuItem("Load Settings")) {
                         std::string error;
-                        bool success = SettingsManager::Get().LoadConfig("S3SS.ini", &error);
+                        bool settingsSuccess = SettingsManager::Get().LoadConfig("S3SS.ini", &error);
                         // Also load optimization settings
-                        success &= OptimizationManager::Get().LoadState("S3SS.ini");
-                        if (!success) {
-                            LOG_ERROR("Failed to load settings: " + error);
+                        bool optimizationSuccess = OptimizationManager::Get().LoadState("S3SS.ini");
+
+                        if (settingsSuccess && optimizationSuccess) {
+                            LOG_INFO("Settings loaded successfully");
+                        } else if (settingsSuccess && !optimizationSuccess) {
+                            LOG_WARNING("Settings loaded but optimization state load failed");
+                        } else if (!settingsSuccess && optimizationSuccess) {
+                            LOG_WARNING("Optimization state loaded but settings load failed: " + error);
+                        } else {
+                            LOG_ERROR("Failed to load both settings and optimization state: " + error);
                         }
                     }
                     
@@ -108,13 +122,19 @@ namespace SettingsGui {
                         if (ImGui::Button("Save New Preset")) {
                             if (strlen(presetName) > 0) {
                                 std::string error;
-                                bool success = PresetManager::Get().SavePreset(presetName, presetDesc, &error);
+                                bool presetSuccess = PresetManager::Get().SavePreset(presetName, presetDesc, &error);
                                 // Save optimization settings to the preset
-                                if (success) {
+                                bool optimizationSuccess = true;
+                                if (presetSuccess) {
                                     std::string presetPath = PresetManager::Get().GetPresetPath(presetName);
-                                    success &= OptimizationManager::Get().SaveState(presetPath);
+                                    optimizationSuccess = OptimizationManager::Get().SaveState(presetPath);
                                 }
-                                if (!success) {
+
+                                if (presetSuccess && optimizationSuccess) {
+                                    LOG_INFO("Preset saved successfully");
+                                } else if (presetSuccess && !optimizationSuccess) {
+                                    LOG_WARNING("Preset saved but optimization state save failed");
+                                } else {
                                     LOG_ERROR("Failed to save preset: " + error);
                                 }
                             }
@@ -1119,19 +1139,24 @@ namespace SettingsGui {
             
             if (ImGui::Button("Merge", ImVec2(buttonWidth, 0))) {
                 std::string error;
-                bool success = PresetManager::Get().LoadPresetWithStrategy(
+                bool presetSuccess = PresetManager::Get().LoadPresetWithStrategy(
                     m_pendingPresetToLoad, PresetLoadStrategy::Merge, &error);
-                    
+
                 // Load optimization settings from the preset
-                if (success) {
+                bool optimizationSuccess = true;
+                if (presetSuccess) {
                     std::string presetPath = PresetManager::Get().GetPresetPath(m_pendingPresetToLoad);
-                    success &= OptimizationManager::Get().LoadState(presetPath);
+                    optimizationSuccess = OptimizationManager::Get().LoadState(presetPath);
                 }
-                
-                if (!success) {
+
+                if (presetSuccess && optimizationSuccess) {
+                    LOG_INFO("Preset loaded successfully (merge)");
+                } else if (presetSuccess && !optimizationSuccess) {
+                    LOG_WARNING("Preset loaded but optimization state load failed");
+                } else {
                     LOG_ERROR("Failed to load preset: " + error);
                 }
-                
+
                 m_showPresetLoadDialog = false;
                 ImGui::CloseCurrentPopup();
             }
@@ -1140,19 +1165,24 @@ namespace SettingsGui {
             
             if (ImGui::Button("Overwrite", ImVec2(buttonWidth, 0))) {
                 std::string error;
-                bool success = PresetManager::Get().LoadPresetWithStrategy(
+                bool presetSuccess = PresetManager::Get().LoadPresetWithStrategy(
                     m_pendingPresetToLoad, PresetLoadStrategy::Overwrite, &error);
-                    
+
                 // Load optimization settings from the preset
-                if (success) {
+                bool optimizationSuccess = true;
+                if (presetSuccess) {
                     std::string presetPath = PresetManager::Get().GetPresetPath(m_pendingPresetToLoad);
-                    success &= OptimizationManager::Get().LoadState(presetPath);
+                    optimizationSuccess = OptimizationManager::Get().LoadState(presetPath);
                 }
-                
-                if (!success) {
+
+                if (presetSuccess && optimizationSuccess) {
+                    LOG_INFO("Preset loaded successfully (overwrite)");
+                } else if (presetSuccess && !optimizationSuccess) {
+                    LOG_WARNING("Preset loaded but optimization state load failed");
+                } else {
                     LOG_ERROR("Failed to load preset: " + error);
                 }
-                
+
                 m_showPresetLoadDialog = false;
                 ImGui::CloseCurrentPopup();
             }

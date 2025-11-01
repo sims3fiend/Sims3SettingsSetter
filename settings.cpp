@@ -34,7 +34,18 @@ T StringToVector(const std::string& str) {
     std::vector<float> values;
     
     while (std::getline(ss, item, ',')) {
-        values.push_back(std::stof(item));
+        // Trim whitespace
+        size_t start = item.find_first_not_of(" \t\r\n");
+        size_t end = item.find_last_not_of(" \t\r\n");
+        if (start == std::string::npos) {
+            continue; // skip empty tokens
+        }
+        std::string token = item.substr(start, end - start + 1);
+        try {
+            values.push_back(std::stof(token));
+        } catch (...) {
+            // Ignore malformed component
+        }
     }
     
     if constexpr (std::is_same_v<T, Vector2>) {
@@ -168,7 +179,7 @@ bool SettingsManager::SaveConfig(const std::string& filename, std::string* error
                 continue;
             }
 
-            // Also skip if override was explicitly cleared
+            // If override was explicitly cleared, skip saving it
             if (!setting->IsOverridden() && setting->HasUnsavedChanges()) {
                 setting->SetUnsavedChanges(false); // Clear the unsaved flag
                 // skip log
@@ -326,8 +337,8 @@ bool SettingsManager::LoadConfig(const std::string& filename, std::string* error
                                 if constexpr (std::is_same_v<T, bool>) {
                                     newValue = value == "true";
                                 }
-                                else if constexpr (std::is_same_v<T, float>) {
-                                    newValue = std::stof(value);
+                else if constexpr (std::is_same_v<T, float>) {
+                    newValue = std::stof(value);
                                 }
                                 else if constexpr (std::is_same_v<T, Vector2>) {
                                     newValue = StringToVector<Vector2>(value);
@@ -344,9 +355,6 @@ bool SettingsManager::LoadConfig(const std::string& filename, std::string* error
                                 else if constexpr (std::is_same_v<T, unsigned int>) {
                                     newValue = static_cast<unsigned int>(std::stoul(value));
                                 }
-                                
-                                // Store for later application
-                                StorePendingSavedValue(currentSetting, newValue);
                                 
                                 // Set value and mark as overridden
                                 setting->SetValue(newValue);
@@ -448,6 +456,19 @@ SettingsManager::GetConfigSettingsInfo() const {
 void SettingsManager::StorePendingSavedValue(const std::wstring& name, const Setting::ValueType& value) {
     m_pendingSavedValues[name].value = value;
     m_pendingSavedValues[name].isOverridden = true;
+
+    // Warn if pending values grow unexpectedly large; log on threshold and each doubling to avoid spam
+    static size_t s_nextWarnAt = 100; // initial threshold
+    const size_t currentSize = m_pendingSavedValues.size();
+    if (currentSize >= s_nextWarnAt) {
+        LOG_WARNING("[SettingsManager] pendingSavedValues size=" + std::to_string(currentSize) +
+            ", possible obsolete or unknown settings in preset");
+        if (s_nextWarnAt <= (SIZE_MAX / 2)) {
+            s_nextWarnAt *= 2; // escalate threshold
+        } else {
+            s_nextWarnAt = SIZE_MAX; // stop escalating to avoid overflow
+        }
+    }
 }
 
 void SettingsManager::ApplyPendingSavedValue(const std::wstring& name) {
@@ -480,7 +501,8 @@ bool SettingsManager::UpdateConfigValue(const std::wstring& name, const std::wst
     std::string fullKey = "Config." + Utils::WideToUtf8(name);
     
     // Update the value in our cache using the ConfigValueCache
-    ConfigValueCache::Instance().GetBuffer(fullKey, newValue);
+    size_t minCapacity = it->second.bufferSize > 0 ? it->second.bufferSize : (newValue.size() + 1);
+    ConfigValueCache::Instance().GetBuffer(fullKey, newValue, minCapacity);
     
     // Update our local copy as well
     it->second.currentValue = newValue;

@@ -15,10 +15,15 @@ PresetManager& PresetManager::Get() {
 }
 
 PresetManager::PresetManager() {
-    // Get the DLL path
+    // Get the DLL path using the actual module handle
     wchar_t dllPath[MAX_PATH];
-    GetModuleFileNameW(GetModuleHandleA("settings.dll"), dllPath, MAX_PATH);
-    
+    HMODULE hModule = GetDllModuleHandle();
+    if (!hModule) {
+        // Fallback: try to get the handle of the current DLL
+        hModule = GetModuleHandleW(NULL);
+    }
+    GetModuleFileNameW(hModule, dllPath, MAX_PATH);
+
     // Create presets directory next to DLL TODO move this to like utils or something
     fs::path dllDir = fs::path(dllPath).parent_path();
     m_presetDir = dllDir / "presets";
@@ -91,12 +96,13 @@ bool PresetManager::LoadPresetWithStrategy(const std::string& name, PresetLoadSt
             // Reset all settings to defaults
             SettingsManager::Get().ResetAllSettings();
             
-            // Also clear all overrides to ensure a clean slate
+            // Clear all override flags for a clean slate
+            // Don't mark as unsaved since we're resetting to defaults
             auto& settingsManager = SettingsManager::Get();
             const auto& allSettings = settingsManager.GetAllSettings();
             for (const auto& [settingName, setting] : allSettings) {
                 setting->SetOverridden(false);  // Remove override flag
-                setting->SetUnsavedChanges(true);  // Mark as needing update
+                setting->SetUnsavedChanges(false);  // Not unsaved, we're at defaults
             }
             
             LOG_INFO("[PresetManager] Reset all settings to defaults before loading preset");
@@ -107,16 +113,8 @@ bool PresetManager::LoadPresetWithStrategy(const std::string& name, PresetLoadSt
         
         if (success) {
             LOG_INFO("Successfully loaded settings from preset");
-            
-            // Force UI update by marking settings as changed
-            auto& settingsManager = SettingsManager::Get();
-            const auto& allSettings = settingsManager.GetAllSettings();
-            for (const auto& [settingName, setting] : allSettings) {
-                if (setting->IsOverridden()) {
-                    // Only mark overridden settings as changed to trigger UI refresh
-                    setting->SetUnsavedChanges(true);
-                }
-            }
+
+            // No need to force unsaved changes flag here
             
             // Auto-save after applying preset
             std::string saveError;
@@ -162,8 +160,10 @@ std::vector<PresetManager::PresetInfo> PresetManager::GetAvailablePresets() {
                 std::ifstream file(entry.path());
                 std::string line;
                 while (std::getline(file, line)) {
-                    if (line.find("; Description: ") == 0) {
-                        info.description = line.substr(14);
+                    // Look for description comment anywhere in the line
+                    size_t descPos = line.find("; Description: ");
+                    if (descPos != std::string::npos) {
+                        info.description = line.substr(descPos + 14);
                         break;
                     }
                 }

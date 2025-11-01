@@ -242,7 +242,7 @@ REGISTER_PATCH(MapViewLotBlockerPatch, {
     .displayName = "Map View Lot Streaming Blocker",
     .description = "Prevents lot loading while in map view mode, reduces stutter/slowdown when exiting/entering map view",
     .category = "Performance",
-    .experimental = false,
+    .experimental = true,
     .targetVersion = GameVersion::Steam,
     .technicalDetails = {
         "Hooks Camera_EnableMapViewMode at 0x0073DFB0",

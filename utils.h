@@ -8,6 +8,8 @@
 #include <ctime>
 #include <iomanip>
 
+extern HMODULE GetDllModuleHandle();
+
 namespace Utils {
     inline std::wstring Utf8ToWide(const std::string& str) {
         if (str.empty()) return std::wstring();

@@ -306,7 +306,7 @@ class ConfigRetrievalHook : public SettingsHook {
                         const std::wstring& savedValue = it->second.currentValue;
 
                         // Use ConfigValueCache to get a persistent buffer for this value
-                        wchar_t* newBuffer = ConfigValueCache::Instance().GetBuffer(fullKey, savedValue);
+                        wchar_t* newBuffer = ConfigValueCache::Instance().GetBuffer(fullKey, savedValue, it->second.bufferSize);
                         if (newBuffer) {
                             // Replace the original buffer with our cached one
                             if (*outValue) {
@@ -323,11 +323,12 @@ class ConfigRetrievalHook : public SettingsHook {
                     if (result == 1 && outValue && *outValue) {
                         // Cache the original value for consistency
                         std::wstring originalValue = *outValue;
-                        wchar_t* cachedBuffer = ConfigValueCache::Instance().GetBuffer(fullKey, originalValue);
+                        size_t requiredCapacity = wcslen(*outValue) + 1;
+                        wchar_t* cachedBuffer = ConfigValueCache::Instance().GetBuffer(fullKey, originalValue, requiredCapacity);
                         *outValue = cachedBuffer;
 
                         info.currentValue = originalValue;
-                        info.bufferSize = wcslen(*outValue) + 1;
+                        info.bufferSize = requiredCapacity;
                         info.valueType = DetectValueType(*outValue);
                     }
                     else {
@@ -595,6 +596,12 @@ HookManager g_hookManager;
 
 HANDLE g_ThreadHandle = NULL;
 DWORD g_ThreadId = 0;
+HMODULE g_hModule = NULL;  // Store the DLL module handle
+
+// Function to get the DLL module handle
+HMODULE GetDllModuleHandle() {
+    return g_hModule;
+}
 
 DWORD WINAPI HookThread(LPVOID lpParameter) {
     try {
@@ -626,30 +633,38 @@ DWORD WINAPI HookThread(LPVOID lpParameter) {
 
         LOG_INFO("UI settings initialized");
 
-        // Initialize optimization patches (register only, don't load states yet)
+        // Initialize patches (register only, don't load states yet)
         try {
-            auto& optimizationManager = OptimizationManager::Get();
-            LOG_INFO("Optimization patches registered");
-            
+            auto& patchManager = OptimizationManager::Get();
+            LOG_INFO("Patches registered successfully");
+
             // NOTE: We'll load saved states AFTER D3D9 is initialized
             // to ensure the game module is fully loaded
         }
         catch (const std::exception& e) {
-            LOG_ERROR("Failed to initialize optimization patches: " + std::string(e.what()));
+            LOG_ERROR("Failed to initialize patch system: " + std::string(e.what()));
         }
 
         // Initialize settings hooks
         try {
-            g_hookManager.Initialize();
-            LOG_INFO("Settings hooks initialized");
+            // Check if hooks should be disabled
+            bool disableHooks = UISettings::Get().GetDisableHooks();
 
-            // Load saved settings
-            std::string error;
-            if (!SettingsManager::Get().LoadConfig("S3SS.ini", &error)) {
-                LOG_WARNING("Failed to load settings at startup: " + error);
+            if (disableHooks) {
+                LOG_INFO("Settings hooks are DISABLED via DisableHooks setting");
             }
             else {
-                LOG_INFO("Successfully loaded settings");
+                g_hookManager.Initialize();
+                LOG_INFO("Settings hooks initialized");
+
+                // Load saved settings
+                std::string error;
+                if (!SettingsManager::Get().LoadConfig("S3SS.ini", &error)) {
+                    LOG_WARNING("Failed to load settings at startup: " + error);
+                }
+                else {
+                    LOG_INFO("Successfully loaded settings");
+                }
             }
 
             // Load QoL settings
@@ -669,17 +684,17 @@ DWORD WINAPI HookThread(LPVOID lpParameter) {
         
         // Now that D3D9 is hooked and the game is running, it's safe to load patch states
         try {
-            LOG_INFO("Loading saved optimization states...");
-            auto& optimizationManager = OptimizationManager::Get();
-            if (!optimizationManager.LoadState("S3SS.ini")) {
-                LOG_WARNING("Failed to load optimization states");
+            LOG_INFO("Loading saved patch states...");
+            auto& patchManager = OptimizationManager::Get();
+            if (!patchManager.LoadState("S3SS.ini")) {
+                LOG_WARNING("Failed to load patch states");
             }
             else {
-                LOG_INFO("Successfully loaded optimization states");
+                LOG_INFO("Successfully loaded patch states");
             }
         }
         catch (const std::exception& e) {
-            LOG_ERROR("Failed to load optimization states: " + std::string(e.what()));
+            LOG_ERROR("Failed to load patch states: " + std::string(e.what()));
         }
 
         LOG_INFO("Starting message loop");
@@ -725,6 +740,7 @@ BOOL APIENTRY DllMain(HMODULE hModule, DWORD reason, LPVOID lpReserved)
     switch (reason) {
     case DLL_PROCESS_ATTACH: {
         DisableThreadLibraryCalls(hModule);
+        g_hModule = hModule;  // Store the module handle
 
         // Check if we're in the correct process
         char processName[MAX_PATH];
@@ -760,9 +776,9 @@ BOOL APIENTRY DllMain(HMODULE hModule, DWORD reason, LPVOID lpReserved)
 
     case DLL_PROCESS_DETACH: {
         if (!lpReserved) {
-            // Clean up optimization patches
-            auto& optimizationManager = OptimizationManager::Get();
-            for (const auto& patch : optimizationManager.GetPatches()) {
+            // Clean up patches
+            auto& patchManager = OptimizationManager::Get();
+            for (const auto& patch : patchManager.GetPatches()) {
                 if (patch->IsEnabled()) {
                     patch->Uninstall();
                 }

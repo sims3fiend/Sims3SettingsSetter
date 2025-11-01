@@ -554,7 +554,3 @@ if (!someOperation()) {
 }
 ```
 Errors appear in the GUI as red text with tooltips showing the message, as well as in the log.
-
-## Tips
-(mostly for myself...)
-- idk
