@@ -48,6 +48,3 @@ ipch/
 *.dll
 .*/
 .tmp*
-*.sln
-*.vcxproj
-*.filters
