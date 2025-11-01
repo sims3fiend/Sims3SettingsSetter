@@ -20,7 +20,6 @@
     <ClCompile Include="imgui\imgui_impl_win32.cpp">
       <Filter>imgui</Filter>
     </ClCompile>
-    <ClCompile Include="pch.cpp" />
     <ClCompile Include="cpu_optimization.cpp" />
     <ClCompile Include="d3d9_hook.cpp" />
     <ClCompile Include="gui.cpp" />
@@ -48,6 +47,9 @@
     <ClCompile Include="patches\smooth_patch_dupe.cpp">
       <Filter>patches</Filter>
     </ClCompile>
+    <ClCompile Include="patches\resolution_control.cpp">
+      <Filter>patches</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="imgui\imconfig.h">
@@ -65,10 +67,15 @@
     <ClInclude Include="imgui\imgui_impl_win32.h">
       <Filter>imgui</Filter>
     </ClInclude>
+    <ClInclude Include="imgui\imstb_rectpack.h">
+      <Filter>imgui</Filter>
+    </ClInclude>
     <ClInclude Include="imgui\imstb_textedit.h">
       <Filter>imgui</Filter>
     </ClInclude>
-    <ClInclude Include="pch.h" />
+    <ClInclude Include="imgui\imstb_truetype.h">
+      <Filter>imgui</Filter>
+    </ClInclude>
     <ClInclude Include="config_value_cache.h" />
     <ClInclude Include="cpu_optimization.h" />
     <ClInclude Include="d3d9_hook.h" />
