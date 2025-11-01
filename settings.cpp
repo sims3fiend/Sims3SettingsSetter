@@ -475,9 +475,63 @@ void SettingsManager::ApplyPendingSavedValue(const std::wstring& name) {
     auto it = m_pendingSavedValues.find(name);
     if (it != m_pendingSavedValues.end()) {
         if (auto* setting = GetSetting(name)) {
-            // omit verbose per-setting apply log
-            setting->SetValue(it->second.value);
-            setting->SetOverridden(it->second.isOverridden);
+            // Convert pending value to match the registered setting's actual type YOU FOOL!!! AAAAAAAAAAAAAA
+            //TODO: Will clean this up eventually, for now this is good enough, can't think of a better sollution
+            Setting::ValueType convertedValue;
+            bool conversionSuccess = false;
+
+            std::visit([&](auto&& targetDefault) {
+                using TargetT = std::decay_t<decltype(targetDefault)>;
+
+                // Try to convert from pending value to target type
+                std::visit([&](auto&& pendingVal) {
+                    using PendingT = std::decay_t<decltype(pendingVal)>;
+
+                    if constexpr (std::is_same_v<PendingT, TargetT>) {
+                        // Types match, direct assignment
+                        convertedValue = pendingVal;
+                        conversionSuccess = true;
+                    }
+                    else if constexpr (std::is_same_v<TargetT, int>) {
+                        // Convert to int
+                        if constexpr (std::is_same_v<PendingT, float>) {
+                            convertedValue = static_cast<int>(pendingVal);
+                            conversionSuccess = true;
+                        } else if constexpr (std::is_same_v<PendingT, unsigned int>) {
+                            convertedValue = static_cast<int>(pendingVal);
+                            conversionSuccess = true;
+                        }
+                    }
+                    else if constexpr (std::is_same_v<TargetT, unsigned int>) {
+                        // Convert to unsigned int
+                        if constexpr (std::is_same_v<PendingT, float>) {
+                            convertedValue = static_cast<unsigned int>(pendingVal);
+                            conversionSuccess = true;
+                        } else if constexpr (std::is_same_v<PendingT, int>) {
+                            convertedValue = static_cast<unsigned int>(pendingVal);
+                            conversionSuccess = true;
+                        }
+                    }
+                    else if constexpr (std::is_same_v<TargetT, float>) {
+                        // Convert to float
+                        if constexpr (std::is_same_v<PendingT, int>) {
+                            convertedValue = static_cast<float>(pendingVal);
+                            conversionSuccess = true;
+                        } else if constexpr (std::is_same_v<PendingT, unsigned int>) {
+                            convertedValue = static_cast<float>(pendingVal);
+                            conversionSuccess = true;
+                        }
+                    }
+                }, it->second.value);
+            }, setting->GetDefaultValue());
+
+            if (conversionSuccess) {
+                setting->SetValue(convertedValue);
+                setting->SetOverridden(it->second.isOverridden);
+            } else {
+                LOG_WARNING("[SettingsManager] Type mismatch for pending value: " + Utils::WideToUtf8(name));
+            }
+
             m_pendingSavedValues.erase(it);
         }
     }

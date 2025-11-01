@@ -147,8 +147,10 @@ class VariableRegistryHook : public SettingsHook {
             switch (actualType) {
             case SettingType::Int32: {
                 int value = *static_cast<int*>(ptr);
+                // Clamp step to minimum 1.0 for integer types
+                float step = (param9 < 1.0f) ? 1.0f : param9;
                 instance->RegisterSetting(ptr, name, value,
-                    static_cast<float>(param5), static_cast<float>(param6), param9);
+                    static_cast<float>(param5), static_cast<float>(param6), step);
                 break;
             }
             case SettingType::Uint32: {
@@ -163,7 +165,9 @@ class VariableRegistryHook : public SettingsHook {
                     std::swap(minVal, maxVal);
                 }
 
-                instance->RegisterSetting(ptr, name, value, minVal, maxVal, param9);
+                // Clamp step to minimum 1.0 for integer types
+                float step = (param9 < 1.0f) ? 1.0f : param9;
+                instance->RegisterSetting(ptr, name, value, minVal, maxVal, step);
                 break;
             }
             case SettingType::Float: {
