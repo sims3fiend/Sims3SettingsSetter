@@ -97,6 +97,10 @@ File → Presets to save or load configurations
 **Crashes while using specific patches**
 - Send me your log
 
+## Building from Source
+
+You'll need [vcpkg](https://github.com/microsoft/vcpkg), and to run `vcpkg install --triplet=x86-windows-static`
+
 ## For Developers
 
 This tool features a modular patch system that makes adding custom patches v easy. All patches auto-register and appear in the GUI, the system handles memory protection, change tracking, and restoration automatically, which makes reverse engineering and patching muuuch simpler.

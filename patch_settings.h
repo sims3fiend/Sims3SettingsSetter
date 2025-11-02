@@ -5,7 +5,7 @@
 #include <memory>
 #include <fstream>
 #include <Windows.h>
-#include "imgui/imgui.h"
+#include "imgui.h"
 
 // UI type for settings
 enum class SettingUIType {

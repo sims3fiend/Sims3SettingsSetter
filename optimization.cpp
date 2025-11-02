@@ -2,7 +2,7 @@
 #include "patch_system.h"
 #include <intrin.h>
 #include <format>
-#include <detours.h>
+#include <detours/detours.h>
 #include "intersection_patch.h"
 #include "cpu_optimization.h"
 #include "utils.h"

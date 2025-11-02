@@ -191,7 +191,7 @@ If you need complete control over the UI, you can still manually implement custo
 #include "../patch_system.h"
 #include "../patch_helpers.h"
 #include "../logger.h"
-#include "../imgui/imgui.h"  // Include ImGui for custom UI
+#include "imgui.h"  // Include ImGui for custom UI
 
 class CustomUIPatch : public OptimizationPatch {
 private:

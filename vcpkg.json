@@ -1,0 +1,14 @@
+{
+  "$schema": "https://raw.githubusercontent.com/microsoft/vcpkg-tool/main/docs/vcpkg.schema.json",
+  "builtin-baseline": "e3ed41868d5034bc608eaaa58383cd6ecdbb5ffb",
+  "dependencies": [
+    {
+      "name": "imgui",
+      "features": [
+        "dx9-binding",
+        "win32-binding"
+      ]
+    },
+    "detours"
+  ]
+}

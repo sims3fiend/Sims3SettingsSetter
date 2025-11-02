@@ -1,8 +1,8 @@
 #include <windows.h>
 #include <d3d9.h>
-#include "imgui/imgui.h"
-#include "imgui/imgui_impl_dx9.h"
-#include "imgui/imgui_impl_win32.h"
+#include "imgui.h"
+#include "imgui_impl_dx9.h"
+#include "imgui_impl_win32.h"
 #include "settings_gui.h"
 
 // Forward declare message handler from imgui_impl_win32.cpp :) :) :) :) :) :):)!

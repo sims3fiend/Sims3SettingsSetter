@@ -48,3 +48,12 @@ ipch/
 *.dll
 .*/
 .tmp*
+
+# vcpkg dependencies (managed by vcpkg.json)
+imgui/
+detours/
+vcpkg_installed/
+
+# NuGet packages (if any legacy ones remain)
+packages/
+*.nupkg

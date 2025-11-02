@@ -1,6 +1,6 @@
 #include "d3d9_hook.h"
 #include "gui.h"
-#include <detours.h>
+#include <detours/detours.h>
 #include "imgui.h"
 #include "imgui_impl_win32.h"
 #include "imgui_impl_dx9.h"

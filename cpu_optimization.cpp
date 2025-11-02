@@ -1,6 +1,6 @@
 /* The game uses a weird hardcoded SetThreadIdealProcessor call in the steam and disk versions, so we use our own implemntation instead xoxo*/
 #include "cpu_optimization.h"
-#include <detours.h>
+#include <detours/detours.h>
 #include <intrin.h>
 #include "utils.h"
 #include "logger.h"
@@ -9,7 +9,7 @@
 #include "patch_helpers.h"
 
 // Include ImGui for custom UI rendering
-#include "imgui/imgui.h"
+#include "imgui.h"
 
 // Initialize static instance
 CPUOptimizationPatch* CPUOptimizationPatch::instance = nullptr;

@@ -1,7 +1,7 @@
 #pragma once
 #include <windows.h>
 #include <Psapi.h>  // For MODULEINFO and GetModuleInformation
-#include <detours.h>
+#include <detours/detours.h>
 #include <vector>
 #include <cstring>
 #include <variant>

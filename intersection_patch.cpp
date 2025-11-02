@@ -1,5 +1,5 @@
 #include "intersection_patch.h"
-#include <detours.h>
+#include <detours/detours.h>
 #include "logger.h"
 
 IntersectionPatch* IntersectionPatch::instance = nullptr;
