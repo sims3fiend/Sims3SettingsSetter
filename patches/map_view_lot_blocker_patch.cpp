@@ -3,113 +3,90 @@
 #include "../logger.h"
 #include <chrono>
 #include <thread>
+#include <atomic>
+#include <condition_variable>
 
 class MapViewLotBlockerPatch : public OptimizationPatch {
 private:
-    std::vector<PatchHelper::PatchLocation> patchedLocations;
     std::vector<DetourHelper::Hook> hooks;
     std::thread delayThread;
-    volatile bool shouldExit = false;
-    volatile bool isCurrentlyPatched = false;
+    std::condition_variable threadCV;
+    std::mutex threadMutex;
+    std::atomic<bool> shouldExit{ false };
+    std::atomic<bool> blockLotStreaming{ false };  // Changed from isCurrentlyPatched
 
     // Function addresses
-    static const uintptr_t WORLD_MANAGER_UPDATE_LOT_STREAMING = 0x00C6C290;
+    static const uintptr_t SPEC_WORLD_MANAGER_UPDATE = 0x00C6D570;
     static const uintptr_t CAMERA_ENABLE_MAP_VIEW_MODE = 0x0073DFB0;
     static const uintptr_t CAMERA_DISABLE_MAP_VIEW_MODE = 0x0073E000;
 
-    // Original bytes at WORLD_MANAGER_UPDATE_LOT_STREAMING
-    // 55 8B EC = push ebp; mov ebp, esp
-    inline static const BYTE ORIGINAL_BYTES[3] = { 0x55, 0x8B, 0xEC }; //could make this cleaner
-
-    // Patch bytes: ret 10h (C2 10 00) - return and clean 16 bytes from stack
-    inline static const BYTE PATCH_BYTES[3] = { 0xC2, 0x10, 0x00 };
+    // WorldManager offset for lot streaming skip flag
+    static const uintptr_t WORLD_MANAGER_LOT_SKIP_OFFSET = 0x258;
 
     // Function pointers for hooks
     typedef void (__cdecl* Camera_EnableMapViewMode_t)(float);
     typedef void (__cdecl* Camera_DisableMapViewMode_t)(float, float, float);
+    typedef int (__thiscall* WorldManager_Update_t)(void* worldMgr, float param2, float param3);
 
     Camera_EnableMapViewMode_t originalEnableMapView = nullptr;
     Camera_DisableMapViewMode_t originalDisableMapView = nullptr;
+    WorldManager_Update_t originalWorldManagerUpdate = nullptr;
 
     // Static instance pointer for hooks
     static MapViewLotBlockerPatch* instance;
 
-    bool ApplyFunctionBlock() {
-        // Check if already patched
-        if (isCurrentlyPatched) {
-            return true;
-        }
-
-        LOG_DEBUG("[MapViewLotBlocker] Applying function block (patching to ret)");
-
-        // Validate current bytes match what we expect
-        if (!PatchHelper::ValidateBytes((LPVOID)WORLD_MANAGER_UPDATE_LOT_STREAMING, ORIGINAL_BYTES, sizeof(ORIGINAL_BYTES))) {
-            // Might already be patched or wrong version
-            BYTE current[3];
-            for (int i = 0; i < 3; i++) {
-                current[i] = PatchHelper::ReadByte(WORLD_MANAGER_UPDATE_LOT_STREAMING + i);
-            }
-
-            // Check if it's already our patch
-            if (current[0] == PATCH_BYTES[0] && current[1] == PATCH_BYTES[1] && current[2] == PATCH_BYTES[2]) {
-                LOG_DEBUG("[MapViewLotBlocker] Already patched");
-                isCurrentlyPatched = true;
-                return true;
-            }
-
-            LOG_WARNING("[MapViewLotBlocker] Unexpected bytes at target address");
-            return false;
-        }
-
-        // Apply the patch
-        std::vector<BYTE> patchBytes(PATCH_BYTES, PATCH_BYTES + sizeof(PATCH_BYTES));
-        if (!PatchHelper::WriteBytes(WORLD_MANAGER_UPDATE_LOT_STREAMING,
-                                     patchBytes,
-                                     &patchedLocations)) {
-            LOG_ERROR("[MapViewLotBlocker] Failed to write patch bytes");
-            return false;
-        }
-
-        isCurrentlyPatched = true;
+    void EnableLotBlocking() {
+        blockLotStreaming.store(true);
         LOG_INFO("[MapViewLotBlocker] Lot streaming BLOCKED");
-        return true;
     }
 
-    bool RemoveFunctionBlock() {
-        // Check if not patched
-        if (!isCurrentlyPatched) {
-            return true;
-        }
-
-        LOG_DEBUG("[MapViewLotBlocker] Removing function block (restoring original)");
-
-        // Restore original bytes
-        if (!PatchHelper::RestoreAll(patchedLocations)) {
-            LOG_ERROR("[MapViewLotBlocker] Failed to restore original bytes");
-            return false;
-        }
-
-        isCurrentlyPatched = false;
+    void DisableLotBlocking() {
+        blockLotStreaming.store(false);
         LOG_INFO("[MapViewLotBlocker] Lot streaming RESTORED");
-        return true;
     }
 
     void DelayedRestoreThreadFunc() {
         LOG_DEBUG("[MapViewLotBlocker] Starting 1-second delay before restore");
 
-        // Wait 1 second
-        std::this_thread::sleep_for(std::chrono::milliseconds(1000));
-
-        if (!shouldExit) {
-            RemoveFunctionBlock();
+        // Wait 1 second with interruptible sleep
+        std::unique_lock<std::mutex> lock(threadMutex);
+        if (threadCV.wait_for(lock, std::chrono::milliseconds(1000), [this] { return shouldExit.load(); })) {
+            // shouldExit became true, exit early
+            LOG_DEBUG("[MapViewLotBlocker] Delay thread interrupted");
+            return;
         }
+
+        // Timeout expired and shouldExit is still false, proceed with restore
+        if (!shouldExit.load()) {
+            DisableLotBlocking();
+        }
+    }
+
+    // Hooked WorldManager_Update - manipulates the skip flag
+    static int __fastcall HookedWorldManagerUpdate(void* worldMgr, void* unused, float param2, float param3) {
+        if (instance && instance->blockLotStreaming.load()) {
+            // Temporarily set the skip flag to prevent lot processing
+            char* skipFlag = (char*)worldMgr + WORLD_MANAGER_LOT_SKIP_OFFSET;
+            char originalValue = *skipFlag;
+            *skipFlag = 1;  // Tell the game to skip lot processing
+
+            // Call original function
+            int result = instance->originalWorldManagerUpdate(worldMgr, param2, param3);
+
+            // Restore original flag value
+            *skipFlag = originalValue;
+            return result;
+        }
+
+        // Not blocking, call original
+        return instance->originalWorldManagerUpdate(worldMgr, param2, param3);
     }
 
     // Hooked function: called when entering map view
     static void __cdecl HookedEnableMapView(float param) {
         if (instance) {
             LOG_INFO("[MapViewLotBlocker] Map view ENABLED - blocking lot streaming NOW");
-            instance->ApplyFunctionBlock();
+            instance->EnableLotBlocking();
         }
 
         // Call original function
@@ -129,13 +106,14 @@ private:
             LOG_INFO("[MapViewLotBlocker] Map view DISABLED - starting delay before restore");
 
             // Stop any existing delay thread
-            instance->shouldExit = true;
+            instance->shouldExit.store(true);
+            instance->threadCV.notify_all();  // Wake up waiting thread
             if (instance->delayThread.joinable()) {
                 instance->delayThread.join();
             }
 
             // Start new delay thread
-            instance->shouldExit = false;
+            instance->shouldExit.store(false);
             instance->delayThread = std::thread(&MapViewLotBlockerPatch::DelayedRestoreThreadFunc, instance);
         }
     }
@@ -149,7 +127,8 @@ public:
         instance = nullptr;
 
         // Ensure thread is stopped
-        shouldExit = true;
+        shouldExit.store(true);
+        threadCV.notify_all();
         if (delayThread.joinable()) {
             delayThread.join();
         }
@@ -163,7 +142,7 @@ public:
 
         // Validate that target addresses are accessible
         MEMORY_BASIC_INFORMATION mbi;
-        if (VirtualQuery((LPVOID)WORLD_MANAGER_UPDATE_LOT_STREAMING, &mbi, sizeof(mbi)) == 0) {
+        if (VirtualQuery((LPVOID)SPEC_WORLD_MANAGER_UPDATE, &mbi, sizeof(mbi)) == 0) {
             return Fail("Target function address not accessible");
         }
 
@@ -171,28 +150,26 @@ public:
             return Fail("Target function memory not committed");
         }
 
-        // Validate original bytes
-        if (!PatchHelper::ValidateBytes((LPVOID)WORLD_MANAGER_UPDATE_LOT_STREAMING, ORIGINAL_BYTES, sizeof(ORIGINAL_BYTES))) {
-            return Fail("Unexpected bytes at target address 0x" + std::to_string(WORLD_MANAGER_UPDATE_LOT_STREAMING) + ". Wrong game version?");
-        }
-
         // Set up function pointers
+        originalWorldManagerUpdate = reinterpret_cast<WorldManager_Update_t>(SPEC_WORLD_MANAGER_UPDATE);
         originalEnableMapView = reinterpret_cast<Camera_EnableMapViewMode_t>(CAMERA_ENABLE_MAP_VIEW_MODE);
         originalDisableMapView = reinterpret_cast<Camera_DisableMapViewMode_t>(CAMERA_DISABLE_MAP_VIEW_MODE);
 
         // Set up hooks
         hooks = {
+            {(void**)&originalWorldManagerUpdate, (void*)HookedWorldManagerUpdate},
             {(void**)&originalEnableMapView, (void*)HookedEnableMapView},
             {(void**)&originalDisableMapView, (void*)HookedDisableMapView}
         };
 
         // Install hooks
         if (!DetourHelper::InstallHooks(hooks)) {
-            return Fail("Failed to install camera function hooks");
+            return Fail("Failed to install hooks");
         }
 
         isEnabled = true;
         LOG_INFO("[MapViewLotBlocker] Successfully installed with function hooks");
+        LOG_INFO("[MapViewLotBlocker] Hooked SPEC_WorldManager_Update at 0x" + std::to_string(SPEC_WORLD_MANAGER_UPDATE));
         LOG_INFO("[MapViewLotBlocker] Hooked Camera_EnableMapViewMode at 0x" + std::to_string(CAMERA_ENABLE_MAP_VIEW_MODE));
         LOG_INFO("[MapViewLotBlocker] Hooked Camera_DisableMapViewMode at 0x" + std::to_string(CAMERA_DISABLE_MAP_VIEW_MODE));
         return true;
@@ -205,7 +182,8 @@ public:
         LOG_INFO("[MapViewLotBlocker] Uninstalling...");
 
         // Signal thread to exit
-        shouldExit = true;
+        shouldExit.store(true);
+        threadCV.notify_all();
 
         // Wait for delay thread to finish if running
         if (delayThread.joinable()) {
@@ -217,16 +195,8 @@ public:
             LOG_WARNING("[MapViewLotBlocker] Failed to remove hooks (may be okay if game is closing)");
         }
 
-        // Restore any active patches
-        if (isCurrentlyPatched) {
-            if (!RemoveFunctionBlock()) {
-                return Fail("Failed to restore original function during uninstall");
-            }
-        }
-
-        // Clean up
-        patchedLocations.clear();
-        isCurrentlyPatched = false;
+        // Ensure blocking is disabled
+        blockLotStreaming.store(false);
 
         isEnabled = false;
         LOG_INFO("[MapViewLotBlocker] Successfully uninstalled");
@@ -237,19 +207,20 @@ public:
 // Static instance pointer initialization
 MapViewLotBlockerPatch* MapViewLotBlockerPatch::instance = nullptr;
 
-// Register the patch
+// Auto-register the patch
 REGISTER_PATCH(MapViewLotBlockerPatch, {
     .displayName = "Map View Lot Streaming Blocker",
-    .description = "Prevents lot loading while in map view mode, reduces stutter/slowdown when exiting/entering map view",
+    .description = "Prevents lot loading while in map view mode, reduces stutter/slowdown when exiting/entering map view.",
     .category = "Performance",
     .experimental = true,
     .targetVersion = GameVersion::Steam,
     .technicalDetails = {
+        "Hooks SPEC_WorldManager_Update at 0x00C6D570",
         "Hooks Camera_EnableMapViewMode at 0x0073DFB0",
         "Hooks Camera_DisableMapViewMode at 0x0073E000",
-        "Patches WorldManager_UpdateLotStreaming(spec name) at 0x00C6C290 to 'ret 10h'",
+        "Sets WorldManager skip flag at offset +0x258 to block lot processing",
         "Blocks lot streaming when entering map view",
         "Restores lot streaming 1 second after exiting map view (for zoom animation)",
-        "There are some slight lag issues with this if you spam the map button, but overall should be fine, will address l8r"
+        "Thread-safe implementation with atomic flags and condition variables"
     }
 })

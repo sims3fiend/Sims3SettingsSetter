@@ -101,6 +101,7 @@
     <ClInclude Include="config_value_cache.h" />
     <ClInclude Include="cpu_optimization.h" />
     <ClInclude Include="d3d9_hook.h" />
+    <ClInclude Include="d3d9_hook_registry.h" />
     <ClInclude Include="framework.h" />
     <ClInclude Include="gui.h" />
     <ClInclude Include="intersection_patch.h" />
@@ -119,6 +120,7 @@
   <ItemGroup>
     <ClCompile Include="cpu_optimization.cpp" />
     <ClCompile Include="d3d9_hook.cpp" />
+    <ClCompile Include="d3d9_hook_registry.cpp" />
     <ClCompile Include="dllmain.cpp" />
     <ClCompile Include="gui.cpp" />
     <ClCompile Include="hooks.cpp" />
@@ -133,7 +135,10 @@
     <ClCompile Include="qol.cpp" />
     <ClCompile Include="settings.cpp" />
     <ClCompile Include="vtable_manager.cpp" />
-    <ClCompile Include="patches\lot_visibility_patch.cpp" />
+    <!-- Old combined patch - deprecated, kept for reference -->
+    <!-- <ClCompile Include="patches\lot_visibility_patch.cpp" /> -->
+    <ClCompile Include="patches\lot_streaming_settings_patch.cpp" />
+    <ClCompile Include="patches\lot_visibility_camera_patch.cpp" />
     <ClCompile Include="patches\cpu_optimization_patch_register.cpp" />
     <ClCompile Include="patches\intersection_patch_register.cpp" />
     <ClCompile Include="patches\createfileW_patch.cpp" />

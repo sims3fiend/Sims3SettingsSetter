@@ -554,3 +554,184 @@ if (!someOperation()) {
 }
 ```
 Errors appear in the GUI as red text with tooltips showing the message, as well as in the log.
+
+## D3D9 Hooking System
+
+🗑🗑🗑WIP🗑🗑🗑 This may all break/change, I don't know why I did any of this
+For patches that need to intercept Direct3D9 rendering calls, we provide a managed hook registry system with priority-based execution and clean integration with the patch system.
+
+### When to Use D3D9 Hooks
+
+D3D9 hooks are ideal for:
+- **Resolution scaling** - Modifying backbuffer/viewport sizes
+- **Selective rendering** - Skipping specific draw calls (culling UI, objects, etc.)
+- **Shader replacement** - Intercepting and replacing pixel/vertex shaders
+- **Draw call analysis** - Counting, logging, or profiling rendering operations
+- **Texture replacement** - Swapping textures at bind time
+- **Post-processing effects** - Injecting custom rendering passes
+
+### Available Hook Types
+
+The D3D9 hook registry supports these commonly-used methods:
+- `DrawIndexedPrimitive` - Main geometry rendering (90% of game rendering)
+- `DrawPrimitive` - Non-indexed geometry
+- `SetRenderTarget` - Render target changes (essential for resolution work)
+- `SetPixelShader` / `SetVertexShader` - Shader changes
+- `SetTexture` - Texture binding
+- `Present` - Frame presentation (good for FPS limiting, screenshots)
+- `BeginScene` - Scene begin (initialization per-frame)
+- `CreateTexture` - Texture creation (intercept for resolution scaling)
+
+### Basic D3D9 Hook Example
+
+```cpp
+#include "../patch_system.h"
+#include "../patch_helpers.h"
+#include "../d3d9_hook_registry.h"
+#include "../logger.h"
+
+extern LPDIRECT3DDEVICE9 g_pd3dDevice;
+
+class DrawCallCounterPatch : public OptimizationPatch {
+private:
+    int drawCallCount = 0;
+    bool countingEnabled = true;
+
+public:
+    DrawCallCounterPatch() : OptimizationPatch("DrawCallCounter", nullptr) {
+        RegisterBoolSetting(&countingEnabled, "enabled", true, "Enable draw call counting");
+    }
+
+    bool Install() override {
+        if (isEnabled) return true;
+
+        // Register a hook with priority
+        D3D9Hooks::RegisterDrawIndexedPrimitive("DrawCallCounter",
+            [this](D3D9Hooks::DeviceContext& ctx, D3DPRIMITIVETYPE type,
+                   INT baseVertexIndex, UINT minVertexIndex, UINT numVertices,
+                   UINT startIndex, UINT primCount) {
+
+                if (countingEnabled) {
+                    drawCallCount++;
+                }
+
+                // Return Continue to let other hooks and the original function run
+                return D3D9Hooks::HookResult::Continue;
+            },
+            D3D9Hooks::Priority::Last  // Run last (monitoring only)
+        );
+
+        isEnabled = true;
+        LOG_INFO("[DrawCallCounter] Successfully installed");
+        return true;
+    }
+
+    bool Uninstall() override {
+        if (!isEnabled) return true;
+
+        // Unregister all hooks registered with this patch's name
+        D3D9Hooks::UnregisterAll("DrawCallCounter");
+
+        isEnabled = false;
+        LOG_INFO("[DrawCallCounter] Successfully uninstalled");
+        return true;
+    }
+
+    void RenderCustomUI() override {
+        ImGui::Text("Draw calls this frame: %d", drawCallCount);
+        if (ImGui::Button("Reset Counter")) {
+            drawCallCount = 0;
+        }
+
+        // Reset each frame for per-frame counting
+        drawCallCount = 0;
+    }
+};
+
+REGISTER_PATCH(DrawCallCounterPatch, {
+    .displayName = "Draw Call Counter",
+    .description = "Counts and displays DrawIndexedPrimitive calls per frame",
+    .category = "Debug",
+    .experimental = false,
+    .targetVersion = GameVersion::All,
+    .technicalDetails = {
+        "Hooks DrawIndexedPrimitive with Last priority",
+        "Non-intrusive monitoring only"
+    }
+})
+```
+
+### Hook Priorities
+
+Control execution order with priorities (lower numbers run first):
+- **First (0)** - Validation, early interception
+- **Early (25)** - Parameter modification before most hooks
+- **Normal (50)** - Default priority
+- **Late (75)** - Post-processing, cleanup
+- **Last (100)** - Monitoring, logging (doesn't modify behavior)
+
+### Hook Results
+
+Control execution flow by returning:
+- **HookResult::Continue** - Continue to next hook / original function (most common)
+- **HookResult::Skip** - Skip original call, return S_OK (success)
+- **HookResult::Block** - Block call, return E_FAIL (failure)
+
+### D3D9 Helper Utilities
+
+The `D3D9Helper` namespace provides useful utilities:
+
+```cpp
+// Get device information
+auto info = D3D9Helper::GetDeviceInfo(g_pd3dDevice);
+if (info.valid) {
+    LOG_INFO("Backbuffer: " + std::to_string(info.backbufferWidth) +
+             "x" + std::to_string(info.backbufferHeight));
+}
+
+// Get just backbuffer size
+UINT width, height;
+if (D3D9Helper::GetBackbufferSize(g_pd3dDevice, &width, &height)) {
+    LOG_INFO("Backbuffer: " + std::to_string(width) + "x" + std::to_string(height));
+}
+
+// Format conversion helpers
+LOG_INFO("Format: " + std::string(D3D9Helper::FormatToString(D3DFMT_A8R8G8B8)));
+LOG_INFO("Primitive: " + std::string(D3D9Helper::PrimitiveTypeToString(D3DPT_TRIANGLELIST)));
+
+// Save shader bytecode for analysis
+if (shader) {
+    D3D9Helper::SaveShaderToFile(shader, "shader_dump.bin");
+}
+```
+
+### Accessing the Device
+
+The global pointer is available:
+
+```cpp
+extern LPDIRECT3DDEVICE9 g_pd3dDevice;
+
+// Use in your hooks or RenderCustomUI
+if (g_pd3dDevice) {
+    // Device is valid and initialized
+}
+```
+### Combining with Byte Patches
+
+You can combine D3D9 hooks with traditional byte patches:
+
+```cpp
+bool Install() override {
+    // First, apply byte patches to disable validation
+    if (!PatchHelper::WriteNOP(0x12345678, 5, &patchedLocations)) {
+        return Fail("Failed to patch validation");
+    }
+
+    // Then install D3D9 hooks for dynamic behavior
+    D3D9Hooks::RegisterSetRenderTarget("MyPatch", hookFunction);
+
+    return true;
+}
+```
+yeyy

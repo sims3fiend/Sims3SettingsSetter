@@ -6,6 +6,7 @@
 #include <mutex>
 #include <memory>
 #include <fstream>
+#include <atomic>
 #include "logger.h"
 #include "patch_settings.h"
 
@@ -22,12 +23,13 @@ public:
 
 protected:
     std::mutex statsMutex;
+    std::mutex patchMutex;
     SampleWindow currentWindow;
     static constexpr auto SAMPLE_INTERVAL = std::chrono::seconds(5);
 
     void* originalFunc;
     std::string patchName;
-    bool isEnabled = false;
+    std::atomic<bool> isEnabled{ false };
     double lastSampleRate = 0.0;
     PatchMetadata* metadata = nullptr;
     std::string lastError;
@@ -103,7 +105,7 @@ public:
     virtual bool Uninstall() = 0;
     
     const std::string& GetName() const { return patchName; }
-    bool IsEnabled() const { return isEnabled; }
+    bool IsEnabled() const { return isEnabled.load(); }
     double GetLastSampleRate() const { return lastSampleRate; }
     const std::string& GetLastError() const { return lastError; }
 
@@ -139,7 +141,7 @@ public:
     // Add methods for serialization
     virtual void SaveState(std::ofstream& file) const {
         file << "[Optimization_" << patchName << "]\n";  // Keep old format for backward compatibility, will remove later
-        file << "Enabled=" << (isEnabled ? "true" : "false") << "\n";
+        file << "Enabled=" << (isEnabled.load() ? "true" : "false") << "\n";
 
         // Save all registered settings
         for (const auto& setting : settings) {
@@ -152,10 +154,11 @@ public:
     virtual bool LoadState(const std::string& key, const std::string& value) {
         // Handle enabled/disabled state
         if (key == "Enabled") {
-            if (value == "true" && !isEnabled) {
+            bool currentlyEnabled = isEnabled.load();
+            if (value == "true" && !currentlyEnabled) {
                 return Install();
             }
-            else if (value == "false" && isEnabled) {
+            else if (value == "false" && currentlyEnabled) {
                 return Uninstall();
             }
             return true;

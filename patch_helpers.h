@@ -1,10 +1,12 @@
 #pragma once
 #include <windows.h>
 #include <Psapi.h>  // For MODULEINFO and GetModuleInformation
+#include <d3d9.h>
 #include <detours/detours.h>
 #include <vector>
 #include <cstring>
 #include <variant>
+#include <fstream>
 #include "logger.h"
 #include "settings.h"
 #include "utils.h"
@@ -26,6 +28,9 @@ namespace PatchHelper {
         std::vector<BYTE> originalBytes;
         size_t size;
     };
+
+    // Global mutex for thread-safe patch location tracking
+    inline std::mutex g_patchLocationMutex;
 
     // Safely change memory protection and write data
     inline bool WriteProtectedMemory(LPVOID address, LPCVOID data, SIZE_T size, 
@@ -51,6 +56,9 @@ namespace PatchHelper {
             loc.size = size;
             loc.originalBytes.resize(size);
             std::memcpy(loc.originalBytes.data(), address, size);
+
+            // Thread-safe!!
+            std::lock_guard<std::mutex> lock(g_patchLocationMutex);
             tracker->push_back(loc);
         }
 
@@ -149,13 +157,15 @@ namespace PatchHelper {
         return WriteProtectedMemory((LPVOID)address, nops.data(), count, tracker);
     }
 
-    // Restore all patched locations
+    // Restore all patched locations (thread-safe)
     inline bool RestoreAll(std::vector<PatchLocation>& locations) {
+        std::lock_guard<std::mutex> lock(g_patchLocationMutex);
+
         bool success = true;
         for (auto it = locations.rbegin(); it != locations.rend(); ++it) {
-            if (!WriteProtectedMemory((LPVOID)it->address, 
-                                     it->originalBytes.data(), 
-                                     it->size, 
+            if (!WriteProtectedMemory((LPVOID)it->address,
+                                     it->originalBytes.data(),
+                                     it->size,
                                      nullptr)) {
                 LOG_ERROR("Failed to restore patch at 0x" + std::to_string(it->address));
                 success = false;
@@ -470,4 +480,158 @@ namespace LiveSetting {
     }
 
 } // namespace LiveSetting
+
+// D3D9 Utilities - should split maybe?
+namespace D3D9Helper {
+
+    // Get current backbuffer dimensions
+    inline bool GetBackbufferSize(LPDIRECT3DDEVICE9 device, UINT* width, UINT* height) {
+        if (!device || !width || !height) return false;
+
+        IDirect3DSurface9* backbuffer = nullptr;
+        if (FAILED(device->GetBackBuffer(0, 0, D3DBACKBUFFER_TYPE_MONO, &backbuffer))) {
+            LOG_ERROR("D3D9Helper: Failed to get backbuffer");
+            return false;
+        }
+
+        D3DSURFACE_DESC desc;
+        HRESULT hr = backbuffer->GetDesc(&desc);
+        backbuffer->Release();
+
+        if (FAILED(hr)) {
+            LOG_ERROR("D3D9Helper: Failed to get backbuffer description");
+            return false;
+        }
+
+        *width = desc.Width;
+        *height = desc.Height;
+        return true;
+    }
+
+    // Get current viewport
+    inline bool GetViewport(LPDIRECT3DDEVICE9 device, D3DVIEWPORT9* viewport) {
+        if (!device || !viewport) return false;
+        return SUCCEEDED(device->GetViewport(viewport));
+    }
+
+    // Get current present parameters
+    inline bool GetPresentParameters(LPDIRECT3DDEVICE9 device, D3DPRESENT_PARAMETERS* params) {
+        if (!device || !params) return false;
+
+        IDirect3DSwapChain9* swapChain = nullptr;
+        if (FAILED(device->GetSwapChain(0, &swapChain)) || !swapChain) {
+            LOG_ERROR("D3D9Helper: Failed to get swap chain");
+            return false;
+        }
+
+        HRESULT hr = swapChain->GetPresentParameters(params);
+        swapChain->Release();
+
+        return SUCCEEDED(hr);
+    }
+
+    // Get device capabilities
+    inline bool GetDeviceCaps(LPDIRECT3DDEVICE9 device, D3DCAPS9* caps) {
+        if (!device || !caps) return false;
+        return SUCCEEDED(device->GetDeviceCaps(caps));
+    }
+
+    // Comprehensive device info structure
+    struct DeviceInfo {
+        D3DPRESENT_PARAMETERS presentParams = {};
+        D3DVIEWPORT9 viewport = {};
+        D3DCAPS9 caps = {};
+        UINT backbufferWidth = 0;
+        UINT backbufferHeight = 0;
+        bool valid = false;
+    };
+
+    // Get all current device information at once
+    inline DeviceInfo GetDeviceInfo(LPDIRECT3DDEVICE9 device) {
+        DeviceInfo info;
+
+        if (!device) {
+            LOG_ERROR("D3D9Helper: Invalid device pointer");
+            return info;
+        }
+
+        info.valid = true;
+        info.valid &= GetPresentParameters(device, &info.presentParams);
+        info.valid &= GetViewport(device, &info.viewport);
+        info.valid &= GetDeviceCaps(device, &info.caps);
+        info.valid &= GetBackbufferSize(device, &info.backbufferWidth, &info.backbufferHeight);
+
+        return info;
+    }
+
+    // Format helpers
+    inline const char* FormatToString(D3DFORMAT format) {
+        switch (format) {
+            case D3DFMT_A8R8G8B8: return "A8R8G8B8";
+            case D3DFMT_X8R8G8B8: return "X8R8G8B8";
+            case D3DFMT_R5G6B5: return "R5G6B5";
+            case D3DFMT_X1R5G5B5: return "X1R5G5B5";
+            case D3DFMT_A1R5G5B5: return "A1R5G5B5";
+            case D3DFMT_A4R4G4B4: return "A4R4G4B4";
+            case D3DFMT_R8G8B8: return "R8G8B8";
+            case D3DFMT_A2B10G10R10: return "A2B10G10R10";
+            case D3DFMT_A16B16G16R16: return "A16B16G16R16";
+            case D3DFMT_A16B16G16R16F: return "A16B16G16R16F";
+            case D3DFMT_A32B32G32R32F: return "A32B32G32R32F";
+            case D3DFMT_D16: return "D16";
+            case D3DFMT_D24S8: return "D24S8";
+            case D3DFMT_D24X8: return "D24X8";
+            case D3DFMT_D32: return "D32";
+            default: return "Unknown";
+        }
+    }
+
+    inline const char* PrimitiveTypeToString(D3DPRIMITIVETYPE type) {
+        switch (type) {
+            case D3DPT_POINTLIST: return "PointList";
+            case D3DPT_LINELIST: return "LineList";
+            case D3DPT_LINESTRIP: return "LineStrip";
+            case D3DPT_TRIANGLELIST: return "TriangleList";
+            case D3DPT_TRIANGLESTRIP: return "TriangleStrip";
+            case D3DPT_TRIANGLEFAN: return "TriangleFan";
+            default: return "Unknown";
+        }
+    }
+
+    // Shader bytecode helpers -bzzt wrong
+    inline bool GetShaderBytecode(IDirect3DPixelShader9* shader, std::vector<BYTE>& bytecode) {
+        if (!shader) return false;
+
+        UINT size = 0;
+        if (FAILED(shader->GetFunction(nullptr, &size))) {
+            LOG_ERROR("D3D9Helper: Failed to get shader size");
+            return false;
+        }
+
+        bytecode.resize(size);
+        if (FAILED(shader->GetFunction(bytecode.data(), &size))) {
+            LOG_ERROR("D3D9Helper: Failed to get shader bytecode");
+            return false;
+        }
+
+        return true;
+    }
+
+    inline bool SaveShaderToFile(IDirect3DPixelShader9* shader, const std::string& filename) {
+        std::vector<BYTE> bytecode;
+        if (!GetShaderBytecode(shader, bytecode)) {
+            return false;
+        }
+
+        std::ofstream file(filename, std::ios::binary);
+        if (!file) {
+            LOG_ERROR("D3D9Helper: Failed to open file for writing: " + filename);
+            return false;
+        }
+
+        file.write(reinterpret_cast<const char*>(bytecode.data()), bytecode.size());
+        return file.good();
+    }
+
+} // namespace D3D9Helper
 

@@ -349,6 +349,7 @@ namespace SettingsGui {
 
                                         ImGui::SameLine();
                                         ImGui::Text("%s", name.c_str());
+                                        bool nameHovered = ImGui::IsItemHovered();
 
                                         if (!compatible) {
                                             ImGui::SameLine();
@@ -363,7 +364,7 @@ namespace SettingsGui {
                                         }
 
                                         // Tooltip with description and error info
-                                        if (ImGui::IsItemHovered()) {
+                                        if (nameHovered || ImGui::IsItemHovered()) {
                                             ImGui::BeginTooltip();
                                             ImGui::PushTextWrapPos(400.0f);
 

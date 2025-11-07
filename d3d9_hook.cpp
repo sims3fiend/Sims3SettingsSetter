@@ -1,4 +1,5 @@
 #include "d3d9_hook.h"
+#include "d3d9_hook_registry.h"
 #include "gui.h"
 #include <detours/detours.h>
 #include "imgui.h"
@@ -102,6 +103,9 @@ HRESULT __stdcall HookedEndScene(LPDIRECT3DDEVICE9 pDevice) {
         g_imguiInitialized.store(true);
         g_imguiInitializing.store(false);
         LOG_INFO("[EndScene] ImGui initialized");
+
+        // Initialize D3D9 hook registry for patches
+        D3D9Hooks::Internal::Initialize(pDevice);
     }
 
     if (g_imguiInitialized.load()) {
@@ -264,6 +268,9 @@ bool InitializeD3D9Hook() {
 }
 
 void CleanupD3D9Hook() {
+    // Cleanup D3D9 hook registry
+    D3D9Hooks::Internal::Cleanup();
+
     // Restore original window procedure if it was hooked
     if (original_WndProc && g_hookedWindow) {
         LOG_INFO("[Cleanup] Restoring original window procedure");
