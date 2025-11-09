@@ -157,14 +157,16 @@ private:
     int maxValue;
     std::string description;
     std::vector<std::pair<std::string, int>> presets;
+    SettingUIType uiType;
     void* boundAddress = nullptr;
 
 public:
     IntSetting(int* ptr, const std::string& name, int defaultVal,
                int minVal, int maxVal, const std::string& desc = "",
-               const std::vector<std::pair<std::string, int>>& presets = {})
+               const std::vector<std::pair<std::string, int>>& presets = {},
+               SettingUIType uiType = SettingUIType::Slider)
         : valuePtr(ptr), name(name), defaultValue(defaultVal),
-          minValue(minVal), maxValue(maxVal), description(desc), presets(presets) {
+          minValue(minVal), maxValue(maxVal), description(desc), presets(presets), uiType(uiType) {
         *valuePtr = defaultValue;
     }
 
@@ -192,9 +194,30 @@ public:
             ImGui::Separator();
         }
 
-        // Render slider
-        if (ImGui::SliderInt(name.c_str(), valuePtr, minValue, maxValue)) {
-            changed = true;
+        // Render input based on UI type - TODO others xoxo
+        ImGui::Text("Custom Value:");
+        switch (uiType) {
+            case SettingUIType::Slider:
+                if (ImGui::SliderInt(name.c_str(), valuePtr, minValue, maxValue)) {
+                    changed = true;
+                }
+                break;
+
+            case SettingUIType::Drag:
+                if (ImGui::DragInt(name.c_str(), valuePtr, (maxValue - minValue) / 100.0f, minValue, maxValue)) {
+                    changed = true;
+                }
+                break;
+
+            case SettingUIType::InputBox:
+            default:
+                if (ImGui::InputInt(name.c_str(), valuePtr)) {
+                    // Clamp to bounds
+                    if (*valuePtr < minValue) *valuePtr = minValue;
+                    if (*valuePtr > maxValue) *valuePtr = maxValue;
+                    changed = true;
+                }
+                break;
         }
 
         // Auto-reapply to memory if bound

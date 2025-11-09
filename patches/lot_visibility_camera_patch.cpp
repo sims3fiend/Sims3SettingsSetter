@@ -66,6 +66,6 @@ REGISTER_PATCH(LotVisibilityCameraPatch, {
     .targetVersion = GameVersion::Steam,
     .technicalDetails = {
         "Modifies a conditional jump at 0x00c63015 (JZ -> JMP)",
-        "Prevents distance-based lot loading/unloading based on camera view"
+        "Prevents lot loading/unloading based on camera view"
     }
 })

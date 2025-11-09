@@ -127,8 +127,10 @@
     <ClCompile Include="intersection_patch.cpp" />
     <ClCompile Include="logger.cpp" />
     <ClCompile Include="optimization.cpp" />
+    <ClCompile Include="patches\gc_stop_world_patch.cpp" />
     <ClCompile Include="patches\map_view_lot_blocker_patch.cpp" />
     <ClCompile Include="patches\smooth_patch_dupe.cpp" />
+    <ClCompile Include="patches\smooth_patch_classic.cpp" />
     <ClCompile Include="patches\timer_optimization_patch.cpp" />
     <ClCompile Include="pattern_scan.cpp" />
     <ClCompile Include="preset_manager.cpp" />

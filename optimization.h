@@ -56,8 +56,9 @@ protected:
 
     void RegisterIntSetting(int* ptr, const std::string& name, int defaultVal,
                            int minVal, int maxVal, const std::string& desc = "",
-                           const std::vector<std::pair<std::string, int>>& presets = {}) {
-        settings.push_back(std::make_unique<IntSetting>(ptr, name, defaultVal, minVal, maxVal, desc, presets));
+                           const std::vector<std::pair<std::string, int>>& presets = {},
+                           SettingUIType uiType = SettingUIType::Slider) {
+        settings.push_back(std::make_unique<IntSetting>(ptr, name, defaultVal, minVal, maxVal, desc, presets, uiType));
     }
 
     void RegisterBoolSetting(bool* ptr, const std::string& name, bool defaultVal,

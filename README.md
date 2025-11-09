@@ -29,12 +29,15 @@ Collection of ASM patches for performance improvements. **Most are Steam (ts3w.e
 
 **Available Patches:**
 - **Smooth Patch Dupe** - Like smooth patch but more focused, sets the frame limit (seconds per frame) more directly, same result but clearer intent and doesn't touch unrelated functions (All versions)
+- **Smooth Patch Original Flavour** - Like smooth patch but exactly the same and in S3SS instead (All versions)
 - **CPU Thread Optimization** - Optimizes thread placement for modern CPUs with P/E-cores or multiple CCXs (All versions)
 - **Intersection Optimization** - SIMD optimization for navmesh calculations (Steam)
 - **Timer & Thread Optimizations ⭐** - Increases timer resolution, optimizes critical sections, patches spin loops. Should be a significant improvement on CPU usage (Steam)
 - **CreateFileW Random Access** - Improves file I/O performance by hinting random access patterns (Steam)
 - **Map View Lot Streaming Blocker ⭐** - Prevents lot streaming while in map view, makes going in and out of map a lot less stuttery (Steam)
-- **Optimized Lot Streaming ⭐⭐** - Disables camera-based lot loading (I think), enables throttling, sets camera speed threshold lower so lots load in when you stop moving more smoothly, major improvement (Steam). This is doable by setting the relevant settings in the streaming category for EA users, minus the camera tweak
+- **Lot Visibility Camera Override**  - Stops lot loading based on camera view, should make it so they only load around you. Might not do anything.
+- **Optimized Lot Streaming Settings ⭐⭐** - Enables lot throttling and sets camera speed threshold settings lower so lots load in when you stop moving more smoothly, major improvement (All versions). This just sets the debug/Live settings, nothing else.
+- **New! GC_stop_world() Optimization** - Adds an early exit for a garbage collection function that is called once a frame-ish, minor drive-by tweak, should have very little performance boost I just saw an easy win.
 
 There's also a lot of helper functions and easy to use things if you'd like to make your own, see **[patches/README.md](patches/README.md)** for technical details on how to write your own.
 
