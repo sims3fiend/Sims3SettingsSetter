@@ -151,7 +151,28 @@ bool SettingsManager::SaveConfig(const std::string& filename, std::string* error
     try {
         // Debug logging
         LOG_DEBUG("[SettingsManager] Begin SaveConfig");
-        
+
+        // Read existing content to preserve sections we don't manage (like patch settings)
+        std::vector<std::string> preservedContent;
+        bool inPatchSection = false;
+        {
+            std::ifstream inFile(filename);
+            if (inFile.is_open()) {
+                std::string line;
+                while (std::getline(inFile, line)) {
+                    // Start preserving when we hit patch settings section
+                    if (line == "; Patch Settings" || line == "; Optimization Settings") {
+                        inPatchSection = true;
+                    }
+
+                    // Preserve patch settings and everything after
+                    if (inPatchSection) {
+                        preservedContent.push_back(line);
+                    }
+                }
+            }
+        }
+
         std::ofstream file(filename);
         if (!file.is_open()) {
             if (error) *error = "Failed to open file for writing: " + filename;
@@ -244,8 +265,18 @@ bool SettingsManager::SaveConfig(const std::string& filename, std::string* error
         }
         
         LOG_INFO("[SettingsManager] Saved " + std::to_string(configCount) + " config values");
+
+        // Write preserved content (patch settings, etc.) at the end
+        if (!preservedContent.empty()) {
+            file << "\n";
+            for (const auto& line : preservedContent) {
+                file << line << "\n";
+            }
+            LOG_DEBUG("[SettingsManager] Preserved " + std::to_string(preservedContent.size()) + " lines from other sections");
+        }
+
         LOG_DEBUG("[SettingsManager] End SaveConfig");
-        
+
         return true;
     }
     catch (const std::exception& e) {

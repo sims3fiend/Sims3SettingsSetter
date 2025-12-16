@@ -59,11 +59,7 @@ public:
         return m_uiToggleKey;
     }
 
-    void SetUIToggleKey(UINT key) {
-        std::lock_guard<std::mutex> lock(m_mutex);
-        m_uiToggleKey = key;
-        m_hasUnsavedChanges = true;
-    }
+    void SetUIToggleKey(UINT key);
 
     // Disable Hooks Setting
     bool GetDisableHooks() const {
@@ -71,11 +67,7 @@ public:
         return m_disableHooks;
     }
 
-    void SetDisableHooks(bool disable) {
-        std::lock_guard<std::mutex> lock(m_mutex);
-        m_disableHooks = disable;
-        m_hasUnsavedChanges = true;
-    }
+    void SetDisableHooks(bool disable);
 
     // Save/Load
     bool SaveToINI(const std::string& filename) const;
@@ -107,4 +99,49 @@ private:
     UINT m_uiToggleKey;
     bool m_disableHooks;
     bool m_hasUnsavedChanges;
+};
+
+// Borderless Window Mode
+class BorderlessWindow {
+public:
+    static BorderlessWindow& Get() {
+        static BorderlessWindow instance;
+        return instance;
+    }
+
+    bool IsEnabled() const {
+        std::lock_guard<std::mutex> lock(m_mutex);
+        return m_enabled;
+    }
+
+    bool IsFullscreen() const {
+        std::lock_guard<std::mutex> lock(m_mutex);
+        return m_fullscreen;
+    }
+
+    void SetEnabled(bool enabled);
+    void SetFullscreen(bool fullscreen);
+    void Apply();  // Apply current state to window
+    void SetWindowHandle(HWND hwnd);
+
+    // Save/Load
+    void LoadSettings(const std::string& filename);
+
+private:
+    BorderlessWindow() : m_enabled(false), m_fullscreen(false), m_hwnd(nullptr),
+                         m_originalStyle(0), m_originalExStyle(0), m_wasApplied(false) {}
+
+    void RemoveDecorations();  // Helper to remove window chrome
+    void ApplyBorderless();
+    void ApplyBorderlessFullscreen();
+    void RestoreWindowed();
+
+    mutable std::mutex m_mutex;
+    bool m_enabled;
+    bool m_fullscreen;
+    HWND m_hwnd;
+    LONG m_originalStyle;
+    LONG m_originalExStyle;
+    RECT m_originalRect;
+    bool m_wasApplied;
 }; 

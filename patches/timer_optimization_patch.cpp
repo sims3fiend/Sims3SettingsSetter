@@ -2,79 +2,86 @@
 #include "../patch_helpers.h"
 #include "../logger.h"
 #include <winternl.h>
-
+//Might break into generic hook patches + steam specific since the some stuff is all steam specific, RIP EA once again
+//This is still a WIP however I don't know if it's worth continuing or even keeping tbh
 #pragma comment(lib, "winmm.lib")
 
 typedef NTSTATUS(WINAPI* NtSetTimerResolution_t)(ULONG DesiredResolution, BOOLEAN SetResolution, PULONG CurrentResolution);
 typedef NTSTATUS(WINAPI* NtQueryTimerResolution_t)(PULONG MinimumResolution, PULONG MaximumResolution, PULONG CurrentResolution);
 
-// Static variables for the naked asm spin loop stub
-static DWORD spinCounter = 0;
-static FARPROC originalGetTickCountAddr = nullptr;
-static FARPROC sleepFuncAddr = nullptr;
-
-static void __declspec(naked) SpinLoopStub() {
-    // Might use Xbyak or asmjit in the future, but this is okay. technically could save a call if we inlined GetTickCount but not worth it
-    __asm {
-        // Call original GetTickCount
-        call dword ptr [originalGetTickCountAddr]
-
-        // Save return value
-        push eax
-
-        // Increment spin counter (thread-safe)
-        lock inc dword ptr [spinCounter]
-
-        // Check if we've spun 50 times
-        cmp dword ptr [spinCounter], 50
-        jb skip_sleep
-
-        // Reset counter
-        mov dword ptr [spinCounter], 0
-
-        // Sleep(1) - __stdcall so it cleans up its own stack
-        push 1
-        call dword ptr [sleepFuncAddr]
-
-    skip_sleep:
-        // Restore return value
-        pop eax
-
-        // Jump back to original code after the call
-        push 0x00401639
-        ret
-    }
-}
-
 class TimerOptimizationPatch : public OptimizationPatch {
 private:
     typedef void (WINAPI* InitializeCriticalSectionFn)(LPCRITICAL_SECTION lpCriticalSection);
+    typedef BOOL (WINAPI* InitializeCriticalSectionAndSpinCountFn)(LPCRITICAL_SECTION lpCriticalSection, DWORD dwSpinCount);
+    typedef DWORD (WINAPI* SetCriticalSectionSpinCountFn)(LPCRITICAL_SECTION lpCriticalSection, DWORD dwSpinCount);
 
     InitializeCriticalSectionFn originalInitializeCriticalSection;
+    InitializeCriticalSectionAndSpinCountFn originalInitializeCriticalSectionAndSpinCount;
+    SetCriticalSectionSpinCountFn originalSetCriticalSectionSpinCount;
 
-    static const DWORD SPIN_COUNT = 8000;
+    static const DWORD DEFAULT_SPIN_COUNT = 4000;       // Standard "good enough" spin count
     static const UINT TARGET_TIMER_RES = 1;
-    static const uintptr_t SPIN_LOOP_ADDRESS = 0x00401634;
+
+    // Configuration structure for tiered critical section optimization
+    struct CriticalSectionConfig {
+        uintptr_t address;
+        DWORD spinCount;
+        const char* debugName;
+    };
+
+    // Tiered critical section targets
+    static const std::vector<CriticalSectionConfig> CS_TARGETS;
 
     ULONG originalTimerResolution = 0;
-    std::vector<PatchHelper::PatchLocation> patchedLocations;
     std::vector<DetourHelper::Hook> hooks;
 
     static TimerOptimizationPatch* instance;
 
     static void WINAPI HookedInitializeCriticalSection(LPCRITICAL_SECTION lpCriticalSection) {
-        if (!instance || !instance->originalInitializeCriticalSection) {
+        if (!instance) {
             InitializeCriticalSection(lpCriticalSection);
             return;
         }
 
-        instance->originalInitializeCriticalSection(lpCriticalSection);
-
-        if (!SetCriticalSectionSpinCount(lpCriticalSection, SPIN_COUNT)) {
-            LOG_DEBUG("[TimerOpt] Failed to set spin count for critical section");
+        if (instance->originalInitializeCriticalSectionAndSpinCount) {
+            // Redirect to the version with spin count
+            instance->originalInitializeCriticalSectionAndSpinCount(lpCriticalSection, DEFAULT_SPIN_COUNT);
+        } else {
+            // Fallback
+            if (instance->originalInitializeCriticalSection) {
+                instance->originalInitializeCriticalSection(lpCriticalSection);
+            }
+            // Try to set it afterwards if we have the setter
+            if (instance->originalSetCriticalSectionSpinCount) {
+                instance->originalSetCriticalSectionSpinCount(lpCriticalSection, DEFAULT_SPIN_COUNT);
+            }
         }
     }
 
+    static BOOL WINAPI HookedInitializeCriticalSectionAndSpinCount(LPCRITICAL_SECTION lpCriticalSection, DWORD dwSpinCount) {
+        // Upgrade pathetic spin counts (like 0 or 10) to something useful
+        if (dwSpinCount < DEFAULT_SPIN_COUNT) {
+            dwSpinCount = DEFAULT_SPIN_COUNT;
+        }
+
+        if (instance && instance->originalInitializeCriticalSectionAndSpinCount) {
+            return instance->originalInitializeCriticalSectionAndSpinCount(lpCriticalSection, dwSpinCount);
+        }
+        return ::InitializeCriticalSectionAndSpinCount(lpCriticalSection, dwSpinCount);
+    }
+
+    static DWORD WINAPI HookedSetCriticalSectionSpinCount(LPCRITICAL_SECTION lpCriticalSection, DWORD dwSpinCount) {
+        if (dwSpinCount < DEFAULT_SPIN_COUNT) {
+            dwSpinCount = DEFAULT_SPIN_COUNT;
+        }
+
+        if (instance && instance->originalSetCriticalSectionSpinCount) {
+            return instance->originalSetCriticalSectionSpinCount(lpCriticalSection, dwSpinCount);
+        }
+        return ::SetCriticalSectionSpinCount(lpCriticalSection, dwSpinCount);
+    }
+
+    //helpers
     bool SetHighResolutionTimer() {
         HMODULE ntdll = GetModuleHandleW(L"ntdll.dll");
         if (!ntdll) {
@@ -123,51 +130,54 @@ private:
         }
     }
 
-    bool ApplySpinLoopPatch() {
-        BYTE* target = (BYTE*)SPIN_LOOP_ADDRESS;
+    bool PatchSpecificCriticalSections() {
+        int successCount = 0;
 
-        MEMORY_BASIC_INFORMATION mbi;
-        if (VirtualQuery(target, &mbi, sizeof(mbi)) == 0 || mbi.State != MEM_COMMIT) {
-            LOG_WARNING("[TimerOpt] Target address not accessible - skipping spin loop patch");
-            return true;
+        LOG_INFO("[TimerOpt] Applying tiered Critical Section patching...");
+
+        for (const auto& config : CS_TARGETS) {
+            LPCRITICAL_SECTION critSec = (LPCRITICAL_SECTION)config.address;
+
+            // 1. Memory Safety Check
+            MEMORY_BASIC_INFORMATION mbi;
+            if (VirtualQuery(critSec, &mbi, sizeof(mbi)) == 0 ||
+                mbi.State != MEM_COMMIT ||
+                (mbi.Protect & (PAGE_READWRITE | PAGE_EXECUTE_READWRITE)) == 0) {
+
+                LOG_WARNING("[TimerOpt] Skipped " + std::string(config.debugName) + " (Invalid Memory)");
+                continue;
+            }
+
+            // 2. Apply the tiered spin count
+            DWORD prevCount = 0;
+            if (originalSetCriticalSectionSpinCount) {
+                prevCount = originalSetCriticalSectionSpinCount(critSec, config.spinCount);
+            } else {
+                prevCount = ::SetCriticalSectionSpinCount(critSec, config.spinCount);
+            }
+
+            // 3. Log the upgrade
+            // Only log if we actually changed it
+            if (prevCount != config.spinCount) {
+                char addressBuffer[32];
+                sprintf_s(addressBuffer, "0x%08X", (unsigned int)config.address);
+
+                LOG_INFO("[TimerOpt] Tuned " + std::string(config.debugName) +
+                         " (" + std::string(addressBuffer) + ")" +
+                         " Spin: " + std::to_string(prevCount) + " -> " + std::to_string(config.spinCount));
+                successCount++;
+            }
         }
 
-        if (target[0] != 0xE8) {
-            LOG_WARNING("[TimerOpt] Target is not a CALL instruction (found 0x" +
-                       std::to_string(target[0]) + ") - skipping spin loop patch");
-            return true;
-        }
-
-        // Extract the original GetTickCount address from the CALL instruction
-        DWORD origDisp = *(DWORD*)(target + 1);
-        originalGetTickCountAddr = (FARPROC)((DWORD)(target + 5) + origDisp);
-
-        // Get Sleep function address
-        sleepFuncAddr = GetProcAddress(GetModuleHandleA("kernel32.dll"), "Sleep");
-        if (!sleepFuncAddr) {
-            return Fail("Failed to get Sleep address");
-        }
-
-        // Initialize spin counter
-        spinCounter = 0;
-
-        // Patch the call to jump to our naked asm stub
-        if (!PatchHelper::WriteRelativeJump((uintptr_t)target, (uintptr_t)SpinLoopStub, &patchedLocations)) {
-            return Fail("Failed to write jump to stub");
-        }
-
-        FlushInstructionCache(GetCurrentProcess(), target, 5);
-        LOG_INFO("[TimerOpt] CPU spin loop patch applied");
+        LOG_INFO("[TimerOpt] Successfully tuned " + std::to_string(successCount) + "/" + std::to_string(CS_TARGETS.size()) + " critical sections");
         return true;
-    }
-
-    void RemoveSpinLoopPatch() {
-        // Nothing to clean up - naked asm stub is part of the code segment now lol
     }
 
 public:
     TimerOptimizationPatch() : OptimizationPatch("TimerOptimization", nullptr),
         originalInitializeCriticalSection(nullptr),
+        originalInitializeCriticalSectionAndSpinCount(nullptr),
+        originalSetCriticalSectionSpinCount(nullptr),
         originalTimerResolution(0) {
     }
 
@@ -186,12 +196,19 @@ public:
         lastError.clear();
         LOG_INFO("[TimerOpt] Installing timer optimization patch...");
 
-        originalInitializeCriticalSection =
-            (InitializeCriticalSectionFn)GetProcAddress(GetModuleHandle(L"kernel32.dll"), "InitializeCriticalSection");
+        HMODULE hKernel = GetModuleHandle(L"kernel32.dll");
+        if (!hKernel) return Fail("Failed to get kernel32.dll handle");
 
-        if (!originalInitializeCriticalSection) {
+        originalInitializeCriticalSection =
+            (InitializeCriticalSectionFn)GetProcAddress(hKernel, "InitializeCriticalSection");
+        originalInitializeCriticalSectionAndSpinCount =
+            (InitializeCriticalSectionAndSpinCountFn)GetProcAddress(hKernel, "InitializeCriticalSectionAndSpinCount");
+        originalSetCriticalSectionSpinCount =
+            (SetCriticalSectionSpinCountFn)GetProcAddress(hKernel, "SetCriticalSectionSpinCount");
+
+        if (!originalInitializeCriticalSection || !originalInitializeCriticalSectionAndSpinCount || !originalSetCriticalSectionSpinCount) {
             instance = nullptr;
-            return Fail("Cannot install timer optimization - missing InitializeCriticalSection function");
+            return Fail("Cannot install timer optimization - missing CriticalSection functions");
         }
 
         if (!SetHighResolutionTimer()) {
@@ -200,16 +217,19 @@ public:
         }
 
         hooks = {
-            {(void**)&originalInitializeCriticalSection, (void*)HookedInitializeCriticalSection}
+            {(void**)&originalInitializeCriticalSection, (void*)HookedInitializeCriticalSection},
+            {(void**)&originalInitializeCriticalSectionAndSpinCount, (void*)HookedInitializeCriticalSectionAndSpinCount},
+            {(void**)&originalSetCriticalSectionSpinCount, (void*)HookedSetCriticalSectionSpinCount}
         };
 
         if (!DetourHelper::InstallHooks(hooks)) {
             RestoreTimerResolution();
             instance = nullptr;
-            return Fail("Failed to install InitializeCriticalSection hook");
+            return Fail("Failed to install CriticalSection hooks");
         }
 
-        if (!ApplySpinLoopPatch()) {
+        // Patch the specific critical sections that are already initialized by the game
+        if (!PatchSpecificCriticalSections()) {
             DetourHelper::RemoveHooks(hooks);
             RestoreTimerResolution();
             instance = nullptr;
@@ -219,8 +239,7 @@ public:
         isEnabled = true;
         LOG_INFO("[TimerOpt] Timer optimization patch installed successfully");
         LOG_INFO("[TimerOpt] + Timer resolution: 1ms");
-        LOG_INFO("[TimerOpt] + Critical sections: Spin count " + std::to_string(SPIN_COUNT));
-        LOG_INFO("[TimerOpt] + CPU spin loop: Patched");
+        LOG_INFO("[TimerOpt] + Critical sections: Default spin count " + std::to_string(DEFAULT_SPIN_COUNT) + " (new), tiered spin counts for " + std::to_string(CS_TARGETS.size()) + " hot sections");
         return true;
     }
 
@@ -230,14 +249,8 @@ public:
         lastError.clear();
         LOG_INFO("[TimerOpt] Removing timer optimization patch...");
 
-        RemoveSpinLoopPatch();
-
-        if (!PatchHelper::RestoreAll(patchedLocations)) {
-            LOG_ERROR("[TimerOpt] Failed to restore spin loop patches");
-        }
-
         if (!DetourHelper::RemoveHooks(hooks)) {
-            return Fail("Failed to remove InitializeCriticalSection hook");
+            return Fail("Failed to remove CriticalSection hooks");
         }
 
         RestoreTimerResolution();
@@ -254,16 +267,29 @@ public:
 
 TimerOptimizationPatch* TimerOptimizationPatch::instance = nullptr;
 
+// Define the tiered critical section targets
+const std::vector<TimerOptimizationPatch::CriticalSectionConfig> TimerOptimizationPatch::CS_TARGETS = {
+    // CRITICAL TIER: (Short hold, high frequency)
+    {0x011f43e4, 24000, "Mono_MethodCache"},
+
+    // HIGH TIER: Many references, rarely contended
+    {0x011ea210, 20000, "Browser"}, //idk if this ever gets used but would be kind of... scary if it was
+
+    // MEDIUM TIER: The original optimization target, I forgor
+    {0x011f43a8, 8000,  "Unk_LookAtLater"},
+};
+
 REGISTER_PATCH(TimerOptimizationPatch, {
-    .displayName = "Timer & Threading Optimizations",
+    .displayName = "Timer & Threading Optimizations (Updated!)",
     .description = "Fixes several timing and threading inefficiencies to reduce CPU usage, stutter, etc. for smoother gameplay.",
     .category = "Performance",
     .experimental = false,
     .targetVersion = GameVersion::Steam,
     .technicalDetails = {
-        "Sets system timer to 1ms via NtSetTimerResolution + timeBeginPeriod for better frame pacing",
-        "Hooks InitializeCriticalSection to add 8000 spin count, reducing context switches on locks/contention",
-        "Patches busy-wait loop at 0x00401634 to inject Sleep(1) every 50 iterations",
-        "Basically transforms a busy-wait into a hybrid spin-wait/sleep wait, should decently reduce idle CPU usage",
+        "Sets system timer to 1ms via NtSetTimerResolution + timeBeginPeriod",
+        "Hooks InitializeCriticalSection(AndSpinCount) to force 4000 spin count for new crit sections, reducing context switches",
+        "Tiered critical section optimization for static critical sections (more to come, currently 3/47)", //me when I lie
+        "Once enabled, static address patches will remain active even when disabled",
+        "Should make performance good, idfk lmao"
     }
 })

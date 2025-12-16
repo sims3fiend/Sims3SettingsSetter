@@ -3,6 +3,7 @@
 #include "gui.h"
 #include <detours/detours.h>
 #include "imgui.h"
+#include "imgui_internal.h"  // For ImGuiContext, ImGuiWindow
 #include "imgui_impl_win32.h"
 #include "imgui_impl_dx9.h"
 #include <atomic>
@@ -12,16 +13,29 @@
 #include "utils.h"
 #include "logger.h"
 
+// Mouse coordinate extraction macros (from windowsx.h), see bellow
+#ifndef GET_X_LPARAM
+#define GET_X_LPARAM(lp) ((int)(short)LOWORD(lp))
+#endif
+#ifndef GET_Y_LPARAM
+#define GET_Y_LPARAM(lp) ((int)(short)HIWORD(lp))
+#endif
+
 // I HATE IMGUI I HATE IMGUI I HATE IMGUI
 
 LPDIRECT3DDEVICE9 g_pd3dDevice = nullptr;
+
+// ImGui scaling state (for resolution spoofing), see comment aove
+float g_lastImGuiScale = 0.0f;
+bool g_baseStyleSaved = false;
+ImGuiStyle g_baseStyle;
 EndScene_t original_EndScene = nullptr;
 Reset_t original_Reset = nullptr;
 WNDPROC original_WndProc = nullptr;
 static std::atomic<bool> g_inEndScene(false);
 static std::atomic<bool> g_imguiInitializing(false);
 static std::atomic<bool> g_imguiInitialized(false);
-static HWND g_hookedWindow = nullptr;
+HWND g_hookedWindow = nullptr;
 
 HRESULT __stdcall HookedEndScene(LPDIRECT3DDEVICE9 pDevice) {
     if (!pDevice) {
@@ -75,7 +89,10 @@ HRESULT __stdcall HookedEndScene(LPDIRECT3DDEVICE9 pDevice) {
             return original_EndScene(pDevice);
         }
         g_hookedWindow = gameWindow;
-        
+
+        // Pass window handle to BorderlessWindow for borderless mode support
+        BorderlessWindow::Get().SetWindowHandle(gameWindow);
+
         // Initialize ImGui
         IMGUI_CHECKVERSION();
         ImGui::CreateContext();
@@ -112,6 +129,55 @@ HRESULT __stdcall HookedEndScene(LPDIRECT3DDEVICE9 pDevice) {
         try {
             ImGui_ImplDX9_NewFrame();
             ImGui_ImplWin32_NewFrame();
+
+            // Override display size to match backbuffer when resolution spoofing is active
+            // ImGui_ImplWin32_NewFrame uses window client size, but we render at backbuffer size :))))))) HATE
+            if (BorderlessWindow::Get().IsEnabled()) {
+                IDirect3DSurface9* pBackBuffer = nullptr;
+                if (SUCCEEDED(pDevice->GetBackBuffer(0, 0, D3DBACKBUFFER_TYPE_MONO, &pBackBuffer))) {
+                    D3DSURFACE_DESC desc;
+                    if (SUCCEEDED(pBackBuffer->GetDesc(&desc))) {
+                        ImGuiIO& io = ImGui::GetIO();
+                        // Only override if backbuffer differs from what ImGui thinks the display is
+                        if (desc.Width != static_cast<UINT>(io.DisplaySize.x) ||
+                            desc.Height != static_cast<UINT>(io.DisplaySize.y)) {
+                            io.DisplaySize = ImVec2(static_cast<float>(desc.Width), static_cast<float>(desc.Height));
+                        }
+
+                        // Auto-scale UI based on render resolution
+                        {
+                            // Use 1080p as the baseline (scale = 1.0)
+                            float newScale = static_cast<float>(desc.Height) / 1080.0f;
+
+                            // Clamp scale to reasonable bounds
+                            const float minScale = 0.75f;
+                            const float maxScale = 3.0f;
+                            newScale = (newScale < minScale) ? minScale : (newScale > maxScale) ? maxScale : newScale;
+
+                            // Save the base style once on first run
+                            if (!g_baseStyleSaved) {
+                                g_baseStyle = ImGuiStyle(ImGui::GetStyle());
+                                g_baseStyleSaved = true;
+                            }
+
+                            // Only update if scale changed significantly
+                            if (std::abs(newScale - g_lastImGuiScale) > 0.01f) {
+                                g_lastImGuiScale = newScale;
+
+                                // Reset style to base, then scale
+                                ImGuiStyle& style = ImGui::GetStyle();
+                                style = g_baseStyle;
+                                style.ScaleAllSizes(newScale);
+
+                                // Scale font globally
+                                io.FontGlobalScale = newScale;
+                            }
+                        }
+                    }
+                    pBackBuffer->Release();
+                }
+            }
+
             ImGui::NewFrame();
             
             SettingsGui::Render();
@@ -137,23 +203,121 @@ HRESULT __stdcall HookedReset(LPDIRECT3DDEVICE9 pDevice, D3DPRESENT_PARAMETERS* 
     if (g_imguiInitialized.load()) {
         ImGui_ImplDX9_InvalidateDeviceObjects();
     }
+    
+    // Enforce windowed mode if Borderless Window is active
+    // This is critical when using the Resolution Spoofer patch with resolutions larger than the monitor, Exclusive Fullscreen fail/hangs the driver ):
+    if (pPresentationParameters && BorderlessWindow::Get().IsEnabled()) {
+        if (!pPresentationParameters->Windowed) {
+             LOG_INFO("[Reset] Enforcing Windowed Mode for Borderless Window");
+             pPresentationParameters->Windowed = TRUE;
+             pPresentationParameters->FullScreen_RefreshRateInHz = 0; // need for windowed apparently
+             
+             // Enforce DISCARD swap effect to allow backbuffer scaling (resolution spoofing)
+             // D3DSWAPEFFECT_COPY requires backbuffer size to match client area, which would fail here
+             pPresentationParameters->SwapEffect = D3DSWAPEFFECT_DISCARD;
+             
+             // LOCKABLE_BACKBUFFER is incompatible with D3DSWAPEFFECT_DISCARD
+             if (pPresentationParameters->Flags & D3DPRESENTFLAG_LOCKABLE_BACKBUFFER) {
+                 pPresentationParameters->Flags &= ~D3DPRESENTFLAG_LOCKABLE_BACKBUFFER;
+                 LOG_INFO("[Reset] Stripped LOCKABLE_BACKBUFFER flag");
+             }
+        }
+    }
+
     HRESULT hr = original_Reset(pDevice, pPresentationParameters);
     if (FAILED(hr)) {
         char buf[96];
         sprintf_s(buf, "[Reset] IDirect3DDevice9::Reset failed. hr=0x%08lX", (unsigned long)hr);
         LOG_DEBUG(buf);
     }
+    
+    // Reapply borderless settings after Reset, reset usually resizes the window to the backbuffer size
+    if (SUCCEEDED(hr) && BorderlessWindow::Get().IsEnabled()) {
+        // We don't have direct access to HWND here except via BorderlessWindow's stored handle or getting it from CreationParameters again, but BorderlessWindow should already have it
+        // If pPresentationParameters has it, use it to make sure
+        if (pPresentationParameters && pPresentationParameters->hDeviceWindow) {
+             BorderlessWindow::Get().SetWindowHandle(pPresentationParameters->hDeviceWindow);
+        }
+        BorderlessWindow::Get().Apply();
+    }
+
     if (SUCCEEDED(hr) && g_imguiInitialized.load()) {
         ImGui_ImplDX9_CreateDeviceObjects();
+
     }
     return hr;
 }
 
 extern IMGUI_IMPL_API LRESULT ImGui_ImplWin32_WndProcHandler(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam); //for sure, for sure...
 
+// you guessed it, resolution scaling!
+static LPARAM ScaleMouseCoords(HWND hWnd, LPARAM lParam) {
+    if (!g_pd3dDevice || !BorderlessWindow::Get().IsEnabled()) {
+        return lParam;
+    }
+
+    // Get backbuffer dimensions
+    IDirect3DSurface9* pBackBuffer = nullptr;
+    if (FAILED(g_pd3dDevice->GetBackBuffer(0, 0, D3DBACKBUFFER_TYPE_MONO, &pBackBuffer))) {
+        return lParam;
+    }
+
+    D3DSURFACE_DESC desc;
+    HRESULT hr = pBackBuffer->GetDesc(&desc);
+    pBackBuffer->Release();
+
+    if (FAILED(hr)) {
+        return lParam;
+    }
+
+    // Get window client size
+    RECT clientRect;
+    if (!GetClientRect(hWnd, &clientRect)) {
+        return lParam;
+    }
+
+    int windowWidth = clientRect.right - clientRect.left;
+    int windowHeight = clientRect.bottom - clientRect.top;
+
+    // If sizes match, no scaling needed
+    if (windowWidth == 0 || windowHeight == 0 ||
+        (desc.Width == static_cast<UINT>(windowWidth) && desc.Height == static_cast<UINT>(windowHeight))) {
+        return lParam;
+    }
+
+    // Scale mouse coordinates from window space to backbuffer space
+    int mouseX = GET_X_LPARAM(lParam);
+    int mouseY = GET_Y_LPARAM(lParam);
+
+    float scaleX = static_cast<float>(desc.Width) / static_cast<float>(windowWidth);
+    float scaleY = static_cast<float>(desc.Height) / static_cast<float>(windowHeight);
+
+    int scaledX = static_cast<int>(mouseX * scaleX);
+    int scaledY = static_cast<int>(mouseY * scaleY);
+
+    return MAKELPARAM(scaledX, scaledY);
+}
+
 LRESULT CALLBACK HookedWndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
-    // Pass events to ImGui
-    if (ImGui_ImplWin32_WndProcHandler(hWnd, uMsg, wParam, lParam))
+    // Scale mouse coordinates for resolution spoofing before passing to ImGui
+    LPARAM scaledLParam = lParam;
+    switch (uMsg) {
+    case WM_MOUSEMOVE:
+    case WM_LBUTTONDOWN:
+    case WM_LBUTTONUP:
+    case WM_RBUTTONDOWN:
+    case WM_RBUTTONUP:
+    case WM_MBUTTONDOWN:
+    case WM_MBUTTONUP:
+    case WM_LBUTTONDBLCLK:
+    case WM_RBUTTONDBLCLK:
+    case WM_MBUTTONDBLCLK:
+        scaledLParam = ScaleMouseCoords(hWnd, lParam);
+        break;
+    }
+
+    // Pass events to ImGui with scaled coordinates
+    if (ImGui_ImplWin32_WndProcHandler(hWnd, uMsg, wParam, scaledLParam))
         return true;
 
     // Handle configurable key to toggle UI

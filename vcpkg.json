@@ -1,6 +1,6 @@
 {
   "$schema": "https://raw.githubusercontent.com/microsoft/vcpkg-tool/main/docs/vcpkg.schema.json",
-  "builtin-baseline": "e3ed41868d5034bc608eaaa58383cd6ecdbb5ffb",
+  "builtin-baseline": "f278ce039b96d4f1c1cf3d82d8bc095cd2be94a3",
   "dependencies": [
     {
       "name": "imgui",
@@ -9,6 +9,7 @@
         "win32-binding"
       ]
     },
-    "detours"
+    "detours",
+    "mimalloc"
   ]
 }

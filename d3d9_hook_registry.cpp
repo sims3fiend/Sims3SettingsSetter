@@ -39,6 +39,10 @@ namespace D3D9Hooks {
         std::vector<HookEntry<CreateTextureHook>> g_createTextureHooks;
         std::vector<HookEntry<CreateRenderTargetHook>> g_createRenderTargetHooks;
         std::vector<HookEntry<SetViewportHook>> g_setViewportHooks;
+        std::vector<HookEntry<CreatePixelShaderHook>> g_createPixelShaderHooks;
+        std::vector<HookEntry<CreateVertexShaderHook>> g_createVertexShaderHooks;
+        std::vector<HookEntry<SetPixelShaderConstantFHook>> g_setPixelShaderConstantFHooks;
+        std::vector<HookEntry<SetVertexShaderConstantFHook>> g_setVertexShaderConstantFHooks;
 
         // Original function pointers (for Tier 1 - DetourHelper access)
         typedef HRESULT(__stdcall* DrawIndexedPrimitive_t)(LPDIRECT3DDEVICE9, D3DPRIMITIVETYPE, INT, UINT, UINT, UINT, UINT);
@@ -52,6 +56,10 @@ namespace D3D9Hooks {
         typedef HRESULT(__stdcall* CreateTexture_t)(LPDIRECT3DDEVICE9, UINT, UINT, UINT, DWORD, D3DFORMAT, D3DPOOL, IDirect3DTexture9**, HANDLE*);
         typedef HRESULT(__stdcall* CreateRenderTarget_t)(LPDIRECT3DDEVICE9, UINT, UINT, D3DFORMAT, D3DMULTISAMPLE_TYPE, DWORD, BOOL, IDirect3DSurface9**, HANDLE*);
         typedef HRESULT(__stdcall* SetViewport_t)(LPDIRECT3DDEVICE9, const D3DVIEWPORT9*);
+        typedef HRESULT(__stdcall* CreatePixelShader_t)(LPDIRECT3DDEVICE9, const DWORD*, IDirect3DPixelShader9**);
+        typedef HRESULT(__stdcall* CreateVertexShader_t)(LPDIRECT3DDEVICE9, const DWORD*, IDirect3DVertexShader9**);
+        typedef HRESULT(__stdcall* SetPixelShaderConstantF_t)(LPDIRECT3DDEVICE9, UINT, const float*, UINT);
+        typedef HRESULT(__stdcall* SetVertexShaderConstantF_t)(LPDIRECT3DDEVICE9, UINT, const float*, UINT);
 
         DrawIndexedPrimitive_t Original_DrawIndexedPrimitive = nullptr;
         DrawPrimitive_t Original_DrawPrimitive = nullptr;
@@ -64,6 +72,10 @@ namespace D3D9Hooks {
         CreateTexture_t Original_CreateTexture = nullptr;
         CreateRenderTarget_t Original_CreateRenderTarget = nullptr;
         SetViewport_t Original_SetViewport = nullptr;
+        CreatePixelShader_t Original_CreatePixelShader = nullptr;
+        CreateVertexShader_t Original_CreateVertexShader = nullptr;
+        SetPixelShaderConstantF_t Original_SetPixelShaderConstantF = nullptr;
+        SetVertexShaderConstantF_t Original_SetVertexShaderConstantF = nullptr;
 
         // Helper to sort hooks by priority
         template<typename THook>
@@ -197,6 +209,46 @@ namespace D3D9Hooks {
         return Original_SetViewport(device, viewport);
     }
 
+    HRESULT __stdcall Hooked_CreatePixelShader(LPDIRECT3DDEVICE9 device, const DWORD* pFunction, IDirect3DPixelShader9** ppShader) {
+        DeviceContext ctx{ device, false, S_OK };
+
+        if (!Internal::ExecuteCreatePixelShaderHooks(ctx, pFunction, ppShader)) {
+            return ctx.overrideResult;
+        }
+
+        return Original_CreatePixelShader(device, pFunction, ppShader);
+    }
+
+    HRESULT __stdcall Hooked_CreateVertexShader(LPDIRECT3DDEVICE9 device, const DWORD* pFunction, IDirect3DVertexShader9** ppShader) {
+        DeviceContext ctx{ device, false, S_OK };
+
+        if (!Internal::ExecuteCreateVertexShaderHooks(ctx, pFunction, ppShader)) {
+            return ctx.overrideResult;
+        }
+
+        return Original_CreateVertexShader(device, pFunction, ppShader);
+    }
+
+    HRESULT __stdcall Hooked_SetPixelShaderConstantF(LPDIRECT3DDEVICE9 device, UINT startRegister, const float* pConstantData, UINT vector4fCount) {
+        DeviceContext ctx{ device, false, S_OK };
+
+        if (!Internal::ExecuteSetPixelShaderConstantFHooks(ctx, startRegister, pConstantData, vector4fCount)) {
+            return ctx.overrideResult;
+        }
+
+        return Original_SetPixelShaderConstantF(device, startRegister, pConstantData, vector4fCount);
+    }
+
+    HRESULT __stdcall Hooked_SetVertexShaderConstantF(LPDIRECT3DDEVICE9 device, UINT startRegister, const float* pConstantData, UINT vector4fCount) {
+        DeviceContext ctx{ device, false, S_OK };
+
+        if (!Internal::ExecuteSetVertexShaderConstantFHooks(ctx, startRegister, pConstantData, vector4fCount)) {
+            return ctx.overrideResult;
+        }
+
+        return Original_SetVertexShaderConstantF(device, startRegister, pConstantData, vector4fCount);
+    }
+
     // Registration Functions
     bool RegisterDrawIndexedPrimitive(const std::string& name, DrawIndexedPrimitiveHook hook, Priority priority) {
         std::lock_guard<std::mutex> lock(g_registryMutex);
@@ -286,6 +338,38 @@ namespace D3D9Hooks {
         return true;
     }
 
+    bool RegisterCreatePixelShader(const std::string& name, CreatePixelShaderHook hook, Priority priority) {
+        std::lock_guard<std::mutex> lock(g_registryMutex);
+        g_createPixelShaderHooks.push_back({ name, hook, priority });
+        SortHooks(g_createPixelShaderHooks);
+        LOG_DEBUG("[D3D9Hooks] Registered CreatePixelShader hook: " + name);
+        return true;
+    }
+
+    bool RegisterCreateVertexShader(const std::string& name, CreateVertexShaderHook hook, Priority priority) {
+        std::lock_guard<std::mutex> lock(g_registryMutex);
+        g_createVertexShaderHooks.push_back({ name, hook, priority });
+        SortHooks(g_createVertexShaderHooks);
+        LOG_DEBUG("[D3D9Hooks] Registered CreateVertexShader hook: " + name);
+        return true;
+    }
+
+    bool RegisterSetPixelShaderConstantF(const std::string& name, SetPixelShaderConstantFHook hook, Priority priority) {
+        std::lock_guard<std::mutex> lock(g_registryMutex);
+        g_setPixelShaderConstantFHooks.push_back({ name, hook, priority });
+        SortHooks(g_setPixelShaderConstantFHooks);
+        LOG_DEBUG("[D3D9Hooks] Registered SetPixelShaderConstantF hook: " + name);
+        return true;
+    }
+
+    bool RegisterSetVertexShaderConstantF(const std::string& name, SetVertexShaderConstantFHook hook, Priority priority) {
+        std::lock_guard<std::mutex> lock(g_registryMutex);
+        g_setVertexShaderConstantFHooks.push_back({ name, hook, priority });
+        SortHooks(g_setVertexShaderConstantFHooks);
+        LOG_DEBUG("[D3D9Hooks] Registered SetVertexShaderConstantF hook: " + name);
+        return true;
+    }
+
     // Direct Original Function Calls
     HRESULT CallOriginalCreateRenderTarget(
         LPDIRECT3DDEVICE9 device,
@@ -353,6 +437,10 @@ namespace D3D9Hooks {
         removeByName(g_createTextureHooks);
         removeByName(g_createRenderTargetHooks);
         removeByName(g_setViewportHooks);
+        removeByName(g_createPixelShaderHooks);
+        removeByName(g_createVertexShaderHooks);
+        removeByName(g_setPixelShaderConstantFHooks);
+        removeByName(g_setVertexShaderConstantFHooks);
 
         LOG_DEBUG("[D3D9Hooks] Unregistered all hooks for: " + name);
     }
@@ -596,6 +684,90 @@ namespace D3D9Hooks {
             return !ctx.skipOriginal;
         }
 
+        bool ExecuteCreatePixelShaderHooks(DeviceContext& ctx, const DWORD* pFunction, IDirect3DPixelShader9** ppShader) {
+            std::lock_guard<std::mutex> lock(g_registryMutex);
+
+            for (auto& entry : g_createPixelShaderHooks) {
+                HookResult result = entry.hook(ctx, pFunction, ppShader);
+
+                if (result == HookResult::Skip) {
+                    ctx.skipOriginal = true;
+                    ctx.overrideResult = S_OK;
+                    return false;
+                }
+                else if (result == HookResult::Block) {
+                    ctx.skipOriginal = true;
+                    ctx.overrideResult = E_FAIL;
+                    return false;
+                }
+            }
+
+            return !ctx.skipOriginal;
+        }
+
+        bool ExecuteCreateVertexShaderHooks(DeviceContext& ctx, const DWORD* pFunction, IDirect3DVertexShader9** ppShader) {
+            std::lock_guard<std::mutex> lock(g_registryMutex);
+
+            for (auto& entry : g_createVertexShaderHooks) {
+                HookResult result = entry.hook(ctx, pFunction, ppShader);
+
+                if (result == HookResult::Skip) {
+                    ctx.skipOriginal = true;
+                    ctx.overrideResult = S_OK;
+                    return false;
+                }
+                else if (result == HookResult::Block) {
+                    ctx.skipOriginal = true;
+                    ctx.overrideResult = E_FAIL;
+                    return false;
+                }
+            }
+
+            return !ctx.skipOriginal;
+        }
+
+        bool ExecuteSetPixelShaderConstantFHooks(DeviceContext& ctx, UINT startRegister, const float* pConstantData, UINT vector4fCount) {
+            std::lock_guard<std::mutex> lock(g_registryMutex);
+
+            for (auto& entry : g_setPixelShaderConstantFHooks) {
+                HookResult result = entry.hook(ctx, startRegister, pConstantData, vector4fCount);
+
+                if (result == HookResult::Skip) {
+                    ctx.skipOriginal = true;
+                    ctx.overrideResult = S_OK;
+                    return false;
+                }
+                else if (result == HookResult::Block) {
+                    ctx.skipOriginal = true;
+                    ctx.overrideResult = E_FAIL;
+                    return false;
+                }
+            }
+
+            return !ctx.skipOriginal;
+        }
+
+        bool ExecuteSetVertexShaderConstantFHooks(DeviceContext& ctx, UINT startRegister, const float* pConstantData, UINT vector4fCount) {
+            std::lock_guard<std::mutex> lock(g_registryMutex);
+
+            for (auto& entry : g_setVertexShaderConstantFHooks) {
+                HookResult result = entry.hook(ctx, startRegister, pConstantData, vector4fCount);
+
+                if (result == HookResult::Skip) {
+                    ctx.skipOriginal = true;
+                    ctx.overrideResult = S_OK;
+                    return false;
+                }
+                else if (result == HookResult::Block) {
+                    ctx.skipOriginal = true;
+                    ctx.overrideResult = E_FAIL;
+                    return false;
+                }
+            }
+
+            return !ctx.skipOriginal;
+        }
+
         void Initialize(LPDIRECT3DDEVICE9 device) {
             if (g_initialized) {
                 LOG_WARNING("[D3D9Hooks] Already initialized");
@@ -618,6 +790,10 @@ namespace D3D9Hooks {
             Original_CreateTexture = reinterpret_cast<CreateTexture_t>(vTable[23]);
             Original_CreateRenderTarget = reinterpret_cast<CreateRenderTarget_t>(vTable[28]);
             Original_SetViewport = reinterpret_cast<SetViewport_t>(vTable[47]);
+            Original_CreatePixelShader = reinterpret_cast<CreatePixelShader_t>(vTable[106]);
+            Original_CreateVertexShader = reinterpret_cast<CreateVertexShader_t>(vTable[91]);
+            Original_SetPixelShaderConstantF = reinterpret_cast<SetPixelShaderConstantF_t>(vTable[109]);
+            Original_SetVertexShaderConstantF = reinterpret_cast<SetVertexShaderConstantF_t>(vTable[94]);
 
             // Install hooks using Detours
             DetourTransactionBegin();
@@ -634,6 +810,10 @@ namespace D3D9Hooks {
             DetourAttach(&(PVOID&)Original_CreateTexture, Hooked_CreateTexture);
             DetourAttach(&(PVOID&)Original_CreateRenderTarget, Hooked_CreateRenderTarget);
             DetourAttach(&(PVOID&)Original_SetViewport, Hooked_SetViewport);
+            DetourAttach(&(PVOID&)Original_CreatePixelShader, Hooked_CreatePixelShader);
+            DetourAttach(&(PVOID&)Original_CreateVertexShader, Hooked_CreateVertexShader);
+            DetourAttach(&(PVOID&)Original_SetPixelShaderConstantF, Hooked_SetPixelShaderConstantF);
+            DetourAttach(&(PVOID&)Original_SetVertexShaderConstantF, Hooked_SetVertexShaderConstantF);
 
             if (DetourTransactionCommit() == NO_ERROR) {
                 g_initialized = true;
@@ -660,6 +840,10 @@ namespace D3D9Hooks {
             if (Original_CreateTexture) DetourDetach(&(PVOID&)Original_CreateTexture, Hooked_CreateTexture);
             if (Original_CreateRenderTarget) DetourDetach(&(PVOID&)Original_CreateRenderTarget, Hooked_CreateRenderTarget);
             if (Original_SetViewport) DetourDetach(&(PVOID&)Original_SetViewport, Hooked_SetViewport);
+            if (Original_CreatePixelShader) DetourDetach(&(PVOID&)Original_CreatePixelShader, Hooked_CreatePixelShader);
+            if (Original_CreateVertexShader) DetourDetach(&(PVOID&)Original_CreateVertexShader, Hooked_CreateVertexShader);
+            if (Original_SetPixelShaderConstantF) DetourDetach(&(PVOID&)Original_SetPixelShaderConstantF, Hooked_SetPixelShaderConstantF);
+            if (Original_SetVertexShaderConstantF) DetourDetach(&(PVOID&)Original_SetVertexShaderConstantF, Hooked_SetVertexShaderConstantF);
 
             DetourTransactionCommit();
 

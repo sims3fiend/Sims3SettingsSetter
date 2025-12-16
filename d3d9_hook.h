@@ -12,6 +12,7 @@ extern LPDIRECT3DDEVICE9 g_pd3dDevice;
 extern EndScene_t original_EndScene;
 extern Reset_t original_Reset;
 extern WNDPROC original_WndProc;
+extern HWND g_hookedWindow;
 
 bool InitializeD3D9Hook();
 void CleanupD3D9Hook();

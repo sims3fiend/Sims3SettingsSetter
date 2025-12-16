@@ -61,6 +61,10 @@ CPUFeatures::CPUFeatures() {
     __cpuid(leaves, 1);
     hasSSE41 = (leaves[2] & (1 << 19)) != 0;
     hasFMA = (leaves[2] & (1 << 12)) != 0;
+
+    // Check for AVX2 (CPUID leaf 7, EBX bit 5)
+    __cpuidex(leaves, 7, 0);
+    hasAVX2 = (leaves[1] & (1 << 5)) != 0;
 }
 
 const CPUFeatures& CPUFeatures::Get() {

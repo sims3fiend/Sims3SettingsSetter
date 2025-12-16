@@ -145,153 +145,300 @@ void MemoryMonitor::ResetWarning() {
 }
 
 // UISettings implementation
+void UISettings::SetUIToggleKey(UINT key) {
+    std::lock_guard<std::mutex> lock(m_mutex);
+    m_uiToggleKey = key;
+
+    // Update SettingsManager
+    auto& settingsManager = SettingsManager::Get();
+    std::wstring settingName = L"QoL:UIToggleKey";
+    settingsManager.UpdateConfigValue(settingName, std::to_wstring(key));
+    settingsManager.SaveConfig("S3SS.ini", nullptr);
+}
+
+void UISettings::SetDisableHooks(bool disable) {
+    std::lock_guard<std::mutex> lock(m_mutex);
+    m_disableHooks = disable;
+
+    // Update SettingsManager
+    auto& settingsManager = SettingsManager::Get();
+    std::wstring settingName = L"QoL:DisableHooks";
+    settingsManager.UpdateConfigValue(settingName, disable ? L"true" : L"false");
+    settingsManager.SaveConfig("S3SS.ini", nullptr);
+}
+
 bool UISettings::SaveToINI(const std::string& filename) const {
-    try {
-        std::lock_guard<std::mutex> lock(m_mutex);
-        
-        // Check if file exists
-        std::ifstream checkFile(filename);
-        bool fileExists = checkFile.is_open();
-        checkFile.close();
-        
-        if (!fileExists) {
-            // Create a new file with just QoL settings
-            std::ofstream newFile(filename);
-            if (!newFile.is_open()) {
-                LOG_ERROR("Failed to create " + filename);
-                return false;
-            }
-            
-            // Write header
-            newFile << "; Sims 3 Settings Setter Configuration\n";
-            newFile << "; Auto-generated file\n\n";
-            
-            // Write QoL section
-            newFile << "[QoL]\n";
-            newFile << "UIToggleKey=" << m_uiToggleKey << "\n";
-            newFile << "DisableHooks=" << (m_disableHooks ? "true" : "false") << "\n";
-            newFile << "\n";
-            
-            newFile.close();
-            LOG_INFO("Created new " + filename + " with QoL settings");
-            return true;
-        }
-        
-        // File exists, read it to check for QoL section
-        std::ifstream infile(filename);
-        std::string fileContent;
-        std::string line;
-        bool hasQoLSettings = false;
-        bool hasOldProgramSettings = false;
-        
-        while (std::getline(infile, line)) {
-            if (line == "[QoL]") {
-                hasQoLSettings = true;
-            }
-            if (line == "[ProgramSettings]") {
-                hasOldProgramSettings = true;
-            }
-            fileContent += line + "\n";
-        }
-        infile.close();
-        
-        // If QoL settings already exist, we don't need to do anything
-        if (hasQoLSettings) {
-            return true;
-        }
-        
-        // Append QoL settings to the end of the file
-        std::ofstream file(filename, std::ios::app);
-        if (!file.is_open()) {
-            LOG_ERROR("Failed to open " + filename + " for appending QoL settings");
-            return false;
-        }
-        
-        // Add a newline if the file doesn't end with one
-        if (!fileContent.empty() && fileContent.back() != '\n') {
-            file << "\n";
-        }
-        
-        // Append QoL section
-        file << "[QoL]\n";
-        file << "UIToggleKey=" << m_uiToggleKey << "\n";
-        file << "DisableHooks=" << (m_disableHooks ? "true" : "false") << "\n";
-        file << "\n";
-        
-        file.close();
-        LOG_INFO("Added QoL settings to " + filename);
-        return true;
-    }
-    catch (const std::exception& e) {
-        LOG_ERROR("Error saving QoL settings: " + std::string(e.what()));
-        return false;
-    }
+    // No-op: UISettings are saved immediately when changed via SetUIToggleKey/SetDisableHooks
+    // This prevents overwriting other sections (like patch settings) that were saved before this call
+    return true;
 }
 
 bool UISettings::LoadFromINI(const std::string& filename) {
     try {
         std::lock_guard<std::mutex> lock(m_mutex);
-        
-        std::ifstream file(filename);
-        if (!file.is_open()) {
-            // File doesn't exist, use defaults and mark as needing save
-            m_hasUnsavedChanges = true;
-            LOG_INFO("No " + filename + " found, will create with defaults");
-            return true;
-        }
-        
-        std::string line;
-        bool inQoLSection = false;
-        bool inOldProgramSection = false;
-        bool foundSettings = false;
-        
-        while (std::getline(file, line)) {
-            // Skip empty lines and comments
-            if (line.empty() || line[0] == ';') continue;
-            
-            // Check for section header
-            if (line[0] == '[') {
-                inQoLSection = (line == "[QoL]");
-                inOldProgramSection = (line == "[ProgramSettings]");
-                if (inQoLSection || inOldProgramSection) {
-                    foundSettings = true;
-                }
-                continue;
-            }
-            
-            // Parse key=value pairs in relevant sections
-            if (inQoLSection || inOldProgramSection) {
-                size_t equalPos = line.find('=');
-                if (equalPos != std::string::npos) {
-                    std::string key = line.substr(0, equalPos);
-                    std::string value = line.substr(equalPos + 1);
 
-                    if (key == "UIToggleKey") {
-                        m_uiToggleKey = static_cast<UINT>(std::stoul(value));
-                    }
-                    else if (key == "DisableHooks") {
-                        m_disableHooks = (value == "true" || value == "1");
-                    }
-                }
+        auto& settingsManager = SettingsManager::Get();
+
+        // Register our config values if they don't exist yet
+        std::wstring toggleKeyName = L"QoL:UIToggleKey";
+        std::wstring disableHooksName = L"QoL:DisableHooks";
+
+        const auto& configValues = settingsManager.GetConfigValues();
+
+        if (configValues.find(toggleKeyName) == configValues.end()) {
+            ConfigValueInfo info;
+            info.category = L"QoL";
+            info.currentValue = std::to_wstring(m_uiToggleKey);
+            info.bufferSize = 10;
+            info.valueType = ConfigValueType::Integer;
+            settingsManager.AddConfigValue(toggleKeyName, info);
+        }
+
+        if (configValues.find(disableHooksName) == configValues.end()) {
+            ConfigValueInfo info;
+            info.category = L"QoL";
+            info.currentValue = m_disableHooks ? L"true" : L"false";
+            info.bufferSize = 10;
+            info.valueType = ConfigValueType::Boolean;
+            settingsManager.AddConfigValue(disableHooksName, info);
+        }
+
+        // Load the settings
+        settingsManager.LoadConfig(filename, nullptr);
+
+        // Now read the values
+        const auto& values = settingsManager.GetConfigValues();
+
+        auto it = values.find(toggleKeyName);
+        if (it != values.end()) {
+            try {
+                m_uiToggleKey = static_cast<UINT>(std::stoul(it->second.currentValue));
+            } catch (...) {
+                m_uiToggleKey = VK_INSERT;
             }
         }
-        
-        file.close();
-        
-        // If we didn't find settings, mark as needing save
-        if (!foundSettings) {
-            m_hasUnsavedChanges = true;
-            LOG_INFO("No [QoL] section found in " + filename + ", will add on next save");
-        } else {
-            m_hasUnsavedChanges = false;
-            LOG_INFO("Loaded QoL settings from " + filename);
+
+        it = values.find(disableHooksName);
+        if (it != values.end()) {
+            m_disableHooks = (it->second.currentValue == L"true");
         }
-        
+
+        m_hasUnsavedChanges = false;
+        LOG_INFO("Loaded QoL settings from " + filename);
+
         return true;
     }
     catch (const std::exception& e) {
         LOG_ERROR("Error loading QoL settings: " + std::string(e.what()));
         return false;
+    }
+}
+
+// BorderlessWindow stuff, I could probably streamline this significantly
+void BorderlessWindow::SetWindowHandle(HWND hwnd) {
+    std::lock_guard<std::mutex> lock(m_mutex);
+    m_hwnd = hwnd;
+
+    // Store original window style and rect when we first get the handle
+    if (hwnd && m_originalStyle == 0) {
+        m_originalStyle = GetWindowLong(hwnd, GWL_STYLE);
+        GetWindowRect(hwnd, &m_originalRect);
+    }
+
+    // Apply borderless if it was enabled before we had a window handle
+    if (m_enabled && !m_wasApplied) {
+        ApplyBorderless();
+    }
+}
+
+void BorderlessWindow::SetEnabled(bool enabled) {
+    {
+        std::lock_guard<std::mutex> lock(m_mutex);
+        if (m_enabled == enabled) return;
+        m_enabled = enabled;
+    }
+
+    // Apply the change
+    Apply();
+
+    // Save to config
+    auto& settingsManager = SettingsManager::Get();
+    std::wstring settingName = L"QoL:BorderlessWindow:Enabled";
+    settingsManager.UpdateConfigValue(settingName, enabled ? L"true" : L"false");
+    settingsManager.SaveConfig("S3SS.ini", nullptr);
+}
+
+void BorderlessWindow::SetFullscreen(bool fullscreen) {
+    {
+        std::lock_guard<std::mutex> lock(m_mutex);
+        if (m_fullscreen == fullscreen) return;
+        m_fullscreen = fullscreen;
+    }
+
+    // Apply the change if borderless is enabled
+    Apply();
+
+    // Save to config
+    auto& settingsManager = SettingsManager::Get();
+    std::wstring settingName = L"QoL:BorderlessWindow:Fullscreen";
+    settingsManager.UpdateConfigValue(settingName, fullscreen ? L"true" : L"false");
+    settingsManager.SaveConfig("S3SS.ini", nullptr);
+}
+
+void BorderlessWindow::Apply() {
+    std::lock_guard<std::mutex> lock(m_mutex);
+    if (m_enabled) {
+        if (m_fullscreen) {
+            ApplyBorderlessFullscreen();
+        } else {
+            ApplyBorderless();
+        }
+    } else {
+        RestoreWindowed();
+    }
+}
+
+void BorderlessWindow::RemoveDecorations() {
+    // Store original styles if we haven't already
+    if (m_originalStyle == 0) {
+        m_originalStyle = GetWindowLong(m_hwnd, GWL_STYLE);
+        m_originalExStyle = GetWindowLong(m_hwnd, GWL_EXSTYLE);
+        GetWindowRect(m_hwnd, &m_originalRect);
+    }
+
+    // Remove window decorations (border, title bar, etc.)
+    LONG style = m_originalStyle;
+    style &= ~(WS_CAPTION | WS_THICKFRAME | WS_SYSMENU | WS_BORDER | WS_DLGFRAME);
+    style |= WS_POPUP;
+    SetWindowLong(m_hwnd, GWL_STYLE, style);
+
+    // Remove extended styles that might cause borders
+    LONG exStyle = m_originalExStyle;
+    exStyle &= ~(WS_EX_DLGMODALFRAME | WS_EX_CLIENTEDGE | WS_EX_STATICEDGE | WS_EX_WINDOWEDGE);
+    SetWindowLong(m_hwnd, GWL_EXSTYLE, exStyle);
+}
+
+void BorderlessWindow::ApplyBorderless() {
+    if (!m_hwnd || !IsWindow(m_hwnd)) return;
+
+    RemoveDecorations();
+
+    // Get the monitor work area (excludes taskbar)
+    HMONITOR hMonitor = MonitorFromWindow(m_hwnd, MONITOR_DEFAULTTONEAREST);
+    MONITORINFO monitorInfo = {};
+    monitorInfo.cbSize = sizeof(MONITORINFO);
+
+    if (GetMonitorInfo(hMonitor, &monitorInfo)) {
+        int x = monitorInfo.rcWork.left;
+        int y = monitorInfo.rcWork.top;
+        int width = monitorInfo.rcWork.right - monitorInfo.rcWork.left;
+        int height = monitorInfo.rcWork.bottom - monitorInfo.rcWork.top;
+
+        SetWindowPos(m_hwnd, nullptr, x, y, width, height,
+            SWP_FRAMECHANGED | SWP_NOACTIVATE | SWP_NOZORDER);
+    } else {
+        SetWindowPos(m_hwnd, nullptr, 0, 0, 0, 0,
+            SWP_FRAMECHANGED | SWP_NOACTIVATE | SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER);
+    }
+
+    m_wasApplied = true;
+    LOG_INFO("Borderless window mode applied");
+}
+
+void BorderlessWindow::ApplyBorderlessFullscreen() {
+    if (!m_hwnd || !IsWindow(m_hwnd)) return;
+
+    RemoveDecorations();
+
+    // Get the monitor the window is currently on
+    HMONITOR hMonitor = MonitorFromWindow(m_hwnd, MONITOR_DEFAULTTONEAREST);
+    MONITORINFO monitorInfo = {};
+    monitorInfo.cbSize = sizeof(MONITORINFO);
+
+    if (GetMonitorInfo(hMonitor, &monitorInfo)) {
+        // Use rcMonitor (full monitor area) instead of rcWork (excludes taskbar)
+        int x = monitorInfo.rcMonitor.left;
+        int y = monitorInfo.rcMonitor.top;
+        int width = monitorInfo.rcMonitor.right - monitorInfo.rcMonitor.left;
+        int height = monitorInfo.rcMonitor.bottom - monitorInfo.rcMonitor.top;
+
+        // Move window to top-left of monitor and resize to cover full screen. This changes the window size, which may cause issues if the game
+        // is using a spoofed resolution via ResolutionSpoofer. In that case, D3D backbuffer won't match the window size.
+        SetWindowPos(m_hwnd, HWND_TOPMOST, x, y, width, height,
+            SWP_FRAMECHANGED | SWP_NOACTIVATE);
+        // Remove TOPMOST immediately after to avoid staying always-on-top
+        SetWindowPos(m_hwnd, HWND_NOTOPMOST, 0, 0, 0, 0,
+            SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
+    } else {
+        // Fallback: just update the frame without resizing
+        SetWindowPos(m_hwnd, nullptr, 0, 0, 0, 0,
+            SWP_FRAMECHANGED | SWP_NOACTIVATE | SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER);
+    }
+
+    m_wasApplied = true;
+    LOG_INFO("Borderless fullscreen mode applied");
+}
+
+void BorderlessWindow::RestoreWindowed() {
+    if (!m_hwnd || !IsWindow(m_hwnd) || !m_wasApplied) return;
+
+    // Restore original style but keep current size/position
+    // Restoring the original window size can cause driver timeouts when large backbuffer (e.g., from resolution spoofing) is active
+    if (m_originalStyle != 0) {
+        SetWindowLong(m_hwnd, GWL_STYLE, m_originalStyle);
+        SetWindowLong(m_hwnd, GWL_EXSTYLE, m_originalExStyle);
+
+        // Just update the frame, don't change size/position
+        SetWindowPos(m_hwnd, nullptr, 0, 0, 0, 0,
+            SWP_FRAMECHANGED | SWP_NOACTIVATE | SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER);
+    }
+
+    m_wasApplied = false;
+    LOG_INFO("Restored windowed mode");
+}
+
+void BorderlessWindow::LoadSettings(const std::string& filename) {
+    auto& settingsManager = SettingsManager::Get();
+
+    std::wstring enabledName = L"QoL:BorderlessWindow:Enabled";
+    std::wstring fullscreenName = L"QoL:BorderlessWindow:Fullscreen";
+
+    const auto& configValues = settingsManager.GetConfigValues();
+
+    if (configValues.find(enabledName) == configValues.end()) {
+        ConfigValueInfo info;
+        info.category = L"QoL";
+        info.currentValue = m_enabled ? L"true" : L"false";
+        info.bufferSize = 10;
+        info.valueType = ConfigValueType::Boolean;
+        settingsManager.AddConfigValue(enabledName, info);
+    }
+
+    if (configValues.find(fullscreenName) == configValues.end()) {
+        ConfigValueInfo info;
+        info.category = L"QoL";
+        info.currentValue = m_fullscreen ? L"true" : L"false";
+        info.bufferSize = 10;
+        info.valueType = ConfigValueType::Boolean;
+        settingsManager.AddConfigValue(fullscreenName, info);
+    }
+
+    // Load the settings
+    settingsManager.LoadConfig(filename, nullptr);
+
+    // Read the values
+    const auto& values = settingsManager.GetConfigValues();
+
+    auto it = values.find(enabledName);
+    if (it != values.end()) {
+        std::lock_guard<std::mutex> lock(m_mutex);
+        m_enabled = (it->second.currentValue == L"true");
+    }
+
+    it = values.find(fullscreenName);
+    if (it != values.end()) {
+        std::lock_guard<std::mutex> lock(m_mutex);
+        m_fullscreen = (it->second.currentValue == L"true");
     }
 }
 

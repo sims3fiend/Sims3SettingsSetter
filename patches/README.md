@@ -155,33 +155,51 @@ class MyPatch : public OptimizationPatch {
 private:
     float myFloat = 0.0f;
     int myInt = 50;
+    bool myBool = false;
+    int myChoice = 0;
 
 public:
     MyPatch() : OptimizationPatch("MyPatch", nullptr) {
-        // Register a float with presets
+        // Register a float with presets and UI type
         RegisterFloatSetting(&myFloat, "floatSetting", SettingUIType::InputBox,
             0.0f, 0.0f, 10.0f, "Description",
             {{"Low", 1.0f}, {"High", 9.0f}});
 
-        RegisterIntSetting(&myInt, "intSetting", 50, 0, 100, "An integer");
+        // Register an int with slider (default), drag, or input box UI
+        RegisterIntSetting(&myInt, "intSetting", 50, 0, 100, "An integer",
+            {{"Min", 0}, {"Max", 100}}, SettingUIType::Slider);
+
+        // Register a boolean checkbox
+        RegisterBoolSetting(&myBool, "boolSetting", false, "Toggle something");
+
+        // Register an enum/dropdown
+        RegisterEnumSetting(&myChoice, "choiceSetting", 0, "Pick one",
+            {"Option A", "Option B", "Option C"});
     }
 
     bool Install() override {
-        //your patching logic using myFloat and myInt
+        //your patching logic using myFloat, myInt, myBool, myChoice
 
-        // Bind setting to memory so it auto-reapplies (might make this default behaviour...)
+        // Bind setting to memory so it auto-reapplies when changed in UI
         BindSettingToAddress("floatSetting", memoryAddress);
         return true;
     }
 };
 ```
 
+**Available UI Types (SettingUIType):**
+- `InputBox` - Text input box for exact values (default for floats)
+- `Slider` - Slider for dragging values (default for ints)
+- `Drag` - Compact inline drag control
+
 **Available methods:**
-- `RegisterFloatSetting(ptr, name, uiType, default, min, max, desc, presets)` - Float with InputBox/Slider/Drag UI
-- `RegisterIntSetting(ptr, name, default, min, max, desc, presets)` - Integer with slider
+- `RegisterFloatSetting(ptr, name, uiType, default, min, max, desc, presets)` - Float with configurable UI
+- `RegisterIntSetting(ptr, name, default, min, max, desc, presets, uiType)` - Integer with optional presets
 - `RegisterBoolSetting(ptr, name, default, desc)` - Boolean checkbox
 - `RegisterEnumSetting(ptr, name, default, desc, choices)` - Dropdown choices
 - `BindSettingToAddress(name, address)` - Auto-reapply when setting changes in UI
+
+Settings are automatically saved/loaded with presets and rendered in the GUI!
 
 ### Patches with Custom UI (Manual Approach)
 
@@ -258,29 +276,20 @@ public:
         file << "BoolSetting=" << (boolSetting ? "true" : "false") << "\n\n";
     }
 
-    bool LoadState(const std::string& value) override {
-        // Called for "Enabled" key
-        if (value == "true") {
-            return Install();
-        } else if (value == "false") {
-            return Uninstall();
+    bool LoadState(const std::string& key, const std::string& value) override {
+        if (key == "Enabled") {
+            if (value == "true") return Install();
+            else if (value == "false") return Uninstall();
         }
-        return false;
-    }
-
-    // OPTIONAL: Custom loader for your additional settings
-    bool LoadCustomSetting(const std::string& key, const std::string& value) {
-        if (key == "MySetting") {
-            try {
-                mySetting = std::stoi(value);
-                return true;
-            } catch (...) { return false; }
-        } else if (key == "FloatSetting") {
-            try {
-                floatSetting = std::stof(value);
-                return true;
-            } catch (...) { return false; }
-        } else if (key == "BoolSetting") {
+        else if (key == "MySetting") {
+            try { mySetting = std::stoi(value); return true; }
+            catch (...) { return false; }
+        }
+        else if (key == "FloatSetting") {
+            try { floatSetting = std::stof(value); return true; }
+            catch (...) { return false; }
+        }
+        else if (key == "BoolSetting") {
             boolSetting = (value == "true");
             return true;
         }
@@ -322,6 +331,65 @@ REGISTER_PATCH(MyExistingPatchClass, {
 ```
 
 ## Available Helper Functions
+
+### PatchHelper Namespace
+
+#### Writing to Memory
+- `WriteByte(address, value, tracker, expectedOld)` - Write a single byte
+- `WriteBytes(address, bytes, tracker, expectedOld)` - Write multiple bytes
+- `WriteDWORD(address, value, tracker, expectedOld)` - Write a 4-byte value
+- `WriteWORD(address, value, tracker, expectedOld)` - Write a 2-byte value
+- `WriteNOP(address, count, tracker)` - NOP out bytes (0x90)
+- `WriteRelativeJump(address, destination, tracker)` - Write E9 JMP instruction
+- `WriteRelativeCall(address, destination, tracker)` - Write E8 CALL instruction
+
+All write functions automatically:
+- Track original bytes for restoration
+- Handle memory protection
+- Verify the write succeeded
+- Optionally validate expected old value
+
+#### Reading from Memory
+- `ReadByte(address)` - Read a single byte
+- `ReadWORD(address)` - Read a 2-byte value
+- `ReadDWORD(address)` - Read a 4-byte value
+
+#### Pattern Scanning
+- `ScanPattern(start, size, "48 89 5C ? ? 08")` - String-based pattern scanning with wildcards
+
+#### Utilities
+- `RestoreAll(locations)` - Restore all patched locations
+- `ValidateBytes(address, expected, size)` - Check if bytes match
+- `GetModuleInfo(hModule, &baseAddr, &imageSize)` - Get module info
+- `CalculateRelativeOffset(from, to, instructionSize)` - Calculate relative jump/call offset
+
+#### Transactions (All-or-Nothing Patching)
+```cpp
+auto tx = PatchHelper::BeginTransaction();
+
+// All patches go into the transaction
+PatchHelper::WriteByte(addr1, val1, &tx.locations);
+PatchHelper::WriteByte(addr2, val2, &tx.locations);
+
+if (success) {
+    PatchHelper::CommitTransaction(tx);  // Keep changes
+} else {
+    PatchHelper::RollbackTransaction(tx);  // Restore all
+}
+```
+
+### SimplePatch Namespace
+
+Quick helpers for defining patch descriptions:
+```cpp
+using namespace SimplePatch;
+
+auto patch1 = Byte(0x12345678, 0xEB, 0x74);  // Single byte
+auto patch2 = Bytes(addr, {0x90, 0x90}, {0x74, 0x05});  // Multiple bytes
+auto patch3 = DWord(addr, newDword, oldDword);  // 4 bytes
+auto patch4 = Word(addr, newWord, oldWord);  // 2 bytes
+auto patch5 = NOP(addr, 5);  // NOP out 5 bytes
+```
 
 ### DetourHelper Namespace
 
@@ -373,6 +441,23 @@ public:
         return true;
     }
 };
+```
+
+### IATHookHelper Namespace
+
+For Import Address Table hooking (hook imported functions):
+
+```cpp
+void* originalFunc = nullptr;
+if (PatchHelper::IATHookHelper::Hook(
+    GetModuleHandle(NULL),  // Module to patch
+    "user32.dll",           // DLL name
+    "MessageBoxA",          // Function name
+    MyHookedMessageBox,     // Your replacement
+    &originalFunc           // Receives original pointer
+)) {
+    // Hook installed successfully
+}
 ```
 
 ### LiveSetting Namespace
@@ -440,37 +525,6 @@ public:
 };
 ```
 
-### PatchHelper Namespace
-
-#### Writing to Memory
-- `WriteByte(address, value, tracker, expectedOld)` - Write a single byte
-- `WriteBytes(address, bytes, tracker, expectedOld)` - Write multiple bytes
-- `WriteDWORD(address, value, tracker, expectedOld)` - Write a 4-byte value
-- `WriteWORD(address, value, tracker, expectedOld)` - Write a 2-byte value
-- `WriteNOP(address, count, tracker)` - NOP out bytes (0x90)
-- `WriteRelativeJump(address, destination, tracker)` - Write E9 JMP instruction
-- `WriteRelativeCall(address, destination, tracker)` - Write E8 CALL instruction
-
-All write functions automatically:
-- Track original bytes for restoration
-- Handle memory protection
-- Verify the write succeeded
-- Optionally validate expected old value
-
-#### Reading from Memory
-- `ReadByte(address)` - Read a single byte
-- `ReadWORD(address)` - Read a 2-byte value
-- `ReadDWORD(address)` - Read a 4-byte value
-
-#### Pattern Scanning
-- `ScanPattern(start, size, "48 89 5C ? ? 08")` - String-based pattern scanning with wildcards
-
-#### Utilities
-- `RestoreAll(locations)` - Restore all patched locations
-- `ValidateBytes(address, expected, size)` - Check if bytes match
-- `GetModuleInfo(hModule, &baseAddr, &imageSize)` - Get module info
-- `CalculateRelativeOffset(from, to, instructionSize)` - Calculate relative jump/call offset
-
 ## Categories
 
 Currently arbitrary, defaults to "General"
@@ -480,7 +534,7 @@ Currently arbitrary, defaults to "General"
 Patches can specify which game version they support using the `targetVersion` field:
 
 - **GameVersion::Steam** - Works only on ts3w.exe (Steam version).
-- **GameVersion::EA** - Works only on ts3.exe (EA/Origin version). 
+- **GameVersion::EA** - Works only on ts3.exe (EA/Origin version).
 - **GameVersion::All** - Works on all versions, for when you've got a banger pattern/using IAT stuff
 
 Patches incompatible with the current version will be shown in the GUI but greyed out and unselectable, mostly to further add to EA users misery.
@@ -557,7 +611,6 @@ Errors appear in the GUI as red text with tooltips showing the message, as well 
 
 ## D3D9 Hooking System
 
-🗑🗑🗑WIP🗑🗑🗑 This may all break/change, I don't know why I did any of this
 For patches that need to intercept Direct3D9 rendering calls, we provide a managed hook registry system with priority-based execution and clean integration with the patch system.
 
 ### When to Use D3D9 Hooks
@@ -572,15 +625,25 @@ D3D9 hooks are ideal for:
 
 ### Available Hook Types
 
-The D3D9 hook registry supports these commonly-used methods:
-- `DrawIndexedPrimitive` - Main geometry rendering (90% of game rendering)
-- `DrawPrimitive` - Non-indexed geometry
-- `SetRenderTarget` - Render target changes (essential for resolution work)
-- `SetPixelShader` / `SetVertexShader` - Shader changes
-- `SetTexture` - Texture binding
-- `Present` - Frame presentation (good for FPS limiting, screenshots)
-- `BeginScene` - Scene begin (initialization per-frame)
-- `CreateTexture` - Texture creation (intercept for resolution scaling)
+The D3D9 hook registry supports these methods:
+
+| Hook | Description |
+|------|-------------|
+| `DrawIndexedPrimitive` | Main geometry rendering (90% of game rendering) |
+| `DrawPrimitive` | Non-indexed geometry |
+| `SetRenderTarget` | Render target changes (essential for resolution work) |
+| `SetPixelShader` | Pixel shader changes |
+| `SetVertexShader` | Vertex shader changes |
+| `SetTexture` | Texture binding |
+| `Present` | Frame presentation (good for FPS limiting, screenshots) |
+| `BeginScene` | Scene begin (initialization per-frame) |
+| `CreateTexture` | Texture creation (intercept for resolution scaling) |
+| `CreateRenderTarget` | Render target surface creation |
+| `SetViewport` | Viewport changes |
+| `CreatePixelShader` | Pixel shader creation (for shader modding) |
+| `CreateVertexShader` | Vertex shader creation |
+| `SetPixelShaderConstantF` | Pixel shader float constant updates |
+| `SetVertexShaderConstantF` | Vertex shader float constant updates |
 
 ### Basic D3D9 Hook Example
 
@@ -677,6 +740,33 @@ Control execution flow by returning:
 - **HookResult::Skip** - Skip original call, return S_OK (success)
 - **HookResult::Block** - Block call, return E_FAIL (failure)
 
+### DeviceContext
+
+Every hook receives a `DeviceContext` struct:
+```cpp
+struct DeviceContext {
+    LPDIRECT3DDEVICE9 device;      // The D3D9 device
+    bool skipOriginal = false;      // Set by hooks to skip original call
+    HRESULT overrideResult = S_OK;  // Return value if skipOriginal is true
+};
+```
+
+### Calling Original Functions (Avoiding Recursion)
+
+When you need to call D3D9 functions from within a hook (e.g., creating resources), use the `CallOriginal*` functions to bypass all hooks:
+
+```cpp
+// Inside a CreateRenderTarget hook, create a render target without triggering hooks
+HRESULT hr = D3D9Hooks::CallOriginalCreateRenderTarget(
+    ctx.device, width, height, format, multiSample,
+    multisampleQuality, lockable, &surface, nullptr
+);
+
+// Also available:
+D3D9Hooks::CallOriginalSetRenderTarget(device, index, surface);
+D3D9Hooks::CallOriginalSetViewport(device, &viewport);
+```
+
 ### D3D9 Helper Utilities
 
 The `D3D9Helper` namespace provides useful utilities:
@@ -693,6 +783,18 @@ if (info.valid) {
 UINT width, height;
 if (D3D9Helper::GetBackbufferSize(g_pd3dDevice, &width, &height)) {
     LOG_INFO("Backbuffer: " + std::to_string(width) + "x" + std::to_string(height));
+}
+
+// Get present parameters
+D3DPRESENT_PARAMETERS params;
+if (D3D9Helper::GetPresentParameters(g_pd3dDevice, &params)) {
+    // Access windowed mode, vsync, etc.
+}
+
+// Get device capabilities
+D3DCAPS9 caps;
+if (D3D9Helper::GetDeviceCaps(g_pd3dDevice, &caps)) {
+    // Check max texture size, shader versions, etc.
 }
 
 // Format conversion helpers
@@ -717,6 +819,7 @@ if (g_pd3dDevice) {
     // Device is valid and initialized
 }
 ```
+
 ### Combining with Byte Patches
 
 You can combine D3D9 hooks with traditional byte patches:
@@ -733,5 +836,48 @@ bool Install() override {
 
     return true;
 }
+
+bool Uninstall() override {
+    // Remove D3D9 hooks
+    D3D9Hooks::UnregisterAll("MyPatch");
+
+    // Restore byte patches
+    PatchHelper::RestoreAll(patchedLocations);
+
+    return true;
+}
 ```
+
+### All Registration Functions
+
+```cpp
+// Drawing
+D3D9Hooks::RegisterDrawIndexedPrimitive(name, hook, priority);
+D3D9Hooks::RegisterDrawPrimitive(name, hook, priority);
+
+// Render state
+D3D9Hooks::RegisterSetRenderTarget(name, hook, priority);
+D3D9Hooks::RegisterSetViewport(name, hook, priority);
+D3D9Hooks::RegisterSetTexture(name, hook, priority);
+
+// Shaders
+D3D9Hooks::RegisterSetPixelShader(name, hook, priority);
+D3D9Hooks::RegisterSetVertexShader(name, hook, priority);
+D3D9Hooks::RegisterCreatePixelShader(name, hook, priority);
+D3D9Hooks::RegisterCreateVertexShader(name, hook, priority);
+D3D9Hooks::RegisterSetPixelShaderConstantF(name, hook, priority);
+D3D9Hooks::RegisterSetVertexShaderConstantF(name, hook, priority);
+
+// Scene/Present
+D3D9Hooks::RegisterPresent(name, hook, priority);
+D3D9Hooks::RegisterBeginScene(name, hook, priority);
+
+// Resource creation
+D3D9Hooks::RegisterCreateTexture(name, hook, priority);
+D3D9Hooks::RegisterCreateRenderTarget(name, hook, priority);
+
+// Cleanup
+D3D9Hooks::UnregisterAll(name);  // Remove all hooks with this name
+```
+
 yeyy

@@ -22,6 +22,8 @@
 //Avert thine gaze, I said I was going to make the code clean and I lied
 //https://www.youtube.com/watch?v=C6iAzyhm0p0
 
+// I promise next release I'll split this...
+
 enum class SettingType { //TODO check these please :) maybe the dll thing has them better defined
     Int32 = 0,
     Uint32 = 1,
@@ -624,6 +626,7 @@ DWORD WINAPI HookThread(LPVOID lpParameter) {
         const auto& cpuFeatures = CPUFeatures::Get();
         LOG_INFO("[Optimization] CPU Features - SSE4.1: " +
             std::string(cpuFeatures.hasSSE41 ? "Yes" : "No") +
+            ", AVX2: " + (cpuFeatures.hasAVX2 ? "Yes" : "No") +
             ", FMA: " + (cpuFeatures.hasFMA ? "Yes" : "No"));
 
         // Load UI settings first
@@ -673,6 +676,7 @@ DWORD WINAPI HookThread(LPVOID lpParameter) {
 
             // Load QoL settings
             MemoryMonitor::Get().LoadSettings("S3SS.ini");
+            BorderlessWindow::Get().LoadSettings("S3SS.ini");
             LOG_INFO("Successfully loaded QoL settings");
         }
         catch (const std::exception& e) {
@@ -722,6 +726,17 @@ DWORD WINAPI HookThread(LPVOID lpParameter) {
                 // Update memory monitor
                 MemoryMonitor::Get().Update();
 
+                // Update patches (for deferred installation and other periodic tasks)
+                try {
+                    auto& patchManager = OptimizationManager::Get();
+                    for (const auto& patch : patchManager.GetPatches()) {
+                        if (patch) {
+                            patch->Update();
+                        }
+                    }
+                }
+                catch (...) {}
+
                 // Sleep when no messages
                 Sleep(10);
             }
@@ -739,11 +754,17 @@ DWORD WINAPI HookThread(LPVOID lpParameter) {
     }
 }
 
+#include "allocator_hook.h"
+
 BOOL APIENTRY DllMain(HMODULE hModule, DWORD reason, LPVOID lpReserved)
 {
     switch (reason) {
     case DLL_PROCESS_ATTACH: {
         DisableThreadLibraryCalls(hModule);
+        
+        // Initialize allocator hooks as early as possible
+        InitializeAllocatorHooks();
+
         g_hModule = hModule;  // Store the module handle
 
         // Check if we're in the correct process

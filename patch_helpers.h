@@ -358,7 +358,53 @@ namespace SimplePatch {
     }
 }
 
-// Detours helper for function hooking
+namespace PatchHelper {
+// IAT Hooking Helper
+    namespace IATHookHelper {
+        inline bool Hook(HMODULE hModule, const char* dllName, const char* funcName, void* newFunc, void** originalFunc) {
+            if (!hModule || !dllName || !funcName || !newFunc) return false;
+
+            PIMAGE_DOS_HEADER pDosHeader = (PIMAGE_DOS_HEADER)hModule;
+            if (pDosHeader->e_magic != IMAGE_DOS_SIGNATURE) return false;
+
+            PIMAGE_NT_HEADERS pNtHeaders = (PIMAGE_NT_HEADERS)((BYTE*)hModule + pDosHeader->e_lfanew);
+            if (pNtHeaders->Signature != IMAGE_NT_SIGNATURE) return false;
+
+            if (pNtHeaders->OptionalHeader.DataDirectory[IMAGE_DIRECTORY_ENTRY_IMPORT].Size == 0) return false;
+
+            PIMAGE_IMPORT_DESCRIPTOR pImportDesc = (PIMAGE_IMPORT_DESCRIPTOR)((BYTE*)hModule + 
+                pNtHeaders->OptionalHeader.DataDirectory[IMAGE_DIRECTORY_ENTRY_IMPORT].VirtualAddress);
+
+            for (; pImportDesc->Name; pImportDesc++) {
+                const char* moduleName = (const char*)((BYTE*)hModule + pImportDesc->Name);
+                if (_stricmp(moduleName, dllName) == 0) {
+                    PIMAGE_THUNK_DATA pThunk = (PIMAGE_THUNK_DATA)((BYTE*)hModule + pImportDesc->FirstThunk);
+                    PIMAGE_THUNK_DATA pOrigThunk = (PIMAGE_THUNK_DATA)((BYTE*)hModule + pImportDesc->OriginalFirstThunk);
+                    
+                    if (!pOrigThunk) pOrigThunk = pThunk; // Fallback if no OriginalFirstThunk
+
+                    for (; pThunk->u1.Function; pThunk++, pOrigThunk++) {
+                        if (IMAGE_SNAP_BY_ORDINAL(pOrigThunk->u1.Ordinal)) continue;
+
+                        PIMAGE_IMPORT_BY_NAME pImport = (PIMAGE_IMPORT_BY_NAME)((BYTE*)hModule + pOrigThunk->u1.AddressOfData);
+                        if (strcmp(pImport->Name, funcName) == 0) {
+                            if (originalFunc) *originalFunc = (void*)pThunk->u1.Function;
+                            
+                            DWORD oldProtect;
+                            VirtualProtect(&pThunk->u1.Function, sizeof(uintptr_t), PAGE_READWRITE, &oldProtect);
+                            pThunk->u1.Function = (uintptr_t)newFunc;
+                            VirtualProtect(&pThunk->u1.Function, sizeof(uintptr_t), oldProtect, &oldProtect);
+                            return true;
+                        }
+                    }
+                }
+            }
+            return false;
+        }
+    }
+}
+
+    // Detours helper for function hooking
 namespace DetourHelper {
     struct Hook {
         void** originalPtr;

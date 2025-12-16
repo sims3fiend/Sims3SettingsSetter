@@ -104,7 +104,11 @@ public:
 
     virtual bool Install() = 0;
     virtual bool Uninstall() = 0;
-    
+
+    // Override for patches that need periodic updates (e.g., deferred installation)
+    // Called from the main message loop
+    virtual void Update() {}
+
     const std::string& GetName() const { return patchName; }
     bool IsEnabled() const { return isEnabled.load(); }
     double GetLastSampleRate() const { return lastSampleRate; }
@@ -183,6 +187,7 @@ public:
 struct CPUFeatures {
     bool hasSSE41{ false };
     bool hasFMA{ false };
+    bool hasAVX2{ false };
 
     CPUFeatures();
     static const CPUFeatures& Get();

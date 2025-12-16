@@ -121,6 +121,37 @@ namespace D3D9Hooks {
         const D3DVIEWPORT9* viewport
     )>;
 
+    // CreatePixelShader - Intercept pixel shader creation (for shader replacement/modding)
+    // pFunction points to the shader bytecode, ppShader receives the created shader
+    using CreatePixelShaderHook = std::function<HookResult(
+        DeviceContext& ctx,
+        const DWORD* pFunction,
+        IDirect3DPixelShader9** ppShader
+    )>;
+
+    // CreateVertexShader - Intercept vertex shader creation
+    using CreateVertexShaderHook = std::function<HookResult(
+        DeviceContext& ctx,
+        const DWORD* pFunction,
+        IDirect3DVertexShader9** ppShader
+    )>;
+
+    // SetPixelShaderConstantF - Intercept pixel shader float constant updates
+    using SetPixelShaderConstantFHook = std::function<HookResult(
+        DeviceContext& ctx,
+        UINT startRegister,
+        const float* pConstantData,
+        UINT vector4fCount
+    )>;
+
+    // SetVertexShaderConstantF - Intercept vertex shader float constant updates
+    using SetVertexShaderConstantFHook = std::function<HookResult(
+        DeviceContext& ctx,
+        UINT startRegister,
+        const float* pConstantData,
+        UINT vector4fCount
+    )>;
+
     // Register hooks with name and priority
     // Name should be unique per patch (use patch name as prefix)
     bool RegisterDrawIndexedPrimitive(const std::string& name, DrawIndexedPrimitiveHook hook, Priority priority = Priority::Normal);
@@ -134,6 +165,10 @@ namespace D3D9Hooks {
     bool RegisterCreateTexture(const std::string& name, CreateTextureHook hook, Priority priority = Priority::Normal);
     bool RegisterCreateRenderTarget(const std::string& name, CreateRenderTargetHook hook, Priority priority = Priority::Normal);
     bool RegisterSetViewport(const std::string& name, SetViewportHook hook, Priority priority = Priority::Normal);
+    bool RegisterCreatePixelShader(const std::string& name, CreatePixelShaderHook hook, Priority priority = Priority::Normal);
+    bool RegisterCreateVertexShader(const std::string& name, CreateVertexShaderHook hook, Priority priority = Priority::Normal);
+    bool RegisterSetPixelShaderConstantF(const std::string& name, SetPixelShaderConstantFHook hook, Priority priority = Priority::Normal);
+    bool RegisterSetVertexShaderConstantF(const std::string& name, SetVertexShaderConstantFHook hook, Priority priority = Priority::Normal);
 
     // Unregister all hooks registered with a specific name
     void UnregisterAll(const std::string& name);
@@ -181,6 +216,10 @@ namespace D3D9Hooks {
                                             D3DMULTISAMPLE_TYPE multiSample, DWORD multisampleQuality, BOOL lockable,
                                             IDirect3DSurface9** surface, HANDLE* sharedHandle);
         bool ExecuteSetViewportHooks(DeviceContext& ctx, const D3DVIEWPORT9* viewport);
+        bool ExecuteCreatePixelShaderHooks(DeviceContext& ctx, const DWORD* pFunction, IDirect3DPixelShader9** ppShader);
+        bool ExecuteCreateVertexShaderHooks(DeviceContext& ctx, const DWORD* pFunction, IDirect3DVertexShader9** ppShader);
+        bool ExecuteSetPixelShaderConstantFHooks(DeviceContext& ctx, UINT startRegister, const float* pConstantData, UINT vector4fCount);
+        bool ExecuteSetVertexShaderConstantFHooks(DeviceContext& ctx, UINT startRegister, const float* pConstantData, UINT vector4fCount);
 
         // Initialize hooks (called once at startup)
         void Initialize(LPDIRECT3DDEVICE9 device);

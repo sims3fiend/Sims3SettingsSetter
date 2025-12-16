@@ -43,6 +43,22 @@
     <ClCompile Include="patches\timer_optimization_patch.cpp">
       <Filter>patches</Filter>
     </ClCompile>
+    <ClCompile Include="patches\refpack_decompressor_patch.cpp">
+      <Filter>patches</Filter>
+    </ClCompile>
+    <ClCompile Include="allocator_hook.cpp" />
+    <ClCompile Include="patches\mimalloc_patch.cpp">
+      <Filter>patches</Filter>
+    </ClCompile>
+    <ClCompile Include="patches\adaptive_wait_patch.cpp">
+      <Filter>patches</Filter>
+    </ClCompile>
+    <ClCompile Include="patches\worldcache_uncap_patch.cpp">
+      <Filter>patches</Filter>
+    </ClCompile>
+    <ClCompile Include="patches\resolution_spoofer_patch.cpp">
+      <Filter>patches</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="config_value_cache.h" />
@@ -63,6 +79,7 @@
     <ClInclude Include="patch_system.h" />
     <ClInclude Include="patch_helpers.h" />
     <ClInclude Include="d3d9_hook_registry.h" />
+    <ClInclude Include="allocator_hook.h" />
   </ItemGroup>
   <ItemGroup>
     <Filter Include="patches">

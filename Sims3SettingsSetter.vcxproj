@@ -64,6 +64,7 @@
       <RuntimeLibrary>MultiThreadedDebug</RuntimeLibrary>
       <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
+      <Optimization>MaxSpeed</Optimization>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
@@ -98,6 +99,7 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClInclude Include="allocator_hook.h" />
     <ClInclude Include="config_value_cache.h" />
     <ClInclude Include="cpu_optimization.h" />
     <ClInclude Include="d3d9_hook.h" />
@@ -118,6 +120,7 @@
     <ClInclude Include="patch_helpers.h" />
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="allocator_hook.cpp" />
     <ClCompile Include="cpu_optimization.cpp" />
     <ClCompile Include="d3d9_hook.cpp" />
     <ClCompile Include="d3d9_hook_registry.cpp" />
@@ -127,11 +130,16 @@
     <ClCompile Include="intersection_patch.cpp" />
     <ClCompile Include="logger.cpp" />
     <ClCompile Include="optimization.cpp" />
+    <ClCompile Include="patches\adaptive_wait_patch.cpp" />
     <ClCompile Include="patches\gc_stop_world_patch.cpp" />
     <ClCompile Include="patches\map_view_lot_blocker_patch.cpp" />
+    <ClCompile Include="patches\mimalloc_patch.cpp" />
+    <ClCompile Include="patches\refpack_decompressor_patch.cpp" />
+    <ClCompile Include="patches\resolution_spoofer_patch.cpp" />
     <ClCompile Include="patches\smooth_patch_dupe.cpp" />
     <ClCompile Include="patches\smooth_patch_classic.cpp" />
     <ClCompile Include="patches\timer_optimization_patch.cpp" />
+    <ClCompile Include="patches\worldcache_uncap_patch.cpp" />
     <ClCompile Include="pattern_scan.cpp" />
     <ClCompile Include="preset_manager.cpp" />
     <ClCompile Include="qol.cpp" />

@@ -14,6 +14,7 @@
 #include "qol.h"
 #include "intersection_patch.h"
 #include "cpu_optimization.h"
+#include "d3d9_hook.h"
 
 //I hate ImGui I hate ImGui I hate ImGui
 //https://www.youtube.com/watch?v=lKntlVofKqU
@@ -109,9 +110,9 @@ namespace SettingsGui {
                     if (ImGui::MenuItem("Reset All to Defaults", nullptr, false, SettingsManager::Get().HasDefaultValues())) {
                         SettingsManager::Get().ResetAllSettings();
                     }
-                    
+
                     ImGui::Separator();
-                    
+
                     if (ImGui::BeginMenu("Presets")) {
                         static char presetName[256] = "";
                         static char presetDesc[1024] = "";
@@ -440,73 +441,6 @@ namespace SettingsGui {
                         ImGui::TextColored(ImVec4(1.0f, 0.0f, 0.0f, 1.0f),
                             "ERROR: Failed to load patches list");
                     }
-                    
-                    /*
-                    // COMMENTED OUT DUE TO IMGUI ASSERTION ERRORS
-                    // Organize patches by category
-                    std::map<std::string, std::vector<OptimizationPatch*>> patchesByCategory;
-                    for (const auto& patch : patches) {
-                        const auto* meta = patch->GetMetadata();
-                        std::string category = meta ? meta->category : "General";
-                        patchesByCategory[category].push_back(patch.get());
-                    }
-                    
-                    // Render patches by category
-                    int patchIndex = 0;
-                    for (const auto& [category, categoryPatches] : patchesByCategory) {
-                        // Category header
-                        if (ImGui::CollapsingHeader(category.c_str(), ImGuiTreeNodeFlags_DefaultOpen)) {
-                            ImGui::Indent();
-                            
-                            for (auto* patch : categoryPatches) {
-                                ImGui::PushID(patchIndex++);
-                                
-                                const auto* meta = patch->GetMetadata();
-                                if (!meta) {
-                                    // Fallback for patches without metadata
-                                    bool enabled = patch->IsEnabled();
-                                    if (ImGui::Checkbox(patch->GetName().c_str(), &enabled)) {
-                                        enabled ? patch->Install() : patch->Uninstall();
-                                    }
-                                } else {
-                                    // Render with metadata
-                                    bool enabled = patch->IsEnabled();
-                                    std::string displayName = meta->displayName;
-                                    if (meta->experimental) {
-                                        displayName += " [EXPERIMENTAL]";
-                                    }
-                                    
-                                    if (ImGui::Checkbox(displayName.c_str(), &enabled)) {
-                                        enabled ? patch->Install() : patch->Uninstall();
-                                    }
-                                    
-                                    // Tooltip with description and technical details
-                                    if (ImGui::IsItemHovered()) {
-                                        ImGui::BeginTooltip();
-                                        ImGui::PushTextWrapPos(400.0f);
-                                        ImGui::Text("%s", meta->description.c_str());
-                                        
-                                        if (!meta->technicalDetails.empty()) {
-                                            ImGui::Separator();
-                                            ImGui::TextDisabled("Technical Details:");
-                                            for (const auto& detail : meta->technicalDetails) {
-                                                ImGui::TextDisabled("  - %s", detail.c_str());
-                                            }
-                                        }
-                                        
-                                        ImGui::PopTextWrapPos();
-                                        ImGui::EndTooltip();
-                                    }
-                                    
-                                    // TEMPORARILY DISABLED: Custom UI rendering
-                                
-                                ImGui::PopID();
-                            }
-                            
-                            ImGui::Unindent();
-                        }
-                    }
-                    */
 
                     ImGui::Separator();
                     ImGui::EndTabItem();
@@ -659,6 +593,29 @@ namespace SettingsGui {
                         if (progress > 0.9f) {
                             ImGui::TextColored(ImVec4(1.0f, 0.0f, 0.0f, 1.0f), 
                                 "Warning: Memory usage is very high!");
+                        }
+                    }
+
+                    ImGui::Separator();
+
+                    // Borderless Window section
+                    if (ImGui::CollapsingHeader("Borderless Window")) {
+                        auto& borderless = BorderlessWindow::Get();
+
+                        bool enabled = borderless.IsEnabled();
+                        if (ImGui::Checkbox("Enable borderless window", &enabled)) {
+                            borderless.SetEnabled(enabled);
+                        }
+                        if (ImGui::IsItemHovered()) {
+                            ImGui::SetTooltip("Removes the title bar and window borders");
+                        }
+
+                        bool fullscreen = borderless.IsFullscreen();
+                        if (ImGui::Checkbox("Borderless fullscreen", &fullscreen)) {
+                            borderless.SetFullscreen(fullscreen);
+                        }
+                        if (ImGui::IsItemHovered()) {
+                            ImGui::SetTooltip("Expand!");
                         }
                     }
 
