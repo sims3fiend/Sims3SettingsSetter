@@ -102,6 +102,13 @@ private:
 };
 
 // Borderless Window Mode
+enum class BorderlessMode {
+    Disabled,       // Normal windowed mode with decorations
+    DecorationsOnly, // Remove decorations but keep current size/position
+    Maximized,      // Remove decorations and maximize to work area (excludes taskbar)
+    Fullscreen      // Remove decorations and cover entire monitor (covers taskbar)
+};
+
 class BorderlessWindow {
 public:
     static BorderlessWindow& Get() {
@@ -111,16 +118,15 @@ public:
 
     bool IsEnabled() const {
         std::lock_guard<std::mutex> lock(m_mutex);
-        return m_enabled;
+        return m_mode != BorderlessMode::Disabled;
     }
 
-    bool IsFullscreen() const {
+    BorderlessMode GetMode() const {
         std::lock_guard<std::mutex> lock(m_mutex);
-        return m_fullscreen;
+        return m_mode;
     }
 
-    void SetEnabled(bool enabled);
-    void SetFullscreen(bool fullscreen);
+    void SetMode(BorderlessMode mode);
     void Apply();  // Apply current state to window
     void SetWindowHandle(HWND hwnd);
 
@@ -128,17 +134,17 @@ public:
     void LoadSettings(const std::string& filename);
 
 private:
-    BorderlessWindow() : m_enabled(false), m_fullscreen(false), m_hwnd(nullptr),
+    BorderlessWindow() : m_mode(BorderlessMode::Disabled), m_hwnd(nullptr),
                          m_originalStyle(0), m_originalExStyle(0), m_wasApplied(false) {}
 
     void RemoveDecorations();  // Helper to remove window chrome
-    void ApplyBorderless();
-    void ApplyBorderlessFullscreen();
+    void ApplyDecorationsOnly();
+    void ApplyMaximized();
+    void ApplyFullscreen();
     void RestoreWindowed();
 
     mutable std::mutex m_mutex;
-    bool m_enabled;
-    bool m_fullscreen;
+    BorderlessMode m_mode;
     HWND m_hwnd;
     LONG m_originalStyle;
     LONG m_originalExStyle;

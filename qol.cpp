@@ -246,16 +246,28 @@ void BorderlessWindow::SetWindowHandle(HWND hwnd) {
     }
 
     // Apply borderless if it was enabled before we had a window handle
-    if (m_enabled && !m_wasApplied) {
-        ApplyBorderless();
+    if (m_mode != BorderlessMode::Disabled && !m_wasApplied) {
+        switch (m_mode) {
+            case BorderlessMode::DecorationsOnly:
+                ApplyDecorationsOnly();
+                break;
+            case BorderlessMode::Maximized:
+                ApplyMaximized();
+                break;
+            case BorderlessMode::Fullscreen:
+                ApplyFullscreen();
+                break;
+            default:
+                break;
+        }
     }
 }
 
-void BorderlessWindow::SetEnabled(bool enabled) {
+void BorderlessWindow::SetMode(BorderlessMode mode) {
     {
         std::lock_guard<std::mutex> lock(m_mutex);
-        if (m_enabled == enabled) return;
-        m_enabled = enabled;
+        if (m_mode == mode) return;
+        m_mode = mode;
     }
 
     // Apply the change
@@ -263,38 +275,33 @@ void BorderlessWindow::SetEnabled(bool enabled) {
 
     // Save to config
     auto& settingsManager = SettingsManager::Get();
-    std::wstring settingName = L"QoL:BorderlessWindow:Enabled";
-    settingsManager.UpdateConfigValue(settingName, enabled ? L"true" : L"false");
-    settingsManager.SaveConfig("S3SS.ini", nullptr);
-}
-
-void BorderlessWindow::SetFullscreen(bool fullscreen) {
-    {
-        std::lock_guard<std::mutex> lock(m_mutex);
-        if (m_fullscreen == fullscreen) return;
-        m_fullscreen = fullscreen;
+    std::wstring settingName = L"QoL:BorderlessWindow:Mode";
+    std::wstring modeValue;
+    switch (mode) {
+        case BorderlessMode::Disabled: modeValue = L"disabled"; break;
+        case BorderlessMode::DecorationsOnly: modeValue = L"decorations_only"; break;
+        case BorderlessMode::Maximized: modeValue = L"maximized"; break;
+        case BorderlessMode::Fullscreen: modeValue = L"fullscreen"; break;
     }
-
-    // Apply the change if borderless is enabled
-    Apply();
-
-    // Save to config
-    auto& settingsManager = SettingsManager::Get();
-    std::wstring settingName = L"QoL:BorderlessWindow:Fullscreen";
-    settingsManager.UpdateConfigValue(settingName, fullscreen ? L"true" : L"false");
+    settingsManager.UpdateConfigValue(settingName, modeValue);
     settingsManager.SaveConfig("S3SS.ini", nullptr);
 }
 
 void BorderlessWindow::Apply() {
     std::lock_guard<std::mutex> lock(m_mutex);
-    if (m_enabled) {
-        if (m_fullscreen) {
-            ApplyBorderlessFullscreen();
-        } else {
-            ApplyBorderless();
-        }
-    } else {
-        RestoreWindowed();
+    switch (m_mode) {
+        case BorderlessMode::Disabled:
+            RestoreWindowed();
+            break;
+        case BorderlessMode::DecorationsOnly:
+            ApplyDecorationsOnly();
+            break;
+        case BorderlessMode::Maximized:
+            ApplyMaximized();
+            break;
+        case BorderlessMode::Fullscreen:
+            ApplyFullscreen();
+            break;
     }
 }
 
@@ -318,7 +325,20 @@ void BorderlessWindow::RemoveDecorations() {
     SetWindowLong(m_hwnd, GWL_EXSTYLE, exStyle);
 }
 
-void BorderlessWindow::ApplyBorderless() {
+void BorderlessWindow::ApplyDecorationsOnly() {
+    if (!m_hwnd || !IsWindow(m_hwnd)) return;
+
+    RemoveDecorations();
+
+    // Just update the frame, keep current size/position
+    SetWindowPos(m_hwnd, nullptr, 0, 0, 0, 0,
+        SWP_FRAMECHANGED | SWP_NOACTIVATE | SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER);
+
+    m_wasApplied = true;
+    LOG_INFO("Borderless (decorations only) mode applied");
+}
+
+void BorderlessWindow::ApplyMaximized() {
     if (!m_hwnd || !IsWindow(m_hwnd)) return;
 
     RemoveDecorations();
@@ -342,10 +362,10 @@ void BorderlessWindow::ApplyBorderless() {
     }
 
     m_wasApplied = true;
-    LOG_INFO("Borderless window mode applied");
+    LOG_INFO("Borderless maximized mode applied");
 }
 
-void BorderlessWindow::ApplyBorderlessFullscreen() {
+void BorderlessWindow::ApplyFullscreen() {
     if (!m_hwnd || !IsWindow(m_hwnd)) return;
 
     RemoveDecorations();
@@ -400,45 +420,38 @@ void BorderlessWindow::RestoreWindowed() {
 void BorderlessWindow::LoadSettings(const std::string& filename) {
     auto& settingsManager = SettingsManager::Get();
 
-    std::wstring enabledName = L"QoL:BorderlessWindow:Enabled";
-    std::wstring fullscreenName = L"QoL:BorderlessWindow:Fullscreen";
+    std::wstring modeName = L"QoL:BorderlessWindow:Mode";
 
     const auto& configValues = settingsManager.GetConfigValues();
 
-    if (configValues.find(enabledName) == configValues.end()) {
+    if (configValues.find(modeName) == configValues.end()) {
         ConfigValueInfo info;
         info.category = L"QoL";
-        info.currentValue = m_enabled ? L"true" : L"false";
-        info.bufferSize = 10;
-        info.valueType = ConfigValueType::Boolean;
-        settingsManager.AddConfigValue(enabledName, info);
-    }
-
-    if (configValues.find(fullscreenName) == configValues.end()) {
-        ConfigValueInfo info;
-        info.category = L"QoL";
-        info.currentValue = m_fullscreen ? L"true" : L"false";
-        info.bufferSize = 10;
-        info.valueType = ConfigValueType::Boolean;
-        settingsManager.AddConfigValue(fullscreenName, info);
+        info.currentValue = L"disabled";
+        info.bufferSize = 20;
+        info.valueType = ConfigValueType::String;
+        settingsManager.AddConfigValue(modeName, info);
     }
 
     // Load the settings
     settingsManager.LoadConfig(filename, nullptr);
 
-    // Read the values
+    // Read the value
     const auto& values = settingsManager.GetConfigValues();
 
-    auto it = values.find(enabledName);
+    auto it = values.find(modeName);
     if (it != values.end()) {
         std::lock_guard<std::mutex> lock(m_mutex);
-        m_enabled = (it->second.currentValue == L"true");
-    }
-
-    it = values.find(fullscreenName);
-    if (it != values.end()) {
-        std::lock_guard<std::mutex> lock(m_mutex);
-        m_fullscreen = (it->second.currentValue == L"true");
+        const auto& val = it->second.currentValue;
+        if (val == L"decorations_only") {
+            m_mode = BorderlessMode::DecorationsOnly;
+        } else if (val == L"maximized") {
+            m_mode = BorderlessMode::Maximized;
+        } else if (val == L"fullscreen") {
+            m_mode = BorderlessMode::Fullscreen;
+        } else {
+            m_mode = BorderlessMode::Disabled;
+        }
     }
 }
 

@@ -259,7 +259,7 @@ namespace SettingsGui {
                     ImGui::EndTabItem();
                 }
 
-                // Patches tab (the hell formerly known as Optimizations)
+                // Patches tab (the hell formerly known as Optimizations) - Rewrite inc, this is way too bloated a section lol, maybe helper? Or method to OptimiationPatch?
                 if (ImGui::BeginTabItem("Patches")) {
                     // Show detected game version
                     GameVersion detectedVersion = DetectGameVersion();
@@ -273,13 +273,23 @@ namespace SettingsGui {
                     try {
                         const auto& patches = OptimizationManager::Get().GetPatches();
 
-                        // Group patches by category
+                        // Group patches by category, with experimental patches in their own section
+                        // Experimental patches ignore their category and go straight to the Experimental section
                         std::map<std::string, std::vector<OptimizationPatch*>> patchesByCategory;
+                        std::vector<OptimizationPatch*> experimentalPatches;
+
                         for (const auto& patch : patches) {
                             if (!patch) continue;
                             const auto* meta = patch->GetMetadata();
-                            std::string category = meta ? meta->category : "General";
-                            patchesByCategory[category].push_back(patch.get());
+                            bool isExperimental = meta ? meta->experimental : false;
+
+                            if (isExperimental) {
+                                // Experimental patches go to their own section, category is ignored
+                                experimentalPatches.push_back(patch.get());
+                            } else {
+                                std::string category = (meta && !meta->category.empty()) ? meta->category : "General";
+                                patchesByCategory[category].push_back(patch.get());
+                            }
                         }
 
                         // Render each category
@@ -432,6 +442,143 @@ namespace SettingsGui {
                                     }
 
                                     ImGui::PopID();  // Pop the unique patch ID
+                                }
+
+                                ImGui::Unindent(15.0f);
+                            }
+                        }
+
+                        // Render experimental patches in their own section
+                        if (!experimentalPatches.empty()) {
+                            std::string headerLabel = "Experimental (" + std::to_string(experimentalPatches.size()) + ")";
+
+                            if (ImGui::CollapsingHeader(headerLabel.c_str(), ImGuiTreeNodeFlags_None)) {
+                                ImGui::Indent(15.0f);
+
+                                for (auto* patch : experimentalPatches) {
+                                    if (!patch) continue;
+
+                                    ImGui::PushID(patch);
+
+                                    try {
+                                        const PatchMetadata* meta = patch->GetMetadata();
+                                        std::string name = meta && !meta->displayName.empty() ?
+                                                          meta->displayName : patch->GetName();
+                                        std::string desc = meta ? meta->description : "";
+                                        bool compatible = patch->IsCompatibleWithCurrentVersion();
+
+                                        bool enabled = patch->IsEnabled();
+                                        bool hasError = false;
+                                        try {
+                                            const std::string& errStr = patch->GetLastError();
+                                            hasError = !errStr.empty();
+                                        } catch (...) {
+                                            hasError = false;
+                                        }
+
+                                        // Color experimental patches, patches with errors, or incompatible patches
+                                        if (hasError) {
+                                            ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 0.3f, 0.3f, 1.0f));
+                                        } else if (!compatible) {
+                                            ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.5f, 0.5f, 0.5f, 1.0f));
+                                        } else {
+                                            ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 0.8f, 0.0f, 1.0f));
+                                        }
+
+                                        if (!compatible) {
+                                            ImGui::BeginDisabled();
+                                        }
+
+                                        bool checkboxState = enabled;
+                                        if (ImGui::Checkbox("##checkbox", &checkboxState)) {
+                                            if (checkboxState) {
+                                                patch->Install();
+                                            } else {
+                                                patch->Uninstall();
+                                            }
+                                        }
+
+                                        if (!compatible) {
+                                            ImGui::EndDisabled();
+                                        }
+
+                                        ImGui::SameLine();
+                                        ImGui::Text("%s", name.c_str());
+                                        bool nameHovered = ImGui::IsItemHovered();
+
+                                        if (!compatible) {
+                                            ImGui::SameLine();
+                                            ImGui::TextDisabled("[INCOMPATIBLE]");
+                                        } else {
+                                            ImGui::SameLine();
+                                            ImGui::TextDisabled("[EXPERIMENTAL]");
+                                        }
+
+                                        ImGui::PopStyleColor();
+
+                                        // Tooltip with description and error info
+                                        if (nameHovered || ImGui::IsItemHovered()) {
+                                            ImGui::BeginTooltip();
+                                            ImGui::PushTextWrapPos(400.0f);
+
+                                            if (!compatible) {
+                                                ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 0.6f, 0.0f, 1.0f));
+                                                const char* currentVersionStr = (detectedVersion == GameVersion::Steam) ? "Steam" :
+                                                                               (detectedVersion == GameVersion::EA) ? "EA/Origin" : "Unknown";
+                                                const char* requiredVersionStr = meta && meta->targetVersion == GameVersion::Steam ? "Steam" :
+                                                                                meta && meta->targetVersion == GameVersion::EA ? "EA/Origin" : "All";
+                                                ImGui::Text("INCOMPATIBLE: This patch requires %s version, but you're running %s",
+                                                          requiredVersionStr, currentVersionStr);
+                                                ImGui::PopStyleColor();
+                                                if (!desc.empty() || hasError) {
+                                                    ImGui::Separator();
+                                                }
+                                            }
+
+                                            if (hasError) {
+                                                ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 0.3f, 0.3f, 1.0f));
+                                                try {
+                                                    ImGui::Text("ERROR: %s", patch->GetLastError().c_str());
+                                                } catch (...) {
+                                                    ImGui::Text("ERROR: (error message unavailable)");
+                                                }
+                                                ImGui::PopStyleColor();
+                                                if (!desc.empty()) {
+                                                    ImGui::Separator();
+                                                }
+                                            }
+
+                                            if (!desc.empty()) {
+                                                ImGui::Text("%s", desc.c_str());
+                                            }
+
+                                            if (meta && !meta->technicalDetails.empty()) {
+                                                ImGui::Separator();
+                                                ImGui::TextDisabled("Technical Details:");
+                                                for (const auto& detail : meta->technicalDetails) {
+                                                    ImGui::BulletText("%s", detail.c_str());
+                                                }
+                                            }
+
+                                            ImGui::PopTextWrapPos();
+                                            ImGui::EndTooltip();
+                                        }
+
+                                        if (enabled) {
+                                            ImGui::Indent();
+                                            patch->RenderCustomUI();
+                                            ImGui::Unindent();
+                                        }
+
+                                    } catch (const std::exception& e) {
+                                        ImGui::TextColored(ImVec4(1.0f, 0.0f, 0.0f, 1.0f),
+                                                          "Error with patch: %s", e.what());
+                                    } catch (...) {
+                                        ImGui::TextColored(ImVec4(1.0f, 0.0f, 0.0f, 1.0f),
+                                                          "Unknown error with patch");
+                                    }
+
+                                    ImGui::PopID();
                                 }
 
                                 ImGui::Unindent(15.0f);
@@ -601,21 +748,22 @@ namespace SettingsGui {
                     // Borderless Window section
                     if (ImGui::CollapsingHeader("Borderless Window")) {
                         auto& borderless = BorderlessWindow::Get();
+                        BorderlessMode currentMode = borderless.GetMode();
 
-                        bool enabled = borderless.IsEnabled();
-                        if (ImGui::Checkbox("Enable borderless window", &enabled)) {
-                            borderless.SetEnabled(enabled);
+                        const char* modeNames[] = { "Disabled", "Decorations Only", "Maximized", "Fullscreen" };
+                        int modeIndex = static_cast<int>(currentMode);
+
+                        if (ImGui::Combo("Mode", &modeIndex, modeNames, IM_ARRAYSIZE(modeNames))) {
+                            borderless.SetMode(static_cast<BorderlessMode>(modeIndex));
                         }
                         if (ImGui::IsItemHovered()) {
-                            ImGui::SetTooltip("Removes the title bar and window borders");
-                        }
-
-                        bool fullscreen = borderless.IsFullscreen();
-                        if (ImGui::Checkbox("Borderless fullscreen", &fullscreen)) {
-                            borderless.SetFullscreen(fullscreen);
-                        }
-                        if (ImGui::IsItemHovered()) {
-                            ImGui::SetTooltip("Expand!");
+                            const char* tooltips[] = {
+                                "Normal windowed mode with title bar and borders",
+                                "Removes title bar and borders, keeps current window size and position",
+                                "Removes decorations and fills the screen (leaves taskbar visible)",
+                                "Removes decorations and covers the entire monitor (hides taskbar)"
+                            };
+                            ImGui::SetTooltip("%s", tooltips[modeIndex]);
                         }
                     }
 
