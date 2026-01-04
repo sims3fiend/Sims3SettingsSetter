@@ -1,5 +1,6 @@
 #include "../patch_system.h"
 #include "../patch_helpers.h"
+#include "../addresses.h"
 #include "../logger.h"
 
 class WorldCacheSizePatch : public OptimizationPatch {
@@ -16,7 +17,9 @@ public:
 
         LOG_INFO("[WorldCacheSizePatch] Installing...");
 
-        // 0x005bc8b4: JC 005bca49 -> Force jump to success path + nop
+        uintptr_t branch = gameAddresses->worldCacheSizePatch;
+
+        // `branch`: JC +0x018f -> Force jump to success path + nop
         // This bypasses the cache size check xoxo. I had another version of this but lost the file tehehe~ Hope this works!
 
         std::vector<BYTE> newBytes = {
@@ -28,8 +31,8 @@ public:
             0x0F, 0x82, 0x8F, 0x01, 0x00, 0x00  // JC instruction
         };
 
-        if (!PatchHelper::WriteBytes(0x005bc8b4, newBytes, &patchedLocations, &expectedOld)) {
-            return Fail("Failed to patch WorldCache size check at 0x005bc8b4");
+        if (!PatchHelper::WriteBytes(branch, newBytes, &patchedLocations, &expectedOld)) {
+            return Fail(std::format("Failed to patch WorldCache size check at {:#010x}", branch));
         }
 
         isEnabled = true;
@@ -60,7 +63,6 @@ REGISTER_PATCH(WorldCacheSizePatch, {
     .description = "Removes the 512MB limit on WorldCache files, allowing larger caches",
     .category = "Performance",
     .experimental = true,
-    .supportedVersions = 1 << GameVersion::Steam_1_67_2_024037,
     .technicalDetails = {
         "Patches the cache size check at 0x005bc8b4",
         "Allows WorldCache files (Documents\\EA\\The Sims 3\\WorldCaches) to grow beyond 512mb",

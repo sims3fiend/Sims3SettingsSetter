@@ -29,6 +29,8 @@ struct GameAddresses {
         // The order of these timers must correspond with the order of the timers in `TimerOptimizationPatch::CS_TARGETS`.
         uintptr_t criticalSectionTimers[3];
     };
+
+    uintptr_t worldCacheSizePatch;
 };
 
 constexpr GameAddresses addressesForSteam_1_67_2_024037 = {
@@ -48,6 +50,7 @@ constexpr GameAddresses addressesForSteam_1_67_2_024037 = {
     .monoMethodCacheTimer = 0x011f43e4,
     .browserTimer = 0x011ea210,
     .unknownTimer = 0x011f43a8,
+    .worldCacheSizePatch = 0x005bc8b4,
 };
 
 constexpr GameAddresses addressesForRetail_1_67_2_024002 = {
@@ -67,6 +70,7 @@ constexpr GameAddresses addressesForRetail_1_67_2_024002 = {
     .monoMethodCacheTimer = 0x011f53e4,
     .browserTimer = 0x011eb210,
     .unknownTimer = 0x011f53a8,
+    .worldCacheSizePatch = 0x005bd114,
 };
 
 constexpr GameAddresses addressesForEA_1_69_47_024017 = {
@@ -86,6 +90,7 @@ constexpr GameAddresses addressesForEA_1_69_47_024017 = {
     .monoMethodCacheTimer = 0x0124e474,
     .browserTimer = 0x01244260,
     .unknownTimer = 0x0124e438,
+    .worldCacheSizePatch = 0x005bd704,
 };
 
 extern const std::array<GameAddresses, gameVersionCount> gameAddressesByGameVersion;
