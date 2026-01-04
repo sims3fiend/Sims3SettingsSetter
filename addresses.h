@@ -11,6 +11,11 @@ struct GameAddresses {
     uintptr_t randomAccessFlagBranch;
     uintptr_t gcThreadLoopCheck;
     uintptr_t lotVisibilityCameraBranch;
+    uintptr_t specWorldManagerUpdate;
+    uintptr_t cameraEnableMapViewMode; // Pattern: 68 89 DD 0F 11 FF D0 85 C0 74 11 D9 44 24 04 6A 00 51 8B C8 D9 1C 24
+                                       // The address of the containing function is what's important.
+    uintptr_t cameraDisableMapViewMode; // Pattern: 68 89 DD 0F 11 FF D0 85 C0 74 23 D9 44 24 0C 6A 00 83 EC 0C D9 5C 24 08 8B C8 D9 44 24 18 D9 5C 24 04 D9 44 24 14 D9 1C 24
+                                        // The address of the containing function is what's important.
 };
 
 constexpr GameAddresses addressesForSteam_1_67_2_024037 = {
@@ -21,6 +26,9 @@ constexpr GameAddresses addressesForSteam_1_67_2_024037 = {
     .randomAccessFlagBranch = 0x004db56c,
     .gcThreadLoopCheck = 0x00e511f5,
     .lotVisibilityCameraBranch = 0x00c63015,
+    .specWorldManagerUpdate = 0x00c6d570,
+    .cameraEnableMapViewMode = 0x0073dfb0,
+    .cameraDisableMapViewMode = 0x0073e000,
 };
 
 constexpr GameAddresses addressesForRetail_1_67_2_024002 = {
@@ -31,6 +39,9 @@ constexpr GameAddresses addressesForRetail_1_67_2_024002 = {
     .randomAccessFlagBranch = 0x004db73c,
     .gcThreadLoopCheck = 0x00e514e5,
     .lotVisibilityCameraBranch = 0x00c62ae5,
+    .specWorldManagerUpdate = 0x00c6d3b0,
+    .cameraEnableMapViewMode = 0x0073e080,
+    .cameraDisableMapViewMode = 0x0073e0d0,
 };
 
 constexpr GameAddresses addressesForEA_1_69_47_024017 = {
@@ -41,6 +52,9 @@ constexpr GameAddresses addressesForEA_1_69_47_024017 = {
     .randomAccessFlagBranch = 0x004db51c,
     .gcThreadLoopCheck = 0x00e51245,
     .lotVisibilityCameraBranch = 0x00c623a5,
+    .specWorldManagerUpdate = 0x00c6c8f0,
+    .cameraEnableMapViewMode = 0x0073ec70,
+    .cameraDisableMapViewMode = 0x0073ecc0,
 };
 
 extern const std::array<GameAddresses, gameVersionCount> gameAddressesByGameVersion;
