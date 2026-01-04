@@ -408,28 +408,7 @@ class ConfigRetrievalHook : public SettingsHook {
 
 public:
     ConfigRetrievalHook() : SettingsHook(nullptr, "Config Retrieval") {
-        // Pattern for the config function
-        const char* pattern = "83 EC 2C 8B 44 24 ?? 53 55 56 57 33 DB 8B F1 BF ?? ?? ?? ?? 50 8D 4C 24 ?? 89 5C 24 ?? 89 5C 24 ?? 89 5C 24 ?? 89 7C 24 ??";
-
-        // Find the function
-        uintptr_t addr = Pattern::Scan(pattern);
-        if (!addr) {
-            throw std::runtime_error("Failed to find config function pattern");
-        }
-
-        // Verify the string reference
-        uintptr_t stringAddr = *(uintptr_t*)(addr + 16);
-        if (!IsSafeToRead<char>((char*)stringAddr)) {
-            throw std::runtime_error("Invalid string reference");
-        }
-
-        // Verify it's the correct function by checking for the string
-        const char* str = (const char*)stringAddr;
-        if (strcmp(str, "Services/ConfigRegistry") != 0) {
-            throw std::runtime_error("Invalid config function pattern match");
-        }
-
-        originalFunc = (void*)addr;
+        originalFunc = (void*)gameAddresses->configRetrieval;
         instance = this;
     }
 
