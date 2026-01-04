@@ -2,6 +2,7 @@
 #include "patch_system.h"
 #include <intrin.h>
 #include <format>
+#include <unordered_map>
 #include <detours/detours.h>
 #include "intersection_patch.h"
 #include "cpu_optimization.h"
@@ -229,6 +230,14 @@ bool OptimizationManager::LoadState(const std::string& filename) {
             return true; // Not an error, just no settings
         }
 
+        // First pass collect all settings per patch
+        // We need to apply Settings.* BEFORE Enabled so patches install with correct values!!!!!!!!!!!!!!!!!
+        struct PatchSettings {
+            std::vector<std::pair<std::string, std::string>> settings;  // Settings.* entries
+            std::string enabledValue;  // "true" or "false" or empty if not specified
+        };
+        std::unordered_map<std::string, PatchSettings> patchSettingsMap;
+
         std::string currentPatchName;
         bool foundAnyOptimizations = false;
 
@@ -251,7 +260,6 @@ bool OptimizationManager::LoadState(const std::string& filename) {
                 continue;
             }
 
-
             // Parse key=value pairs within a valid section
             size_t equalPos = line.find('=');
             if (equalPos != std::string::npos && !currentPatchName.empty()) {
@@ -260,28 +268,43 @@ bool OptimizationManager::LoadState(const std::string& filename) {
 
                 LOG_DEBUG("[PatchSystem] Found setting for [" + currentPatchName + "] - Key: " + key + ", Value: " + value);
 
-                // Find the patch by name and apply the setting
-                bool foundPatch = false;
-                for (auto& patch : patches) { // Iterate directly through the patches vector
-                    if (patch->GetName() == currentPatchName) {
-                        LOG_DEBUG("[PatchSystem] Applying setting to patch: " + currentPatchName);
-
-                        // Pass both key and value to patch's LoadState
-                        // This allows patches to handle Enabled state and custom settings
-                        bool success = patch->LoadState(key, value);
-
-                        LOG_DEBUG("[PatchSystem] State application " +
-                            std::string(success ? "succeeded" : "failed"));
-
-                        foundPatch = true;
-                        break; // Found the patch, move to the next line
-                    }
+                // Store in our map for later application
+                if (key == "Enabled") {
+                    patchSettingsMap[currentPatchName].enabledValue = value;
+                } else {
+                    patchSettingsMap[currentPatchName].settings.emplace_back(key, value);
                 }
+            }
+        }
 
-                if (!foundPatch) {
-                    LOG_WARNING("[PatchSystem] No matching patch found for section: " +
-                        currentPatchName);
+        // Second pass apply settings to patches in correct order
+        // First apply all Settings.* values (so patches have correct config before install)
+        // Then apply Enabled state (which may trigger Instal)
+        for (auto& [patchName, patchSettings] : patchSettingsMap) {
+            // Find the patch
+            OptimizationPatch* patch = nullptr;
+            for (auto& p : patches) {
+                if (p->GetName() == patchName) {
+                    patch = p.get();
+                    break;
                 }
+            }
+
+            if (!patch) {
+                LOG_WARNING("[PatchSystem] No matching patch found for section: " + patchName);
+                continue;
+            }
+
+            // Apply settings first (before Enabled)
+            for (const auto& [key, value] : patchSettings.settings) {
+                LOG_DEBUG("[PatchSystem] Applying setting to patch [" + patchName + "]: " + key + "=" + value);
+                patch->LoadState(key, value);
+            }
+
+            // Now apply Enabled state (may trigger Install with correct settings)
+            if (!patchSettings.enabledValue.empty()) {
+                LOG_DEBUG("[PatchSystem] Applying Enabled=" + patchSettings.enabledValue + " to patch: " + patchName);
+                patch->LoadState("Enabled", patchSettings.enabledValue);
             }
         }
 

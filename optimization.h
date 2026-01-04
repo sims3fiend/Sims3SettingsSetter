@@ -26,6 +26,7 @@ protected:
     std::mutex patchMutex;
     SampleWindow currentWindow;
     static constexpr auto SAMPLE_INTERVAL = std::chrono::seconds(5);
+    static constexpr auto SETTING_CHANGE_DEBOUNCE = std::chrono::seconds(2);
 
     void* originalFunc;
     std::string patchName;
@@ -36,6 +37,10 @@ protected:
 
     // Settings storage
     std::vector<std::unique_ptr<PatchSetting>> settings;
+
+    // Debounced reinstall state to mitigate people crashing themselves :)
+    std::chrono::steady_clock::time_point lastSettingChange;
+    bool pendingReinstall = false;
 
     void MaybeSampleMinimal(LONG currentCalls);
 
@@ -51,24 +56,32 @@ protected:
                              float defaultVal, float minVal, float maxVal,
                              const std::string& desc = "",
                              const std::vector<std::pair<std::string, float>>& presets = {}) {
-        settings.push_back(std::make_unique<FloatSetting>(ptr, name, defaultVal, minVal, maxVal, desc, presets, uiType));
+        auto setting = std::make_unique<FloatSetting>(ptr, name, defaultVal, minVal, maxVal, desc, presets, uiType);
+        setting->SetChangedCallback([this]() { NotifySettingChanged(); });
+        settings.push_back(std::move(setting));
     }
 
     void RegisterIntSetting(int* ptr, const std::string& name, int defaultVal,
                            int minVal, int maxVal, const std::string& desc = "",
                            const std::vector<std::pair<std::string, int>>& presets = {},
                            SettingUIType uiType = SettingUIType::Slider) {
-        settings.push_back(std::make_unique<IntSetting>(ptr, name, defaultVal, minVal, maxVal, desc, presets, uiType));
+        auto setting = std::make_unique<IntSetting>(ptr, name, defaultVal, minVal, maxVal, desc, presets, uiType);
+        setting->SetChangedCallback([this]() { NotifySettingChanged(); });
+        settings.push_back(std::move(setting));
     }
 
     void RegisterBoolSetting(bool* ptr, const std::string& name, bool defaultVal,
                             const std::string& desc = "") {
-        settings.push_back(std::make_unique<BoolSetting>(ptr, name, defaultVal, desc));
+        auto setting = std::make_unique<BoolSetting>(ptr, name, defaultVal, desc);
+        setting->SetChangedCallback([this]() { NotifySettingChanged(); });
+        settings.push_back(std::move(setting));
     }
 
     void RegisterEnumSetting(int* ptr, const std::string& name, int defaultVal,
                             const std::string& desc, const std::vector<std::string>& choices) {
-        settings.push_back(std::make_unique<EnumSetting>(ptr, name, defaultVal, desc, choices));
+        auto setting = std::make_unique<EnumSetting>(ptr, name, defaultVal, desc, choices);
+        setting->SetChangedCallback([this]() { NotifySettingChanged(); });
+        settings.push_back(std::move(setting));
     }
 
     // Bind a setting to a memory address for auto-reapplication
@@ -107,7 +120,24 @@ public:
 
     // Override for patches that need periodic updates (e.g., deferred installation)
     // Called from the main message loop
-    virtual void Update() {}
+    virtual void Update() {
+        // Handle debounced reinstall when settings change
+        if (pendingReinstall && isEnabled.load()) {
+            auto now = std::chrono::steady_clock::now();
+            if (now - lastSettingChange >= SETTING_CHANGE_DEBOUNCE) {
+                pendingReinstall = false;
+                LOG_DEBUG("[" + patchName + "] Reinstalling after setting change");
+                Uninstall();
+                Install();
+            }
+        }
+    }
+
+    // Called by settings when their value changes in the UI, debounces reinstall to avoid rapid reinstalls while user is typing which would be bad
+    void NotifySettingChanged() {
+        lastSettingChange = std::chrono::steady_clock::now();
+        pendingReinstall = true;
+    }
 
     const std::string& GetName() const { return patchName; }
     bool IsEnabled() const { return isEnabled.load(); }

@@ -1,5 +1,6 @@
-#include <algorithm> 
-#include <unordered_set> 
+#include <algorithm>
+#include <unordered_set>
+#include <set>
 #include "settings.h"
 #include <fstream>
 #include <sstream>
@@ -152,23 +153,80 @@ bool SettingsManager::SaveConfig(const std::string& filename, std::string* error
         // Debug logging
         LOG_DEBUG("[SettingsManager] Begin SaveConfig");
 
-        // Read existing content to preserve sections we don't manage (like patch settings)
-        std::vector<std::string> preservedContent;
-        bool inPatchSection = false;
+        // Read existing content to preserve settings we're not rewriting
+        std::vector<std::string> preservedSettingsContent;  // Settings not being rewritten
+        std::set<std::string> settingsToWrite;  // Track which settings we'll write from m_settings
+
+        // Build set of settings we're going to write
+        for (const auto& [name, setting] : m_settings) {
+            if (setting->HasUnsavedChanges() && setting->IsOverridden()) {
+                settingsToWrite.insert(Utils::WideToUtf8(name));
+            }
+        }
+
         {
             std::ifstream inFile(filename);
             if (inFile.is_open()) {
                 std::string line;
+                bool inUnknownSetting = false;
+                std::string currentSettingName;
+                std::vector<std::string> currentSettingLines;
+
                 while (std::getline(inFile, line)) {
-                    // Start preserving when we hit patch settings section
+                    // Stop when we hit patch/optimization section - those are managed by OptimizationManager
                     if (line == "; Patch Settings" || line == "; Optimization Settings") {
-                        inPatchSection = true;
+                        // Flush any pending setting before stopping
+                        if (inUnknownSetting && !currentSettingLines.empty()) {
+                            for (const auto& l : currentSettingLines) {
+                                preservedSettingsContent.push_back(l);
+                            }
+                            preservedSettingsContent.push_back("");  // Empty line separator
+                        }
+                        break;  // Stop reading - OptimizationManager handles the rest
                     }
 
-                    // Preserve patch settings and everything after
-                    if (inPatchSection) {
-                        preservedContent.push_back(line);
+                    // Check for setting section header [SettingName]
+                    if (!line.empty() && line[0] == '[' && line.back() == ']') {
+                        // Flush previous unknown setting if any
+                        if (inUnknownSetting && !currentSettingLines.empty()) {
+                            for (const auto& l : currentSettingLines) {
+                                preservedSettingsContent.push_back(l);
+                            }
+                            preservedSettingsContent.push_back("");  // Empty line separator
+                        }
+
+                        currentSettingName = line.substr(1, line.size() - 2);
+                        currentSettingLines.clear();
+                        currentSettingLines.push_back(line);
+
+                        // Determine if we should preserve this setting from the INI
+                        // Skip (don't preserve) if we're gunna write it fresh (in settingsToWrite) or Config: section (handled separately under)
+                        // Preserve if it's not in settingsToWrite (either unknown or known but unchanged)
+                        if (currentSettingName.find("Config:") == 0) {
+                            // Config sections are handled separately, don't preserve
+                            inUnknownSetting = false;
+                        } else if (settingsToWrite.find(currentSettingName) != settingsToWrite.end()) {
+                            // We're writing this fresh, don't preserve old version
+                            inUnknownSetting = false;
+                        } else {
+                            // Preserve this setting - either unknown or known but not being rewritten
+                            inUnknownSetting = true;
+                        }
                     }
+                    else if (inUnknownSetting) {
+                        // Continue collecting lines for unknown setting
+                        if (!line.empty()) {
+                            currentSettingLines.push_back(line);
+                        }
+                    }
+                }
+
+                // Flush final unknown setting if any
+                if (inUnknownSetting && !currentSettingLines.empty()) {
+                    for (const auto& l : currentSettingLines) {
+                        preservedSettingsContent.push_back(l);
+                    }
+                    preservedSettingsContent.push_back("");
                 }
             }
         }
@@ -188,8 +246,15 @@ bool SettingsManager::SaveConfig(const std::string& filename, std::string* error
         file << "; Format: [SettingName]\nValue=value\n\n";
 
         int savedCount = 0;
-        // Too verbose for user-facing logs: suppress per-setting debug counts
-        
+
+        // Write preserved settings that aren't in m_settings (from previous saves)
+        if (!preservedSettingsContent.empty()) {
+            for (const auto& line : preservedSettingsContent) {
+                file << line << "\n";
+            }
+            LOG_DEBUG("[SettingsManager] Preserved " + std::to_string(preservedSettingsContent.size()) + " lines of unknown settings");
+        }
+
         for (const auto& [name, setting] : m_settings) {
             // Debug log current setting status
             std::string settingName = Utils::WideToUtf8(name);
@@ -210,15 +275,15 @@ bool SettingsManager::SaveConfig(const std::string& filename, std::string* error
             // Log saving this setting
             // skip per-setting log
             savedCount++;
-            
+
             file << "[" << settingName << "]\n";
-            
+
             // Write category if available
             const auto& metadata = setting->GetMetadata();
             if (!metadata.category.empty()) {
                 file << "Category=" << Utils::WideToUtf8(metadata.category) << "\n";
             }
-            
+
             // Write value
             std::visit([&](auto&& value) {
                 using T = std::decay_t<decltype(value)>;
@@ -229,8 +294,8 @@ bool SettingsManager::SaveConfig(const std::string& filename, std::string* error
                 else if constexpr (std::is_same_v<T, float>) {
                     file << std::fixed << std::setprecision(6) << value;
                 }
-                else if constexpr (std::is_same_v<T, Vector2> || 
-                                 std::is_same_v<T, Vector3> || 
+                else if constexpr (std::is_same_v<T, Vector2> ||
+                                 std::is_same_v<T, Vector3> ||
                                  std::is_same_v<T, Vector4>) {
                     file << VectorToString(value);
                 }
@@ -266,14 +331,7 @@ bool SettingsManager::SaveConfig(const std::string& filename, std::string* error
         
         LOG_INFO("[SettingsManager] Saved " + std::to_string(configCount) + " config values");
 
-        // Write preserved content (patch settings, etc.) at the end
-        if (!preservedContent.empty()) {
-            file << "\n";
-            for (const auto& line : preservedContent) {
-                file << line << "\n";
-            }
-            LOG_DEBUG("[SettingsManager] Preserved " + std::to_string(preservedContent.size()) + " lines from other sections");
-        }
+        // Patch/Optimization sections are NOT written here - they are managed by OptimizationManager::SaveState() which "should" be called after SaveConfig()
 
         LOG_DEBUG("[SettingsManager] End SaveConfig");
 

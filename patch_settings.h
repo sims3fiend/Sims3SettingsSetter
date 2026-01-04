@@ -4,6 +4,7 @@
 #include <vector>
 #include <memory>
 #include <fstream>
+#include <functional>
 #include <Windows.h>
 #include "imgui.h"
 
@@ -13,6 +14,9 @@ enum class SettingUIType {
     Slider,     // Slider for dragging values
     Drag        // DragFloat widget (compact inline control)
 };
+
+// Callback type for notifying parent patch of setting changes
+using SettingChangedCallback = std::function<void()>;
 
 // Base class for all patch settings
 class PatchSetting {
@@ -25,7 +29,21 @@ public:
     virtual std::string GetName() const = 0;
     virtual void ResetToDefault() = 0;
 
+    // Set callback for when setting value changes in UI
+    void SetChangedCallback(SettingChangedCallback callback) {
+        onChangedCallback = callback;
+    }
+
 protected:
+    SettingChangedCallback onChangedCallback;
+
+    // Call this when value changes in UI
+    void NotifyChanged() {
+        if (onChangedCallback) {
+            onChangedCallback();
+        }
+    }
+
     // Helper to write to protected memory
     void WriteToMemory(void* address, const void* data, size_t size) {
         if (!address) return;
@@ -114,9 +132,13 @@ public:
                 break;
         }
 
-        // Auto-reapply to memory if bound
-        if (changed && boundAddress) {
-            WriteToMemory(boundAddress, valuePtr, sizeof(float));
+        if (changed) {
+            // Auto-reapply to memory if bound
+            if (boundAddress) {
+                WriteToMemory(boundAddress, valuePtr, sizeof(float));
+            }
+            // Notify parent patch of change for debounced reinstall
+            NotifyChanged();
         }
         #endif
     }
@@ -220,9 +242,13 @@ public:
                 break;
         }
 
-        // Auto-reapply to memory if bound
-        if (changed && boundAddress) {
-            WriteToMemory(boundAddress, valuePtr, sizeof(int));
+        if (changed) {
+            // Auto-reapply to memory if bound
+            if (boundAddress) {
+                WriteToMemory(boundAddress, valuePtr, sizeof(int));
+            }
+            // Notify parent patch of change for debounced reinstall
+            NotifyChanged();
         }
         #endif
     }
@@ -287,9 +313,13 @@ public:
             }
         }
 
-        // Auto-reapply to memory if bound
-        if (changed && boundAddress) {
-            WriteToMemory(boundAddress, valuePtr, sizeof(bool));
+        if (changed) {
+            // Auto-reapply to memory if bound
+            if (boundAddress) {
+                WriteToMemory(boundAddress, valuePtr, sizeof(bool));
+            }
+            // Notify parent patch of change for debounced reinstall
+            NotifyChanged();
         }
         #endif
     }
@@ -365,9 +395,13 @@ public:
             ImGui::EndCombo();
         }
 
-        // Auto-reapply to memory if bound
-        if (changed && boundAddress) {
-            WriteToMemory(boundAddress, valuePtr, sizeof(int));
+        if (changed) {
+            // Auto-reapply to memory if bound
+            if (boundAddress) {
+                WriteToMemory(boundAddress, valuePtr, sizeof(int));
+            }
+            // Notify parent patch of change for debounced reinstall
+            NotifyChanged();
         }
         #endif
     }

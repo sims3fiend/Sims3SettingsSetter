@@ -146,13 +146,13 @@ bool ShouldEnableAllocatorHooks() {
     // Check if file exists
     DWORD attr = GetFileAttributesA(iniPath);
     if (attr == INVALID_FILE_ATTRIBUTES) {
-        // File doesn't exist, default to TRUE (enabled by default)
-        return true;
+        // File doesn't exist, default to FALSE (user must explicitly enable)
+        return false;
     }
 
-    // Read value
+    // Read value - default to false if key doesn't exist
     char value[32];
-    GetPrivateProfileStringA("Optimization_Mimalloc", "Enabled", "true", value, 32, iniPath);
+    GetPrivateProfileStringA("Optimization_Mimalloc", "Enabled", "false", value, 32, iniPath);
     return _stricmp(value, "true") == 0;
 }
 

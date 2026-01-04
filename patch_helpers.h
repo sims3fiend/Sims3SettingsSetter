@@ -88,20 +88,24 @@ namespace PatchHelper {
         // Use VirtualQuery for safer memory validation
         MEMORY_BASIC_INFORMATION mbi;
         if (VirtualQuery(address, &mbi, sizeof(mbi)) == 0) {
-            LOG_ERROR("VirtualQuery failed for address 0x" + 
+            LOG_ERROR("VirtualQuery failed for address 0x" +
                      std::to_string(reinterpret_cast<uintptr_t>(address)));
             return false;
         }
-        
+
         // Check if memory is readable
-        if (mbi.State != MEM_COMMIT || 
-            (mbi.Protect & (PAGE_READONLY | PAGE_READWRITE | PAGE_EXECUTE_READ | PAGE_EXECUTE_READWRITE)) == 0) {
-            LOG_ERROR("Memory at 0x" + std::to_string(reinterpret_cast<uintptr_t>(address)) + 
-                     " is not readable (State: " + std::to_string(mbi.State) + 
+        // Include WRITECOPY protections which are also readable
+        constexpr DWORD READABLE_PROTECTIONS =
+            PAGE_READONLY | PAGE_READWRITE | PAGE_EXECUTE_READ | PAGE_EXECUTE_READWRITE |
+            PAGE_WRITECOPY | PAGE_EXECUTE_WRITECOPY;
+
+        if (mbi.State != MEM_COMMIT || (mbi.Protect & READABLE_PROTECTIONS) == 0) {
+            LOG_ERROR("Memory at 0x" + std::to_string(reinterpret_cast<uintptr_t>(address)) +
+                     " is not readable (State: " + std::to_string(mbi.State) +
                      ", Protect: " + std::to_string(mbi.Protect) + ")");
             return false;
         }
-        
+
         // Now safe to compare
         return std::memcmp(address, expected, size) == 0;
     }
@@ -389,10 +393,25 @@ namespace PatchHelper {
                         PIMAGE_IMPORT_BY_NAME pImport = (PIMAGE_IMPORT_BY_NAME)((BYTE*)hModule + pOrigThunk->u1.AddressOfData);
                         if (strcmp(pImport->Name, funcName) == 0) {
                             if (originalFunc) *originalFunc = (void*)pThunk->u1.Function;
-                            
+
                             DWORD oldProtect;
-                            VirtualProtect(&pThunk->u1.Function, sizeof(uintptr_t), PAGE_READWRITE, &oldProtect);
+                            // Try PAGE_READWRITE first, fall back to PAGE_EXECUTE_READWRITE for Win11 compatibility
+                            if (!VirtualProtect(&pThunk->u1.Function, sizeof(uintptr_t), PAGE_READWRITE, &oldProtect)) {
+                                DWORD err = GetLastError();
+                                LOG_ERROR("IAT Hook: VirtualProtect(PAGE_READWRITE) failed for " + std::string(funcName) + ", error: " + std::to_string(err));
+                                // Try with execute permissions as fallback
+                                if (!VirtualProtect(&pThunk->u1.Function, sizeof(uintptr_t), PAGE_EXECUTE_READWRITE, &oldProtect)) {
+                                    err = GetLastError();
+                                    LOG_ERROR("IAT Hook: VirtualProtect(PAGE_EXECUTE_READWRITE) also failed, error: " + std::to_string(err));
+                                    return false;
+                                }
+                            }
+
                             pThunk->u1.Function = (uintptr_t)newFunc;
+
+                            // Flush instruction cache for compatibility with certain security configurations
+                            FlushInstructionCache(GetCurrentProcess(), &pThunk->u1.Function, sizeof(uintptr_t));
+
                             VirtualProtect(&pThunk->u1.Function, sizeof(uintptr_t), oldProtect, &oldProtect);
                             return true;
                         }

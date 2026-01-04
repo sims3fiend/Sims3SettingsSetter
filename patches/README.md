@@ -201,6 +201,11 @@ public:
 
 Settings are automatically saved/loaded with presets and rendered in the GUI!
 
+**Automatic Reinstall on Setting Change:**
+When a user changes a setting value in the UI, the patch will automatically reinstall after a 2-second debounce delay. This ensures patches that compute values at install time (like SmoothPatchClassic's TPS calculation) apply the new settings without requiring manual toggle off/on.
+
+The debounce prevents rapid reinstalls while the user is still typing or adjusting values. If you need to opt-out of this behavior for a specific patch (e.g., if your patch uses `BindSettingToAddress` for live memory updates), you can avoid calling `NotifyChanged()` in your custom UI code.
+
 ### Patches with Custom UI (Manual Approach)
 
 If you need complete control over the UI, you can still manually implement custom ImGui controls:

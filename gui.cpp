@@ -111,12 +111,14 @@ namespace SettingsGui {
                         SettingsManager::Get().ResetAllSettings();
                     }
 
+                    // TODO: Preset system temporarily disabled - needs save/load logic fixes, nobody uses this anyway soooo
+                    /*
                     ImGui::Separator();
 
                     if (ImGui::BeginMenu("Presets")) {
                         static char presetName[256] = "";
                         static char presetDesc[1024] = "";
-                        
+
                         // Save new preset
                         ImGui::InputText("Name", presetName, sizeof(presetName));
                         ImGui::InputText("Description", presetDesc, sizeof(presetDesc));
@@ -140,9 +142,9 @@ namespace SettingsGui {
                                 }
                             }
                         }
-                        
+
                         ImGui::Separator();
-                        
+
                         // List available presets
                         auto presets = PresetManager::Get().GetAvailablePresets();
                         for (const auto& preset : presets) {
@@ -156,9 +158,10 @@ namespace SettingsGui {
                                 ImGui::SetTooltip("%s", preset.description.c_str());
                             }
                         }
-                        
+
                         ImGui::EndMenu();
                     }
+                    */
                     ImGui::EndMenu();
                 }
                 ImGui::EndMenuBar();
@@ -838,8 +841,8 @@ namespace SettingsGui {
         // Always render the memory warning if needed
         RenderMemoryWarning();
         
-        // Render the preset load dialog if needed
-        RenderPresetLoadDialog();
+        // TODO: Preset system temporarily disabled
+        // RenderPresetLoadDialog();
 
         // Only render the main UI if visible
         RenderUI();
