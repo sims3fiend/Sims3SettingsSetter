@@ -1,5 +1,6 @@
 #include "../patch_system.h"
 #include "../patch_helpers.h"
+#include "../addresses.h"
 #include "../logger.h"
 
 class SmoothPatchDupe : public OptimizationPatch {
@@ -53,31 +54,11 @@ public:
 
         *customFrameLimitPtr = frameLimitValue;
 
-        // Get module info
-        HMODULE hModule = GetModuleHandle(NULL);
-        BYTE* baseAddr;
-        size_t imageSize;
-        if (!PatchHelper::GetModuleInfo(hModule, &baseAddr, &imageSize)) {
-            return Fail("Failed to get module information");
-        }
+        BYTE* fldAddr = (BYTE*)gameAddresses->smoothPatchDupe;
 
-        // Find pattern: 80 7e 60 00 0f 57 c0 f3 0f 11 44 24 10
-        BYTE* patternAddr = (BYTE*)PatchHelper::ScanPattern(
-            baseAddr,
-            imageSize,
-            "80 7e 60 00 0f 57 c0 f3 0f 11 44 24 10"
-        );
-
-        if (!patternAddr) {
-            return Fail("Failed to find pattern");
-        }
-
-        // Add 0x25 (37 bytes) to get to the FLD instruction
-        BYTE* fldAddr = patternAddr + 0x25;
-
-        // Verify this is an FLD instruction: d9 05 ?? ?? ?? ?? 
+        // Verify this is an FLD instruction: d9 05 ?? ?? ?? ??
         if (fldAddr[0] != 0xD9 || fldAddr[1] != 0x05) {
-            return Fail("Expected FLD instruction not found at calculated offset");
+            return Fail(std::format("Expected FLD instruction not found at {:#010x}", (uintptr_t)fldAddr));
         }
 
         // Extract the original shared constant address for validation

@@ -18,6 +18,7 @@ struct GameAddresses {
                                         // The address of the containing function is what's important.
     uintptr_t refPackDecompressor;
     uintptr_t smoothPatchClassic; // Pattern: 8B 44 24 04 8B 08 6A 01 51 FF
+    uintptr_t smoothPatchDupe; // Pattern: [80 7E 60 00 0F 57 C0 F3 0F 11 44 24 10] + 0x25
 };
 
 constexpr GameAddresses addressesForSteam_1_67_2_024037 = {
@@ -33,6 +34,7 @@ constexpr GameAddresses addressesForSteam_1_67_2_024037 = {
     .cameraDisableMapViewMode = 0x0073e000,
     .refPackDecompressor = 0x004eb3b0,
     .smoothPatchClassic = 0x004e1320,
+    .smoothPatchDupe = 0x008b2aa4,
 };
 
 constexpr GameAddresses addressesForRetail_1_67_2_024002 = {
@@ -48,6 +50,7 @@ constexpr GameAddresses addressesForRetail_1_67_2_024002 = {
     .cameraDisableMapViewMode = 0x0073e0d0,
     .refPackDecompressor = 0x004eb900,
     .smoothPatchClassic = 0x004e1830,
+    .smoothPatchDupe = 0x008b1f84,
 };
 
 constexpr GameAddresses addressesForEA_1_69_47_024017 = {
@@ -63,6 +66,7 @@ constexpr GameAddresses addressesForEA_1_69_47_024017 = {
     .cameraDisableMapViewMode = 0x0073ecc0,
     .refPackDecompressor = 0x004eb4f0,
     .smoothPatchClassic = 0x004e14f0,
+    .smoothPatchDupe = 0x008b37a4,
 };
 
 extern const std::array<GameAddresses, gameVersionCount> gameAddressesByGameVersion;
