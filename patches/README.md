@@ -56,7 +56,7 @@ REGISTER_PATCH(MySimplePatch, {
     .description = "Does something cool",
     .category = "Performance",  // or "Graphics", "Experimental", "Quality of Life", etc. Try and use an existing one pls.
     .experimental = false, //adds a [EXPERIMENTAL] tag
-    .targetVersion = GameVersion::Steam,  // Steam, EA, or All
+    .supportedVersions = (1 << GameVersion::Steam_1_67_2_024037) | (1 << GameVersion::Retail_1_67_2_024002), // A bitmask of the game versions supported by the patch.
     .technicalDetails = { //Just a mini-readme, I should change the naming actually... Shows on hover.
         "Modifies address 0x12345678",
         "Changes JZ to JMP for better performance"
@@ -137,7 +137,7 @@ REGISTER_PATCH(ComplexPatch, {
     .description = "Uses pattern scanning to find and patch multiple locations",
     .category = "Performance",
     .experimental = true,
-    .targetVersion = GameVersion::All,
+    .supportedVersions = allGameVersionsMask,
     .technicalDetails = {
         "Scans for pattern: 48 89 5C 24 ?",
         "lalalala"
@@ -307,7 +307,7 @@ REGISTER_PATCH(CustomUIPatch, {
     .description = "A patch with configurable settings",
     .category = "Experimental",
     .experimental = false,
-    .targetVersion = GameVersion::Steam,
+    .supportedVersions = 1 << GameVersion::Steam_1_67_2_024037,
     .technicalDetails = {
         "Supports custom configuration",
         "Can be adjusted at runtime"
@@ -328,7 +328,7 @@ REGISTER_PATCH(MyExistingPatchClass, {
     .description = "Registers an existing patch class",
     .category = "Performance",
     .experimental = false,
-    .targetVersion = GameVersion::All,
+    .supportedVersions = allGameVersionsMask,
     .technicalDetails = {
         "Implementation in my_existing_patch.h/cpp"
     }
@@ -536,11 +536,17 @@ Currently arbitrary, defaults to "General"
 
 ## Version Targeting
 
-Patches can specify which game version they support using the `targetVersion` field:
+Patches can specify which game versions they support using the `supportedVersions` field, which is a bitmask of game-version-indices.
 
-- **GameVersion::Steam** - Works only on ts3w.exe (Steam version).
-- **GameVersion::EA** - Works only on ts3.exe (EA/Origin version).
-- **GameVersion::All** - Works on all versions, for when you've got a banger pattern/using IAT stuff
+- **GameVersion::Steam_1_67_2_024037** - Supports the Steam version of the game.
+- **GameVersion::Retail_1_67_2_024002** - Support the retail/disc version of the game. (The version provided by the Super Patch).
+- **GameVersion::EA_1_69_47_024017** - Supports the EA App version of the game.
+
+The `GameVersion` values are contiguous, and begin at zero, as they are intended to be used as indices for bitmasks and arrays.
+
+The `supportedVersions` field is one such bitmask; for example, to support the Steam and Retail versions of the game, the following bitmask would be assigned to the `supportedVersions` field: `(1 << GameVersion::Steam_1_67_2_024037) | (1 << GameVersion::Retail_1_67_2_024002)`.
+
+**allGameVersionsMask** is a convenience value for supporting all versions of the game, for when you've got a banger of a pattern or are using IAT stuff.
 
 Patches incompatible with the current version will be shown in the GUI but greyed out and unselectable, mostly to further add to EA users misery.
 
@@ -721,7 +727,7 @@ REGISTER_PATCH(DrawCallCounterPatch, {
     .description = "Counts and displays DrawIndexedPrimitive calls per frame",
     .category = "Debug",
     .experimental = false,
-    .targetVersion = GameVersion::All,
+    .supportedVersions = allGameVersionsMask,
     .technicalDetails = {
         "Hooks DrawIndexedPrimitive with Last priority",
         "Non-intrusive monitoring only"
