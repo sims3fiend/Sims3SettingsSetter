@@ -1,5 +1,6 @@
 #include "../patch_system.h"
 #include "../patch_helpers.h"
+#include "../addresses.h"
 #include "../logger.h"
 #include "../optimization.h"
 #include <windows.h>
@@ -263,12 +264,11 @@ public:
             LOG_INFO("[RefPackDecompressor] Installing optimized decompressor (SSE2 + Safety Checks)...");
         }
 
-        // hook addy
-        constexpr uintptr_t HOOK_ADDR = 0x4eb3b0;
+        uintptr_t entry = gameAddresses->refPackDecompressor;
         uintptr_t targetAddr = (uintptr_t)&Dispatch;
 
-        if (!PatchHelper::WriteRelativeJump(HOOK_ADDR, targetAddr, &patchedLocations)) {
-            return Fail("Failed to install decompressor hook at 0x4eb3b0");
+        if (!PatchHelper::WriteRelativeJump(entry, targetAddr, &patchedLocations)) {
+            return Fail(std::format("Failed to install decompressor hook at {:#010x}", entry));
         }
 
         isEnabled = true;
@@ -301,7 +301,6 @@ REGISTER_PATCH(RefPackDecompressorPatch, {
     .description = "Highly optimized RefPack decompression using AVX2/SSE2 intrinsics with safety checks. Auto-detects CPU capabilities.",
     .category = "Performance",
     .experimental = false,
-    .supportedVersions = 1 << GameVersion::Steam_1_67_2_024037,
     .technicalDetails = {
         "Replaces original RefPack decompressor at 0x4eb3b0 entirely",
         "AVX2 path for modern CPUs, SSE2 fallback for older ones",
