@@ -17,6 +17,7 @@ struct GameAddresses {
     uintptr_t cameraDisableMapViewMode; // Pattern: 68 89 DD 0F 11 FF D0 85 C0 74 23 D9 44 24 0C 6A 00 83 EC 0C D9 5C 24 08 8B C8 D9 44 24 18 D9 5C 24 04 D9 44 24 14 D9 1C 24
                                         // The address of the containing function is what's important.
     uintptr_t refPackDecompressor;
+    uintptr_t smoothPatchClassic; // Pattern: 8B 44 24 04 8B 08 6A 01 51 FF
 };
 
 constexpr GameAddresses addressesForSteam_1_67_2_024037 = {
@@ -31,6 +32,7 @@ constexpr GameAddresses addressesForSteam_1_67_2_024037 = {
     .cameraEnableMapViewMode = 0x0073dfb0,
     .cameraDisableMapViewMode = 0x0073e000,
     .refPackDecompressor = 0x004eb3b0,
+    .smoothPatchClassic = 0x004e1320,
 };
 
 constexpr GameAddresses addressesForRetail_1_67_2_024002 = {
@@ -45,6 +47,7 @@ constexpr GameAddresses addressesForRetail_1_67_2_024002 = {
     .cameraEnableMapViewMode = 0x0073e080,
     .cameraDisableMapViewMode = 0x0073e0d0,
     .refPackDecompressor = 0x004eb900,
+    .smoothPatchClassic = 0x004e1830,
 };
 
 constexpr GameAddresses addressesForEA_1_69_47_024017 = {
@@ -59,6 +62,7 @@ constexpr GameAddresses addressesForEA_1_69_47_024017 = {
     .cameraEnableMapViewMode = 0x0073ec70,
     .cameraDisableMapViewMode = 0x0073ecc0,
     .refPackDecompressor = 0x004eb4f0,
+    .smoothPatchClassic = 0x004e14f0,
 };
 
 extern const std::array<GameAddresses, gameVersionCount> gameAddressesByGameVersion;

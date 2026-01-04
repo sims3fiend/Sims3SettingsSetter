@@ -1,3 +1,4 @@
+#include "../addresses.h"
 #include "../logger.h"
 #include "../patch_helpers.h"
 #include "../patch_system.h"
@@ -25,56 +26,36 @@ public:
         lastError.clear();
         LOG_INFO("[SmoothPatchClassic] Installing...");
 
-        HMODULE hModule = GetModuleHandle(NULL);
-        BYTE* baseAddr;
-        size_t imageSize;
-
-        if (!PatchHelper::GetModuleInfo(hModule, &baseAddr, &imageSize)) {
-            return Fail("Failed to get module information");
-        }
-
-        BYTE* found = baseAddr;
-        int patchCount = 0;
         int mspt = CalculateMSPT();
 
-        while ((found = (BYTE*)PatchHelper::ScanPattern(found, imageSize - (found - baseAddr),
-                                                         "8B 44 24 04 8B 08 6A 01 51 FF"))) {
+        uintptr_t addr = gameAddresses->smoothPatchClassic;
 
-            std::vector<BYTE> patch;
+        std::vector<BYTE> patch;
 
-            if (mspt == -1) {
-                // Uncapped mode: RET immediately (skip sleep entirely)
-                patch = {0xC3};
-            }
-            else if (mspt == 0) {
-                // sleep for 0ms
-                patch = {0xB9, 0x00, 0x00, 0x00, 0x00, 0x90, 0x6A, 0x00};
-            }
-            else {
-                // Normal capped mode: MOV ECX, [mspt] + NOP
-                patch = {0xB9};
-                patch.push_back(mspt & 0xFF);
-                patch.push_back((mspt >> 8) & 0xFF);
-                patch.push_back((mspt >> 16) & 0xFF);
-                patch.push_back((mspt >> 24) & 0xFF);
-                patch.push_back(0x90);
-            }
-
-            if (!PatchHelper::WriteBytes((uintptr_t)found, patch, &patchedLocations)) {
-                LOG_ERROR("[SmoothPatchClassic] Failed to patch at 0x" +
-                         std::to_string((uintptr_t)found));
-                found += 10;
-                continue;
-            }
-
-            patchCount++;
-            LOG_DEBUG("[SmoothPatchClassic] Patched at 0x" + std::to_string((uintptr_t)found));
-            found += 10;
+        if (mspt == -1) {
+            // Uncapped mode: RET immediately (skip sleep entirely)
+            patch = {0xC3};
+        }
+        else if (mspt == 0) {
+            // sleep for 0ms
+            patch = {0xB9, 0x00, 0x00, 0x00, 0x00, 0x90, 0x6A, 0x00};
+        }
+        else {
+            // Normal capped mode: MOV ECX, [mspt] + NOP
+            patch = {0xB9};
+            patch.push_back(mspt & 0xFF);
+            patch.push_back((mspt >> 8) & 0xFF);
+            patch.push_back((mspt >> 16) & 0xFF);
+            patch.push_back((mspt >> 24) & 0xFF);
+            patch.push_back(0x90);
         }
 
-        if (patchCount == 0) {
-            return Fail("Failed to find any matching patterns");
+        if (!PatchHelper::WriteBytes(addr, patch, &patchedLocations)) {
+            LOG_ERROR(std::format("[SmoothPatchClassic] Failed to patch at {:#010x}", addr));
+            return false;
         }
+
+        LOG_DEBUG(std::format("[SmoothPatchClassic] Patched at {:#010x}", addr));
 
         isEnabled = true;
         std::string modeDesc;
@@ -85,8 +66,7 @@ public:
         } else {
             modeDesc = std::to_string(customTPS) + " TPS, " + std::to_string(mspt) + "ms sleep per tick";
         }
-        LOG_INFO("[SmoothPatchClassic] Successfully installed (" +
-                std::to_string(patchCount) + " locations patched, " + modeDesc + ")");
+        LOG_INFO(std::format("[SmoothPatchClassic] Successfully installed, {}", modeDesc));
         return true;
     }
 
