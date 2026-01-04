@@ -19,6 +19,16 @@ struct GameAddresses {
     uintptr_t refPackDecompressor;
     uintptr_t smoothPatchClassic; // Pattern: 8B 44 24 04 8B 08 6A 01 51 FF
     uintptr_t smoothPatchDupe; // Pattern: [80 7E 60 00 0F 57 C0 F3 0F 11 44 24 10] + 0x25
+
+    union {
+        struct {
+            uintptr_t monoMethodCacheTimer; // Pattern: 83 C4 10 8B 45 08 8B 08 8B B1 D0 02 00 00 68 <address>
+            uintptr_t browserTimer; // Pattern: 5F 5D 5B B0 01 5E 83 C4 60 C3 68 <address>
+            uintptr_t unknownTimer; // Pattern: 83 C4 04 89 43 08 8B 4E 0C 89 4B 0C 89 5E 0C 68 <address>
+        };
+        // The order of these timers must correspond with the order of the timers in `TimerOptimizationPatch::CS_TARGETS`.
+        uintptr_t criticalSectionTimers[3];
+    };
 };
 
 constexpr GameAddresses addressesForSteam_1_67_2_024037 = {
@@ -35,6 +45,9 @@ constexpr GameAddresses addressesForSteam_1_67_2_024037 = {
     .refPackDecompressor = 0x004eb3b0,
     .smoothPatchClassic = 0x004e1320,
     .smoothPatchDupe = 0x008b2aa4,
+    .monoMethodCacheTimer = 0x011f43e4,
+    .browserTimer = 0x011ea210,
+    .unknownTimer = 0x011f43a8,
 };
 
 constexpr GameAddresses addressesForRetail_1_67_2_024002 = {
@@ -51,6 +64,9 @@ constexpr GameAddresses addressesForRetail_1_67_2_024002 = {
     .refPackDecompressor = 0x004eb900,
     .smoothPatchClassic = 0x004e1830,
     .smoothPatchDupe = 0x008b1f84,
+    .monoMethodCacheTimer = 0x011f53e4,
+    .browserTimer = 0x011eb210,
+    .unknownTimer = 0x011f53a8,
 };
 
 constexpr GameAddresses addressesForEA_1_69_47_024017 = {
@@ -67,6 +83,9 @@ constexpr GameAddresses addressesForEA_1_69_47_024017 = {
     .refPackDecompressor = 0x004eb4f0,
     .smoothPatchClassic = 0x004e14f0,
     .smoothPatchDupe = 0x008b37a4,
+    .monoMethodCacheTimer = 0x0124e474,
+    .browserTimer = 0x01244260,
+    .unknownTimer = 0x0124e438,
 };
 
 extern const std::array<GameAddresses, gameVersionCount> gameAddressesByGameVersion;

@@ -1,5 +1,6 @@
 #include "../patch_system.h"
 #include "../patch_helpers.h"
+#include "../addresses.h"
 #include "../logger.h"
 #include <winternl.h>
 //Might break into generic hook patches + steam specific since the some stuff is all steam specific, RIP EA once again
@@ -24,7 +25,6 @@ private:
 
     // Configuration structure for tiered critical section optimization
     struct CriticalSectionConfig {
-        uintptr_t address;
         DWORD spinCount;
         const char* debugName;
     };
@@ -135,8 +135,10 @@ private:
 
         LOG_INFO("[TimerOpt] Applying tiered Critical Section patching...");
 
-        for (const auto& config : CS_TARGETS) {
-            LPCRITICAL_SECTION critSec = (LPCRITICAL_SECTION)config.address;
+        for (size_t index = 0; index < CS_TARGETS.size(); ++index) {
+            const auto& config = CS_TARGETS[index];
+            uintptr_t address = gameAddresses->criticalSectionTimers[index];
+            LPCRITICAL_SECTION critSec = (LPCRITICAL_SECTION)address;
 
             // 1. Memory Safety Check
             MEMORY_BASIC_INFORMATION mbi;
@@ -159,12 +161,7 @@ private:
             // 3. Log the upgrade
             // Only log if we actually changed it
             if (prevCount != config.spinCount) {
-                char addressBuffer[32];
-                sprintf_s(addressBuffer, "0x%08X", (unsigned int)config.address);
-
-                LOG_INFO("[TimerOpt] Tuned " + std::string(config.debugName) +
-                         " (" + std::string(addressBuffer) + ")" +
-                         " Spin: " + std::to_string(prevCount) + " -> " + std::to_string(config.spinCount));
+                LOG_INFO(std::format("[TimerOpt] Tuned {} ({:#010x}) Spin: {} -> {}", config.debugName, address, prevCount, config.spinCount));
                 successCount++;
             }
         }
@@ -270,13 +267,13 @@ TimerOptimizationPatch* TimerOptimizationPatch::instance = nullptr;
 // Define the tiered critical section targets
 const std::vector<TimerOptimizationPatch::CriticalSectionConfig> TimerOptimizationPatch::CS_TARGETS = {
     // CRITICAL TIER: (Short hold, high frequency)
-    {0x011f43e4, 24000, "Mono_MethodCache"},
+    {24000, "Mono_MethodCache"},
 
     // HIGH TIER: Many references, rarely contended
-    {0x011ea210, 20000, "Browser"}, //idk if this ever gets used but would be kind of... scary if it was
+    {20000, "Browser"}, //idk if this ever gets used but would be kind of... scary if it was
 
     // MEDIUM TIER: The original optimization target, I forgor
-    {0x011f43a8, 8000,  "Unk_LookAtLater"},
+    {8000,  "Unk_LookAtLater"},
 };
 
 REGISTER_PATCH(TimerOptimizationPatch, {
@@ -284,7 +281,6 @@ REGISTER_PATCH(TimerOptimizationPatch, {
     .description = "Fixes several timing and threading inefficiencies to reduce CPU usage, stutter, etc. for smoother gameplay.",
     .category = "Performance",
     .experimental = false,
-    .supportedVersions = 1 << GameVersion::Steam_1_67_2_024037,
     .technicalDetails = {
         "Sets system timer to 1ms via NtSetTimerResolution + timeBeginPeriod",
         "Hooks InitializeCriticalSection(AndSpinCount) to force 4000 spin count for new crit sections, reducing context switches",
