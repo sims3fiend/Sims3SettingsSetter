@@ -25,38 +25,34 @@ constexpr GameVersionMask allGameVersionsMask = (
 );
 
 extern const std::array<const char*, gameVersionCount> gameVersionNames;
+extern const std::array<uint32_t, gameVersionCount> gameVersionTimestamps;
 
 extern GameVersion gameVersion;
 
-// Detect current game version from executable name
-inline GameVersion DetectGameVersion() {
-    static GameVersion cachedVersion = []() {
-        wchar_t exePath[MAX_PATH];
-        GetModuleFileNameW(nullptr, exePath, MAX_PATH);
+// Detect current game version from the executable's timestamp.
+inline bool DetectGameVersion(GameVersion* detectedVersion) {
+    const uintptr_t exe = reinterpret_cast<uintptr_t>(GetModuleHandleW(nullptr));
+    const IMAGE_DOS_HEADER* dosStub = reinterpret_cast<const IMAGE_DOS_HEADER*>(exe);
+    const IMAGE_NT_HEADERS* pe = reinterpret_cast<const IMAGE_NT_HEADERS*>(exe + dosStub->e_lfanew);
 
-        // Extract just the filename
-        std::wstring exeName = exePath;
-        size_t lastSlash = exeName.find_last_of(L"\\/");
-        if (lastSlash != std::wstring::npos) {
-            exeName = exeName.substr(lastSlash + 1);
-        }
+    uint32_t timestamp = pe->FileHeader.TimeDateStamp;
 
-        // Convert to lowercase for comparison
-        for (auto& c : exeName) {
-            c = towlower(c);
-        }
+    const auto match = std::find(gameVersionTimestamps.begin(), gameVersionTimestamps.end(), timestamp);
 
-        if (exeName == L"ts3w.exe") {
-            return GameVersion::Steam_1_67_2_024037;
-        } else if (exeName == L"ts3.exe") {
-            return GameVersion::EA_1_69_47_024017;
-        }
+    if (match != gameVersionTimestamps.end()) {
+        size_t index = match - gameVersionTimestamps.begin();
+        LOG_INFO(std::format("A recognized executable timestamp of {:#010x} was encountered. Detected game version: {}",
+                             timestamp, gameVersionNames[index]));
+        // Bosh.
+        *detectedVersion = static_cast<GameVersion>(index);
+        return true;
+    }
 
-        // Default to EA if we can't determine
-        return GameVersion::EA_1_69_47_024017;
-    }();
+    LOG_ERROR(std::format("An unrecognized executable timestamp of {:#010x} was encountered.", timestamp));
 
-    return cachedVersion;
+    // Default to EA if we can't determine
+    *detectedVersion = GameVersion::EA_1_69_47_024017;
+    return false;
 }
 
 // Metadata for patch description and categorization

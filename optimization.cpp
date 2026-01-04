@@ -27,7 +27,7 @@ bool OptimizationPatch::IsCompatibleWithCurrentVersion() const {
         return true; // No metadata = assume compatible
     }
 
-    GameVersionMask current = GameVersionMask(1) << DetectGameVersion();
+    GameVersionMask current = GameVersionMask(1) << gameVersion;
     GameVersionMask supports = metadata->supportedVersions;
 
     return (supports & current) != 0;

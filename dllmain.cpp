@@ -18,6 +18,7 @@
 #include <strsafe.h>
 #include "qol.h"
 #include "config_value_cache.h"
+#include "patch_system.h"
 
 //Avert thine gaze, I said I was going to make the code clean and I lied
 //https://www.youtube.com/watch?v=C6iAzyhm0p0
@@ -609,6 +610,16 @@ HMODULE GetDllModuleHandle() {
     return g_hModule;
 }
 
+bool InitializeGameVersionDependentState() {
+    bool detectedGameVersion = DetectGameVersion(&gameVersion);
+
+    if (!detectedGameVersion) {
+        LOG_ERROR("Failed to detect the version of the game!");
+    }
+
+    return true;
+}
+
 DWORD WINAPI HookThread(LPVOID lpParameter) {
     try {
         // Initialize logger
@@ -639,6 +650,11 @@ DWORD WINAPI HookThread(LPVOID lpParameter) {
         }
 
         LOG_INFO("UI settings initialized");
+
+        if (!InitializeGameVersionDependentState()) {
+            LOG_ERROR("Failed to initialize game-version-dependent state.");
+            return FALSE;
+        }
 
         // Initialize patches (register only, don't load states yet)
         try {

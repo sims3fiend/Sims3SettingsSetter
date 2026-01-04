@@ -8,5 +8,14 @@ const std::array<const char*, gameVersionCount> gameVersionNames = []() {
     return a;
 }();
 
+// These are the timestamps found in the `TimeDateStamp` field of the executables' PE file-headers.
+const std::array<uint32_t, gameVersionCount> gameVersionTimestamps = []() {
+    std::array<uint32_t, gameVersionCount> a;
+    a[GameVersion::Retail_1_67_2_024002] = 0x52D872DA;
+    a[GameVersion::Steam_1_67_2_024037] = 0x52DEC247;
+    a[GameVersion::EA_1_69_47_024017] = 0x6707155C;
+    return a;
+}();
+
 GameVersion gameVersion = {};
 

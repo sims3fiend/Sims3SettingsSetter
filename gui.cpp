@@ -266,7 +266,7 @@ namespace SettingsGui {
                 // Patches tab (the hell formerly known as Optimizations) - Rewrite inc, this is way too bloated a section lol, maybe helper? Or method to OptimiationPatch?
                 if (ImGui::BeginTabItem("Patches")) {
                     // Show detected game version
-                    GameVersion detectedVersion = DetectGameVersion();
+                    GameVersion detectedVersion = gameVersion;
                     const char* versionStr = gameVersionNames[detectedVersion];
                     ImGui::TextColored(ImVec4(0.5f, 1.0f, 0.5f, 1.0f), "Detected Version: %s", versionStr);
                     ImGui::TextDisabled("Incompatible patches will be greyed out and disabled");
