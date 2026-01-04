@@ -50,25 +50,6 @@ static bool FunctionReferencesPointer(uintptr_t funcAddr, size_t searchLen, uint
     return false;
 }
 
-bool VTableManager::ValidateVTable(uintptr_t candidate) {
-    // Ensure the vtable itself is in readable memory (typically .rdata/.data)
-    MEMORY_BASIC_INFORMATION mbi{};
-    if (!VirtualQuery(reinterpret_cast<LPCVOID>(candidate), &mbi, sizeof(mbi))) {
-        return false;
-    }
-
-    // Validate the first few entries point to executable code within the main module
-    HMODULE mainModule = GetModuleHandle(nullptr);
-    const int kEntriesToCheck = 8;
-    for (int i = 0; i < kEntriesToCheck; ++i) {
-        uintptr_t entry = *reinterpret_cast<uintptr_t*>(candidate + i * sizeof(uintptr_t));
-        if (!IsExecutableAddress(entry)) return false;
-        if (!IsWithinModule(entry, mainModule)) return false;
-    }
-
-    return true;
-}
-
 bool VTableManager::IsExecutableAddress(uintptr_t addr) {
     MEMORY_BASIC_INFORMATION mbi;
     if(!VirtualQuery(reinterpret_cast<LPCVOID>(addr), &mbi, sizeof(mbi)))
@@ -77,34 +58,13 @@ bool VTableManager::IsExecutableAddress(uintptr_t addr) {
 }
 
 bool VTableManager::Initialize() {
-    // Find constructor using pattern
-    uintptr_t ctorAddr = Pattern::Scan(constructorPattern);
-    if(!ctorAddr) {
-        LOG_ERROR("[VTableManager] Constructor pattern not found");
-        return false;
-    }
-
-    // Extract VTABLE address from constructor MOV instruction
-    vtableBase = *reinterpret_cast<uintptr_t*>(ctorAddr + 5);
-    if(!vtableBase) {
-        LOG_ERROR("[VTableManager] Invalid base address");
-        return false;
-    }
-
-    // Multi-layer validation
-    validated = ValidateVTable(vtableBase);
-    if(!validated) {
-        LOG_ERROR("[VTableManager] Validation failed");
-        vtableBase = 0;
-        return false;
-    }
-
+    vtableBase = gameAddresses->vtableBase;
     LOG_INFO("[VTableManager] Initialized successfully");
     return true;
 }
 
 void* VTableManager::GetFunctionAddress(const char* debugStr, uintptr_t offset) {
-    if(!validated || !vtableBase) {
+    if(!vtableBase) {
         LOG_ERROR("[VTableManager] Not initialized");
         return nullptr;
     }
