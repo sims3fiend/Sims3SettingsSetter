@@ -8,7 +8,7 @@ IntersectionPatch* IntersectionPatch::instance = nullptr;
 static const size_t CALLS_OFFSET = OptimizationPatch::GetCurrentWindowOffset() + OptimizationPatch::GetCallsOffset();
 
 IntersectionPatch::IntersectionPatch() 
-    : OptimizationPatch("Intersection", (void*)0x67afb0) // Steam version address, need to do a pattern or rather, everyone else needs to use steam
+    : OptimizationPatch("Intersection", (void*)gameAddresses->intersectionPatch)
 {
     instance = this;
 }

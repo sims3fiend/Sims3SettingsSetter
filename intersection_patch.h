@@ -1,5 +1,6 @@
 #pragma once
 #include "optimization.h"
+#include "addresses.h"
 
 class IntersectionPatch : public OptimizationPatch {
 public:
