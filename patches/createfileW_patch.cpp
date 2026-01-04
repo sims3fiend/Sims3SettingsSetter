@@ -74,7 +74,7 @@ REGISTER_PATCH(CreateFileRandomAccessPatch, {
     .description = "Adds FILE_FLAG_RANDOM_ACCESS to CreateFileW calls for better disk I/O performance",
     .category = "Performance",
     .experimental = false,
-    .targetVersion = GameVersion::Steam,
+    .supportedVersions = 1 << GameVersion::Steam_1_67_2_024037,
     .technicalDetails = {
         "Patch 1: Modifies sub_404550 at 0x404573 (DWORD: 0x80 -> 0x10000080)",
         "Patch 2: NOPs sub_4DB4C0 at 0x4DB56C (2 bytes) to force fallthrough",

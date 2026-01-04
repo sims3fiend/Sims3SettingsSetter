@@ -63,7 +63,7 @@ REGISTER_PATCH(LotVisibilityCameraPatch, {
     .description = "Disables view-based lot loading by patching the camera visibility check.",
     .category = "Performance",
     .experimental = false,
-    .targetVersion = GameVersion::Steam,
+    .supportedVersions = 1 << GameVersion::Steam_1_67_2_024037,
     .technicalDetails = {
         "Modifies a conditional jump at 0x00c63015 (JZ -> JMP)",
         "Prevents lot loading/unloading based on camera view"

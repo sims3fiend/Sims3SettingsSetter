@@ -167,7 +167,7 @@ REGISTER_PATCH(TemplatePatch, {
     .description = "This is a template for creating new patches",  // Short description
     .category = "Experimental",  // Can be anything
     .experimental = true,  // Mark as experimental if risky/untested
-    .targetVersion = GameVersion::Steam,  // Steam, EA, or All
+    .supportedVersions = allGameVersionsMask,  // A bitmask of the game-versions supported
     .technicalDetails = {  // Technical info shown in tooltip
         "Add technical details about what this patch does",
         "Mention any risks or compatibility issues, etc."

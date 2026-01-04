@@ -141,7 +141,7 @@ REGISTER_PATCH(SmoothPatchDupe, {
     .description = "Removes or adjusts the frame rate limiter without touching sleep functions",
     .category = "Performance",
     .experimental = false,
-    .targetVersion = GameVersion::All,
+    .supportedVersions = allGameVersionsMask,
     .technicalDetails = {
         "Pattern: 80 7e 60 00 0f 57 c0 f3 0f 11 44 24 10",
         "Offset: +0x25 to the FLD instruction (d9 05 ?? ?? ?? ??)",

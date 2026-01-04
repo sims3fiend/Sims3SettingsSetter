@@ -62,7 +62,7 @@ REGISTER_PATCH(GCStopWorldPatch, {
     .description = "Optimizes GC_stop_world() by skipping unnecessary thread iteration when count is 0",
     .category = "Performance",
     .experimental = true,
-    .targetVersion = GameVersion::Steam,
+    .supportedVersions = 1 << GameVersion::Steam_1_67_2_024037,
     .technicalDetails = {
         "Patches GC_stop_world() at 0x00E511F5",
         "Replaces 'CMP EAX, 0x100' check with 'TEST EAX, EAX'",

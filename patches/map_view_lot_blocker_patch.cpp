@@ -213,7 +213,7 @@ REGISTER_PATCH(MapViewLotBlockerPatch, {
     .description = "Prevents lot loading while in map view mode, reduces stutter/slowdown when exiting/entering map view.",
     .category = "Performance",
     .experimental = true,
-    .targetVersion = GameVersion::Steam,
+    .supportedVersions = 1 << GameVersion::Steam_1_67_2_024037,
     .technicalDetails = {
         "Hooks SPEC_WorldManager_Update at 0x00C6D570",
         "Hooks Camera_EnableMapViewMode at 0x0073DFB0",

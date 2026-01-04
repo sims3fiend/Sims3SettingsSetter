@@ -284,7 +284,7 @@ REGISTER_PATCH(TimerOptimizationPatch, {
     .description = "Fixes several timing and threading inefficiencies to reduce CPU usage, stutter, etc. for smoother gameplay.",
     .category = "Performance",
     .experimental = false,
-    .targetVersion = GameVersion::Steam,
+    .supportedVersions = 1 << GameVersion::Steam_1_67_2_024037,
     .technicalDetails = {
         "Sets system timer to 1ms via NtSetTimerResolution + timeBeginPeriod",
         "Hooks InitializeCriticalSection(AndSpinCount) to force 4000 spin count for new crit sections, reducing context switches",

@@ -44,7 +44,7 @@ REGISTER_PATCH(MimallocPatch, {
     .description = "Replaces the default MSVCR80 allocator with mimalloc. Improves performance and reduces memory fragmentation.",
     .category = "Performance",
     .experimental = false,
-    .targetVersion = GameVersion::All,
+    .supportedVersions = allGameVersionsMask,
     .technicalDetails = {
         "Hooks MSVCR80 malloc/free/realloc/etc.",
         "Redirects memory allocations to mimalloc, a more performant library for better performance and memory management",

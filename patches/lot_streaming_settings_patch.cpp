@@ -117,7 +117,7 @@ REGISTER_PATCH(LotStreamingSettingsPatch, {
     .description = "Optimizes lot streaming behavior by enabling throttle LoD transitions and adjusting camera speed threshold.",
     .category = "Performance",
     .experimental = false,
-    .targetVersion = GameVersion::All,
+    .supportedVersions = allGameVersionsMask,
     .technicalDetails = {
         "Enables 'Throttle Lot LoD Transitions' setting",
         "Sets 'Camera speed threshold' to 5.0 (lower = more time between stopping camera movement and lot loading)",

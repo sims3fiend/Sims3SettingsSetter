@@ -5,6 +5,7 @@
 #include "utils.h"
 #include "logger.h"
 #include "settings_gui.h"
+#include <bit>
 #include <map>
 #include <sstream>
 #include <unordered_map>
@@ -266,8 +267,7 @@ namespace SettingsGui {
                 if (ImGui::BeginTabItem("Patches")) {
                     // Show detected game version
                     GameVersion detectedVersion = DetectGameVersion();
-                    const char* versionStr = (detectedVersion == GameVersion::Steam) ? "Steam (ts3w.exe)" :
-                                           (detectedVersion == GameVersion::EA) ? "EA/Origin (ts3.exe)" : "Unknown";
+                    const char* versionStr = gameVersionNames[detectedVersion];
                     ImGui::TextColored(ImVec4(0.5f, 1.0f, 0.5f, 1.0f), "Detected Version: %s", versionStr);
                     ImGui::TextDisabled("Incompatible patches will be greyed out and disabled");
                     ImGui::Separator();
@@ -385,12 +385,22 @@ namespace SettingsGui {
                                             // Show incompatibility warning first
                                             if (!compatible) {
                                                 ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 0.6f, 0.0f, 1.0f));
-                                                const char* currentVersionStr = (detectedVersion == GameVersion::Steam) ? "Steam" :
-                                                                               (detectedVersion == GameVersion::EA) ? "EA/Origin" : "Unknown";
-                                                const char* requiredVersionStr = meta && meta->targetVersion == GameVersion::Steam ? "Steam" :
-                                                                                meta && meta->targetVersion == GameVersion::EA ? "EA/Origin" : "All";
-                                                ImGui::Text("INCOMPATIBLE: This patch requires %s version, but you're running %s",
-                                                          requiredVersionStr, currentVersionStr);
+
+                                                GameVersionMask supports = meta->supportedVersions;
+
+                                                if (supports == 0) {
+                                                    ImGui::Text("INCOMPATIBLE: This patch doesn't support any version of the game! ???");
+                                                } else {
+                                                    ImGui::Text("INCOMPATIBLE: You're running version %s, but this patch requires one of these versions:",
+                                                                gameVersionNames[detectedVersion]);
+
+                                                    do {
+                                                        auto supportedVersion = static_cast<GameVersion>(std::countr_zero(supports));
+                                                        ImGui::Text("    %s", gameVersionNames[supportedVersion]);
+                                                        supports &= supports - 1;
+                                                    } while (supports != 0);
+                                                }
+
                                                 ImGui::PopStyleColor();
                                                 if (!desc.empty() || hasError) {
                                                     ImGui::Separator();
@@ -526,12 +536,22 @@ namespace SettingsGui {
 
                                             if (!compatible) {
                                                 ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 0.6f, 0.0f, 1.0f));
-                                                const char* currentVersionStr = (detectedVersion == GameVersion::Steam) ? "Steam" :
-                                                                               (detectedVersion == GameVersion::EA) ? "EA/Origin" : "Unknown";
-                                                const char* requiredVersionStr = meta && meta->targetVersion == GameVersion::Steam ? "Steam" :
-                                                                                meta && meta->targetVersion == GameVersion::EA ? "EA/Origin" : "All";
-                                                ImGui::Text("INCOMPATIBLE: This patch requires %s version, but you're running %s",
-                                                          requiredVersionStr, currentVersionStr);
+
+                                                GameVersionMask supports = meta->supportedVersions;
+
+                                                if (supports == 0) {
+                                                    ImGui::Text("INCOMPATIBLE: This patch doesn't support any version of the game! ???");
+                                                } else {
+                                                    ImGui::Text("INCOMPATIBLE: You're running version %s, but this patch requires one of these versions:",
+                                                                gameVersionNames[detectedVersion]);
+
+                                                    do {
+                                                        auto supportedVersion = static_cast<GameVersion>(std::countr_zero(supports));
+                                                        ImGui::Text("    %s", gameVersionNames[supportedVersion]);
+                                                        supports &= supports - 1;
+                                                    } while (supports != 0);
+                                                }
+
                                                 ImGui::PopStyleColor();
                                                 if (!desc.empty() || hasError) {
                                                     ImGui::Separator();

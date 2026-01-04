@@ -60,7 +60,7 @@ REGISTER_PATCH(WorldCacheSizePatch, {
     .description = "Removes the 512MB limit on WorldCache files, allowing larger caches",
     .category = "Performance",
     .experimental = true,
-    .targetVersion = GameVersion::Steam,
+    .supportedVersions = 1 << GameVersion::Steam_1_67_2_024037,
     .technicalDetails = {
         "Patches the cache size check at 0x005bc8b4",
         "Allows WorldCache files (Documents\\EA\\The Sims 3\\WorldCaches) to grow beyond 512mb",

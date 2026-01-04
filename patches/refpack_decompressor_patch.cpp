@@ -301,7 +301,7 @@ REGISTER_PATCH(RefPackDecompressorPatch, {
     .description = "Highly optimized RefPack decompression using AVX2/SSE2 intrinsics with safety checks. Auto-detects CPU capabilities.",
     .category = "Performance",
     .experimental = false,
-    .targetVersion = GameVersion::Steam,
+    .supportedVersions = 1 << GameVersion::Steam_1_67_2_024037,
     .technicalDetails = {
         "Replaces original RefPack decompressor at 0x4eb3b0 entirely",
         "AVX2 path for modern CPUs, SSE2 fallback for older ones",
