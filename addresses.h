@@ -9,6 +9,7 @@ struct GameAddresses {
                           // The address of the vtable is loaded into `[esi]`.
     uintptr_t createFileWFlagsInit;
     uintptr_t randomAccessFlagBranch;
+    uintptr_t gcThreadLoopCheck;
 };
 
 constexpr GameAddresses addressesForSteam_1_67_2_024037 = {
@@ -17,6 +18,7 @@ constexpr GameAddresses addressesForSteam_1_67_2_024037 = {
     .vtableBase = 0x00fde0a0,
     .createFileWFlagsInit = 0x00404573,
     .randomAccessFlagBranch = 0x004db56c,
+    .gcThreadLoopCheck = 0x00e511f5,
 };
 
 constexpr GameAddresses addressesForRetail_1_67_2_024002 = {
@@ -25,6 +27,7 @@ constexpr GameAddresses addressesForRetail_1_67_2_024002 = {
     .vtableBase = 0x00fdf100,
     .createFileWFlagsInit = 0x00404563,
     .randomAccessFlagBranch = 0x004db73c,
+    .gcThreadLoopCheck = 0x00e514e5,
 };
 
 constexpr GameAddresses addressesForEA_1_69_47_024017 = {
@@ -33,6 +36,7 @@ constexpr GameAddresses addressesForEA_1_69_47_024017 = {
     .vtableBase = 0x01029618,
     .createFileWFlagsInit = 0x00404563,
     .randomAccessFlagBranch = 0x004db51c,
+    .gcThreadLoopCheck = 0x00e51245,
 };
 
 extern const std::array<GameAddresses, gameVersionCount> gameAddressesByGameVersion;
