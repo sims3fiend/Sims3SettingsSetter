@@ -59,6 +59,7 @@
     <ClCompile Include="patches\resolution_spoofer_patch.cpp">
       <Filter>patches</Filter>
     </ClCompile>
+    <ClCompile Include="addresses.cpp" />
     <ClCompile Include="patch_system.cpp" />
   </ItemGroup>
   <ItemGroup>
@@ -81,6 +82,7 @@
     <ClInclude Include="patch_helpers.h" />
     <ClInclude Include="d3d9_hook_registry.h" />
     <ClInclude Include="allocator_hook.h" />
+    <ClInclude Include="addresses.h" />
   </ItemGroup>
   <ItemGroup>
     <Filter Include="patches">

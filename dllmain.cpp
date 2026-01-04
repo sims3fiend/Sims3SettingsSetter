@@ -617,6 +617,8 @@ bool InitializeGameVersionDependentState() {
         LOG_ERROR("Failed to detect the version of the game!");
     }
 
+    gameAddresses = &gameAddressesByGameVersion[gameVersion];
+
     return true;
 }
 

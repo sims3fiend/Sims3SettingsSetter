@@ -99,6 +99,7 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClInclude Include="addresses.h" />
     <ClInclude Include="allocator_hook.h" />
     <ClInclude Include="config_value_cache.h" />
     <ClInclude Include="cpu_optimization.h" />
@@ -120,6 +121,7 @@
     <ClInclude Include="patch_helpers.h" />
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="addresses.cpp" />
     <ClCompile Include="allocator_hook.cpp" />
     <ClCompile Include="cpu_optimization.cpp" />
     <ClCompile Include="d3d9_hook.cpp" />
