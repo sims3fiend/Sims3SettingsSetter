@@ -144,7 +144,8 @@ private:
                 mbi.State != MEM_COMMIT ||
                 (mbi.Protect & (PAGE_READWRITE | PAGE_EXECUTE_READWRITE)) == 0) {
 
-                LOG_WARNING("[TimerOpt] Skipped " + std::string(config.debugName) + " (Invalid Memory)");
+                LOG_WARNING(std::format("[TimerOpt] Skipped {} (Invalid Memory at {:#010x}; State: {:#010x}; Protect: {:#010x})",
+                                        config.debugName, address, mbi.State, mbi.Protect));
                 continue;
             }
 
