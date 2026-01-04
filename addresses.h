@@ -10,6 +10,7 @@ struct GameAddresses {
     uintptr_t createFileWFlagsInit;
     uintptr_t randomAccessFlagBranch;
     uintptr_t gcThreadLoopCheck;
+    uintptr_t lotVisibilityCameraBranch;
 };
 
 constexpr GameAddresses addressesForSteam_1_67_2_024037 = {
@@ -19,6 +20,7 @@ constexpr GameAddresses addressesForSteam_1_67_2_024037 = {
     .createFileWFlagsInit = 0x00404573,
     .randomAccessFlagBranch = 0x004db56c,
     .gcThreadLoopCheck = 0x00e511f5,
+    .lotVisibilityCameraBranch = 0x00c63015,
 };
 
 constexpr GameAddresses addressesForRetail_1_67_2_024002 = {
@@ -28,6 +30,7 @@ constexpr GameAddresses addressesForRetail_1_67_2_024002 = {
     .createFileWFlagsInit = 0x00404563,
     .randomAccessFlagBranch = 0x004db73c,
     .gcThreadLoopCheck = 0x00e514e5,
+    .lotVisibilityCameraBranch = 0x00c62ae5,
 };
 
 constexpr GameAddresses addressesForEA_1_69_47_024017 = {
@@ -37,6 +40,7 @@ constexpr GameAddresses addressesForEA_1_69_47_024017 = {
     .createFileWFlagsInit = 0x00404563,
     .randomAccessFlagBranch = 0x004db51c,
     .gcThreadLoopCheck = 0x00e51245,
+    .lotVisibilityCameraBranch = 0x00c623a5,
 };
 
 extern const std::array<GameAddresses, gameVersionCount> gameAddressesByGameVersion;
