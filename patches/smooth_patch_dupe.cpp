@@ -7,7 +7,7 @@ private:
     std::vector<PatchHelper::PatchLocation> patchedLocations;
     float frameLimitValue = 0.0f;  // 0 = no limit, 0.02 = original (50fps), etc.
     void* frameLimitAddress = nullptr;
-    float* customFrameLimitPtr = nullptr;  // Allocate our own float, the one the target uses is actually used by a bunch of random functions, fml
+    float customFrameLimit = 0.0f;  // Allocate our own float, the one the target uses is actually used by a bunch of random functions, fml
     static constexpr float MIN_FRAME_LIMIT = 0.000001f;  // Very small value to prevent division by zero, doesn't actually matter though! Might change this back to how it was
 
 public:
@@ -25,33 +25,15 @@ public:
         );
     }
 
-    ~SmoothPatchDupe() override {
-        // Free allocated memory if it exists
-        if (customFrameLimitPtr) {
-            VirtualFree(customFrameLimitPtr, 0, MEM_RELEASE);
-            customFrameLimitPtr = nullptr;
-        }
-    }
-
     bool Install() override {
         if (isEnabled) return true;
 
         lastError.clear();
         LOG_INFO("[SmoothPatchDupe] Installing...");
 
-        // Allocate memory for our custom variable
-        customFrameLimitPtr = (float*)VirtualAlloc(
-            nullptr,
-            sizeof(float),
-            MEM_COMMIT | MEM_RESERVE,
-            PAGE_READWRITE
-        );
+        customFrameLimit = frameLimitValue;
 
-        if (!customFrameLimitPtr) {
-            return Fail("Failed to allocate memory for custom frame limit variable");
-        }
-
-        *customFrameLimitPtr = frameLimitValue;
+        float* customFrameLimitPtr = &customFrameLimit;
 
         // Get module info
         HMODULE hModule = GetModuleHandle(NULL);
@@ -121,12 +103,6 @@ public:
         // Restore the original FLD instruction (points back to shared constant)
         if (!PatchHelper::RestoreAll(patchedLocations)) {
             return Fail("Failed to restore original FLD instruction");
-        }
-
-        // Free our custom allocated memory
-        if (customFrameLimitPtr) {
-            VirtualFree(customFrameLimitPtr, 0, MEM_RELEASE);
-            customFrameLimitPtr = nullptr;
         }
 
         frameLimitAddress = nullptr;
