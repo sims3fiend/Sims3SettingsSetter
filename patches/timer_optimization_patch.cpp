@@ -140,11 +140,11 @@ private:
 
             // 1. Memory Safety Check
             MEMORY_BASIC_INFORMATION mbi;
-            if (VirtualQuery(critSec, &mbi, sizeof(mbi)) == 0 ||
-                mbi.State != MEM_COMMIT ||
-                (mbi.Protect & (PAGE_READWRITE | PAGE_EXECUTE_READWRITE)) == 0) {
-
-                LOG_WARNING("[TimerOpt] Skipped " + std::string(config.debugName) + " (Invalid Memory)");
+            if (!PatchHelper::IsMemoryWritable(critSec, &mbi)) {
+                char buf[128];
+                sprintf_s(buf, "[TimerOpt] Skipped %s (Invalid Memory at 0x%08X; State: 0x%08X; Protect: 0x%08X)",
+                          config.debugName, (unsigned int)config.address, (unsigned int)mbi.State, (unsigned int)mbi.Protect);
+                LOG_WARNING(buf);
                 continue;
             }
 

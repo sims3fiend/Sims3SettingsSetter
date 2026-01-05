@@ -83,6 +83,30 @@ namespace PatchHelper {
         return true;
     }
 
+    // Check if memory is writable (for modifying existing structures like CRITICAL_SECTION)
+    inline bool IsMemoryWritable(LPVOID address, MEMORY_BASIC_INFORMATION* outMbi = nullptr) {
+        MEMORY_BASIC_INFORMATION mbi;
+        if (VirtualQuery(address, &mbi, sizeof(mbi)) == 0) {
+            LOG_ERROR("VirtualQuery failed for address 0x" +
+                     std::to_string(reinterpret_cast<uintptr_t>(address)));
+            return false;
+        }
+
+        if (outMbi) {
+            *outMbi = mbi;
+        }
+
+        if (mbi.State != MEM_COMMIT) {
+            return false;
+        }
+
+        // Check for writable protections (including copy-on-write variants)
+        constexpr DWORD WRITABLE_PROTECTIONS =
+            PAGE_READWRITE | PAGE_EXECUTE_READWRITE | PAGE_WRITECOPY | PAGE_EXECUTE_WRITECOPY;
+
+        return (mbi.Protect & WRITABLE_PROTECTIONS) != 0;
+    }
+
     // Validate that memory contains expected bytes before patching
     inline bool ValidateBytes(LPVOID address, LPCVOID expected, SIZE_T size) {
         // Use VirtualQuery for safer memory validation
