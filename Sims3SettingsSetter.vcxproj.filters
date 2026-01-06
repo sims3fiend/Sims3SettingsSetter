@@ -59,6 +59,7 @@
     <ClCompile Include="patches\resolution_spoofer_patch.cpp">
       <Filter>patches</Filter>
     </ClCompile>
+    <ClCompile Include="patches\smooth_patch_precise.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="config_value_cache.h" />

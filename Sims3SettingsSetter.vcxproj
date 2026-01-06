@@ -138,6 +138,7 @@
     <ClCompile Include="patches\resolution_spoofer_patch.cpp" />
     <ClCompile Include="patches\smooth_patch_dupe.cpp" />
     <ClCompile Include="patches\smooth_patch_classic.cpp" />
+    <ClCompile Include="patches\smooth_patch_precise.cpp" />
     <ClCompile Include="patches\timer_optimization_patch.cpp" />
     <ClCompile Include="patches\worldcache_uncap_patch.cpp" />
     <ClCompile Include="pattern_scan.cpp" />
