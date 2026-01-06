@@ -8,6 +8,7 @@ extern "C" __declspec(dllimport) NTSTATUS __stdcall NtDelayExecution(BOOLEAN Ale
 
 class SmoothPatchPrecise : public OptimizationPatch {
 private:
+    // This is Sims3::Scripting::ScriptHostBase::IdleSimulationCycle called from Sims3::MonoEngine::MonoScriptHost::Simulate, I think
     static inline const AddressInfo simulationFrameRateLimiterFunctionAddressInfo = {
         .name = "SmoothPatchPrecise::simulationFrameTimingSetup",
         .addresses = {
@@ -19,6 +20,7 @@ private:
         .patternOffset = -218
     };
 
+    // This is the global (gSimulationThreadId) set by Sims3::Utility::SetSimulationThreadId (called from Sims3::Scripting::ScriptService::Init)
     static inline const AddressInfo simulatorThreadIDAddressInfo = {
         .name = "SmoothPatchPrecise::simulatorThreadID",
         .addresses = {

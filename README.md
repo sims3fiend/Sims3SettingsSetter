@@ -23,32 +23,33 @@ Some package mods sometimes tweak some of these, so this can also be a way of do
 View and edit Config values from GraphicsRules.sgr. This shows what's actually loaded in memory (not just what's in the file which can sometimes be wrong/changed after init) and includes hidden settings that don't appear in the original files. Much clearer and easier than editing the .sgr file manually IMO.
 
 ### Performance Patches
-The main point of the mod now
-Collection of ASM patches for performance improvements. **Most are Steam (ts3w.exe) only** - EA users can still use all other features, but incompatible patches are greyed out.... One day I'll port some over I promise...
+The main point of the mod now. Collection of ASM patches for performance improvements. **All patches now work on all game versions! woo!** (Steam, EA App, and Retail, others should also be supported via pattern matching).
 
 ⭐'s for ones that I think are particularly worthwhile
 
 **Available Patches:**
-- **RefPack Decompressor Optimization ⭐⭐⭐** - Completely rewrote the games refpack .package file decompressor with AVX2/SSE2 SIMD intrinsics. This is probably the most impactful patch, faster loading screens, less stuttering when streaming assets, optimises one of the heaviest functions in the game. (Steam only, sorry)
-- **Mimalloc Allocator ⭐** - Replaces the sims 3 old crusty memory allocator with [mimalloc](https://github.com/microsoft/mimalloc) for better memory management and performance. Requires restart to apply. (All versions)
-- **Optimized Lot Streaming Settings ⭐** - Enables lot throttling and tweaks camera speed threshold settings so lots load more smoothly when you stop moving. Major improvement. (All versions)
-- **Timer & Thread Optimizations ⭐** - Increases (reduces?) timer resolution to 1ms, optimizes critical sections with tiered spin counts. (Steam, EA version sometime maybe)
-- **Lot Visibility Camera Override** - Stops lot loading based on camera view, should make it so they only load around you. Might not do anything. (Steam)
-- **Smooth Patch Original Flavour** - Exact smooth patch implementation in S3SS, I may change this in the future as I find it very confusing (All versions)
-- **Smooth Patch Dupe** - Like smooth patch but just one function, sets a frame limiterm I would suggest just using Smooth Patch Originall™, you can use both but Original Flavour will overwrite this one (All versions)
-- **CPU Thread Optimization** - Optimizes thread placement for modern CPUs with P/E-cores or multiple CCXs (All versions)
-- **Intersection Optimization** - SIMD optimization for navmesh/pathing calculations, a lot faster but rarely called in normall gameplay, is called very heavily when loading CC/uncached worlds though (Steam)
-- **CreateFileW Random Access** - Improves file I/O performance by hinting random access pattern (Steam)
-- **GC_stop_world() Optimization** - Early exit for a GC function called ~once per frame, very minor improvement, driveby patch (Steam)
+- **RefPack Decompressor Optimization ⭐⭐⭐** - Completely rewrote the game's refpack .package file decompressor with AVX2/SSE2 SIMD intrinsics. This is probably the most impactful patch, faster loading screens, less stuttering when streaming assets, optimises one of the heaviest functions in the game.
+- **Mimalloc Allocator ⭐** - Replaces the Sims 3's old crusty memory allocator with [mimalloc](https://github.com/microsoft/mimalloc) for better memory management and performance. Requires restart to apply.
+- **Optimized Lot Streaming Settings ⭐** - Enables lot throttling and tweaks camera speed threshold settings so lots load more smoothly when you stop moving. Major improvement.
+- **Timer & Thread Optimizations ⭐** - Increases (reduces?) timer resolution to 1ms, optimizes critical sections with tiered spin counts.
+- **Smooth Patch (Precise Flavour) ⭐** - ["Just Harry"](https://github.com/just-harry)'s more precise alternative to the original Smooth Patch. Only affects the simulator thread (not global Sleep), uses NtDelayExecution for sub-millisecond precision, allowing actual distinction between tick rates like 750 vs 1000 TPS that the original does not.
+- **Smooth Patch (Original Flavour)** - LazyDuchess's original Smooth Patch implementation in S3SS.
+- **Lot Visibility Camera Override** - Stops lot loading based on camera view, should make it so they only load around you. Might not do anything.
+- **CPU Thread Optimization** - Optimizes thread placement for modern CPUs with P/E-cores or multiple CCXs.
+- **Intersection Optimization** - SIMD optimization for navmesh/pathing calculations, a lot faster but rarely called in normal gameplay, is called very heavily when loading CC/uncached worlds though.
+- **CreateFileW Random Access** - Improves file I/O performance by hinting random access pattern.
+- **GC_stop_world() Optimization** - Early exit for a GC function called ~once per frame, very minor improvement, driveby patch.
 
 **Experimental Patches:**
-- **Adaptive Thread Waiting** - Hybrid spin-wait that adapts between 50-500μs based on success rate. Trades a bit of CPU usage for lower frame time variance. (All versions)
-  - This shoud be safe but may need adjusting to make more performant, also not really sure it's worth the hassle but It's done now so might as well include it, may re-add stat tracking also
-- **WorldCache Size Uncap** - Removes the 512MB limit on WorldCache files. May help with large CC worlds as it prevents cache churning. (All versions)
-  - Might have issues once the cache exceeds 2gb, if you run into a crash and think it's this, let me know
-- **Resolution Spoofer** - Injects fake resolutions (1440p, 4K, 5K, 6K) for downsampling. Makes the game look real good! You'll want a [UI scale](github.com/just-harry/tiny-ui-fix-for-ts3) mod as well. (All versions)
-  - Still working on this, may replace with a more targetted patch that shouldn't require a UI mod (using the pseudoresolution setting). This can also crash your game when set too high for your setup. It **may also crash when using other borderless fullscreen implementations**, I do some special handling in the mod for this.
-- **Map View Lot Streaming Blocker** - Prevents lot streaming while in map view, makes going in and out of map a lot less stuttery (Steam)
+- **GC Finalizer Throttle** - Prevents (or tries to) the garbage collector finalizer loop from blocking the simulation thread, reducing large stutters. Increases the frame threshold before triggering the blocking loop and caps it to one batch of finalizers per frame instead of an infinite loop.
+  - May slightly increase memory usage on very long play sessions
+- **Adaptive Thread Waiting** - Hybrid spin-wait that adapts between 50-500μs based on success rate. Trades a bit of CPU usage for lower frame time variance.
+  - This should be safe but may need adjusting to make more performant, also not really sure it's worth the hassle but it's done now so might as well include it, may re-add stat tracking also
+- **WorldCache Size Uncap** - Removes the 512MB limit on WorldCache files. May help with large CC worlds as it prevents cache churning.
+  - Might have issues once the cache exceeds 2GB, if you run into a crash and think it's this, let me know
+- **Resolution Spoofer** - Injects fake resolutions (1440p, 4K, 5K, 6K) for downsampling. Makes the game look real good! You'll want a [UI scale](https://github.com/just-harry/tiny-ui-fix-for-ts3) mod as well.
+  - Still working on this, may replace with a more targeted patch that shouldn't require a UI mod (using the pseudoresolution setting). This can also crash your game when set too high for your setup. It **may also crash when using other borderless fullscreen implementations**, I do some special handling in the mod for this.
+- **Map View Lot Streaming Blocker** - Prevents lot streaming while in map view, makes going in and out of map a lot less stuttery.
   - Experimental as it has a known issue where the toggle gets stuck on the "don't load" path. If your lots aren't loading in, try disabling this first
 
 There's also a lot of helper functions and easy to use things if you'd like to make your own, see **[patches/README.md](patches/README.md)** for technical details on how to write your own.
@@ -85,7 +86,6 @@ Green text = modified and saved value, yellow text is modified but not saved.
 
 ### Patches Tab
 - Toggle patches on/off
-- Incompatible patches are greyed out (EA sorry)
 - Hover for descriptions and technical details
 - Experimental patches marked with [EXPERIMENTAL] may be unsafe, more of a pre-release thing
 

@@ -131,12 +131,12 @@
     <ClCompile Include="logger.cpp" />
     <ClCompile Include="optimization.cpp" />
     <ClCompile Include="patches\adaptive_wait_patch.cpp" />
+    <ClCompile Include="patches\gc_finalize_throttle_patch.cpp" />
     <ClCompile Include="patches\gc_stop_world_patch.cpp" />
     <ClCompile Include="patches\map_view_lot_blocker_patch.cpp" />
     <ClCompile Include="patches\mimalloc_patch.cpp" />
     <ClCompile Include="patches\refpack_decompressor_patch.cpp" />
     <ClCompile Include="patches\resolution_spoofer_patch.cpp" />
-    <ClCompile Include="patches\smooth_patch_dupe.cpp" />
     <ClCompile Include="patches\smooth_patch_classic.cpp" />
     <ClCompile Include="patches\smooth_patch_precise.cpp" />
     <ClCompile Include="patches\timer_optimization_patch.cpp" />
@@ -146,8 +146,6 @@
     <ClCompile Include="qol.cpp" />
     <ClCompile Include="settings.cpp" />
     <ClCompile Include="vtable_manager.cpp" />
-    <!-- Old combined patch - deprecated, kept for reference -->
-    <!-- <ClCompile Include="patches\lot_visibility_patch.cpp" /> -->
     <ClCompile Include="patches\lot_streaming_settings_patch.cpp" />
     <ClCompile Include="patches\lot_visibility_camera_patch.cpp" />
     <ClCompile Include="patches\cpu_optimization_patch_register.cpp" />
