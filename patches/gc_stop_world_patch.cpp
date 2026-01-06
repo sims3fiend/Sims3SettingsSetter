@@ -4,47 +4,54 @@
 
 class GCStopWorldPatch : public OptimizationPatch {
 private:
+    // Address definition: explicit version addresses + optional pattern for unknown versions
+    static inline const AddressInfo threadLoopCheck = {
+        .name = "GCStopWorld::threadLoopCheck",
+        .addresses = {
+            {GameVersion::Retail, 0x00e514e5},
+            {GameVersion::Steam,  0x00e511f5},
+            {GameVersion::EA,     0x00e51245},
+        },
+        .pattern = "3D 00 01 00 00 7C ?? B8 FF 00 00 00 3B F8 7F",
+        .expectedBytes = {0x3D, 0x00, 0x01, 0x00, 0x00, 0x7C},
+    };
+
     std::vector<PatchHelper::PatchLocation> patchedLocations;
 
-    static const uintptr_t THREAD_LOOP_CHECK = 0x00E511F5;
-
 public:
-    GCStopWorldPatch() : OptimizationPatch("GCStopWorld", nullptr) {}
+    GCStopWorldPatch() : OptimizationPatch("GCStopWorld", nullptr) {} //literally who cares about this??? most useless patch omfg
 
     bool Install() override {
         if (isEnabled) return true;
-
         lastError.clear();
+
         LOG_INFO("[GCStopWorld] Installing...");
 
-        // Validate original bytes at target location
-        // Original: 3D 00 01 00 00  ; CMP EAX, 0x100
-        //           7C 05           ; JL 00e51201
-        std::vector<BYTE> expectedBytes = { 0x3D, 0x00, 0x01, 0x00, 0x00, 0x7C, 0x05 };
-        if (!PatchHelper::ValidateBytes((LPVOID)THREAD_LOOP_CHECK, expectedBytes.data(), expectedBytes.size())) {
-            return Fail("Unexpected bytes at target address - game version mismatch?");
+        // Resolve address (pattern scan first, then fallback)
+        auto addr = threadLoopCheck.Resolve();
+        if (!addr) {
+            return Fail("Could not resolve threadLoopCheck address");
         }
 
         // Replace with:
         // 85 C0        ; TEST EAX, EAX
         // 74 7D        ; JZ 0x00E51276 (skip thread loop if count is 0)
         // 90 90 90     ; NOP padding
-        std::vector<BYTE> newBytes = { 0x85, 0xC0, 0x74, 0x7D, 0x90, 0x90, 0x90 };
+        std::vector<BYTE> newBytes = {0x85, 0xC0, 0x74, 0x7D, 0x90, 0x90, 0x90};
 
-        if (!PatchHelper::WriteBytes(THREAD_LOOP_CHECK, newBytes, &patchedLocations, &expectedBytes)) {
-            return Fail("Failed to patch thread loop check at 0x" + std::to_string(THREAD_LOOP_CHECK));
+        if (!PatchHelper::WriteBytes(*addr, newBytes, &patchedLocations)) {
+            return Fail(std::format("Failed to write patch at {:#010x}", *addr));
         }
 
         isEnabled = true;
-        LOG_INFO("[GCStopWorld] Successfully installed");
-        LOG_INFO("[GCStopWorld] Optimized GC_stop_world() to skip thread iteration when count is 0");
+        LOG_INFO(std::format("[GCStopWorld] Installed at {:#010x}", *addr));
         return true;
     }
 
     bool Uninstall() override {
         if (!isEnabled) return true;
-
         lastError.clear();
+
         LOG_INFO("[GCStopWorld] Uninstalling...");
 
         if (!PatchHelper::RestoreAll(patchedLocations)) {
@@ -62,12 +69,10 @@ REGISTER_PATCH(GCStopWorldPatch, {
     .description = "Optimizes GC_stop_world() by skipping unnecessary thread iteration when count is 0",
     .category = "Performance",
     .experimental = true,
-    .targetVersion = GameVersion::Steam,
+    .supportedVersions = VERSION_ALL,
     .technicalDetails = {
-        "Patches GC_stop_world() at 0x00E511F5",
         "Replaces 'CMP EAX, 0x100' check with 'TEST EAX, EAX'",
         "Adds early exit (JZ) when thread count is 0",
         "Skips EnterCriticalSection/thread iteration overhead for empty slot 0",
-        "Minor speedup/overhead reduction, should have no downsides since in testing 0x011f4124 is always 0"
     }
 })

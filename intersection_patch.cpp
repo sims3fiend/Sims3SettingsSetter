@@ -7,31 +7,39 @@ IntersectionPatch* IntersectionPatch::instance = nullptr;
 // Calculate offsets at compile time
 static const size_t CALLS_OFFSET = OptimizationPatch::GetCurrentWindowOffset() + OptimizationPatch::GetCallsOffset();
 
-IntersectionPatch::IntersectionPatch() 
-    : OptimizationPatch("Intersection", (void*)0x67afb0) // Steam version address, need to do a pattern or rather, everyone else needs to use steam
+IntersectionPatch::IntersectionPatch()
+    : OptimizationPatch("Intersection", nullptr)
 {
     instance = this;
 }
 
 bool IntersectionPatch::Install() {
     if (isEnabled) return true;
-    
+
+    auto addr = intersectionAddr.Resolve();
+    if (!addr) {
+        LOG_ERROR("[IntersectionPatch] Could not resolve intersection address");
+        return false;
+    }
+
+    originalFunc = (void*)*addr;
+
     DetourTransactionBegin();
     DetourUpdateThread(GetCurrentThread());
     LONG error = DetourAttach(&originalFunc, OptimizedHook);
     if (DetourTransactionCommit() == NO_ERROR) {
         isEnabled = true;
-        LOG_INFO("[IntersectionPatch] Successfully installed");
+        LOG_INFO(std::format("[IntersectionPatch] Successfully installed at {:#010x}", *addr));
         return true;
     }
-    
+
     LOG_ERROR("[IntersectionPatch] Failed to install");
     return false;
 }
 
 bool IntersectionPatch::Uninstall() {
     if (!isEnabled) return true;
-    
+
     DetourTransactionBegin();
     DetourUpdateThread(GetCurrentThread());
     DetourDetach(&originalFunc, OptimizedHook);
@@ -114,4 +122,4 @@ __declspec(naked) bool __cdecl IntersectionPatch::OptimizedHook() {
         pop ebp
         ret 4
     }
-} 
+}

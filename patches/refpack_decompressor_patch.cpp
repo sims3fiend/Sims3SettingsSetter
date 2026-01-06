@@ -11,6 +11,17 @@
 // There are probably other optimisations (PGO??? idk what that is but sure) but for now I am never touching this again ever
 class RefPackDecompressorPatch : public OptimizationPatch {
 private:
+    static inline const AddressInfo refPackDecompressor = {
+        .name = "RefPackDecompressor::hookAddr",
+        .addresses = {
+            {GameVersion::Retail, 0x004eb900},
+            {GameVersion::Steam,  0x004eb3b0},
+            {GameVersion::EA,     0x004eb4f0},
+        },
+        .pattern = "83 EC 10 8B 4C 24 1C 85 C9 53 55 56 8B 74 24 20 57 C7 44 24 1C 00 00 00 00 0F 84",
+        .expectedBytes = {0x83, 0xEC, 0x10, 0x8B, 0x4C, 0x24, 0x1C},
+    };
+
     std::vector<PatchHelper::PatchLocation> patchedLocations;
     static RefPackDecompressorPatch* instance;
     static bool cpuHasAVX2;
@@ -254,6 +265,11 @@ public:
 
         lastError.clear();
 
+        auto addr = refPackDecompressor.Resolve();
+        if (!addr) {
+            return Fail("Could not resolve RefPack decompressor address");
+        }
+
         const auto& cpuFeatures = CPUFeatures::Get();
         cpuHasAVX2 = cpuFeatures.hasAVX2;
 
@@ -263,12 +279,10 @@ public:
             LOG_INFO("[RefPackDecompressor] Installing optimized decompressor (SSE2 + Safety Checks)...");
         }
 
-        // hook addy
-        constexpr uintptr_t HOOK_ADDR = 0x4eb3b0;
         uintptr_t targetAddr = (uintptr_t)&Dispatch;
 
-        if (!PatchHelper::WriteRelativeJump(HOOK_ADDR, targetAddr, &patchedLocations)) {
-            return Fail("Failed to install decompressor hook at 0x4eb3b0");
+        if (!PatchHelper::WriteRelativeJump(*addr, targetAddr, &patchedLocations)) {
+            return Fail(std::format("Failed to install decompressor hook at {:#010x}", *addr));
         }
 
         isEnabled = true;
@@ -301,9 +315,9 @@ REGISTER_PATCH(RefPackDecompressorPatch, {
     .description = "Highly optimized RefPack decompression using AVX2/SSE2 intrinsics with safety checks. Auto-detects CPU capabilities.",
     .category = "Performance",
     .experimental = false,
-    .targetVersion = GameVersion::Steam,
+    .supportedVersions = VERSION_ALL,
     .technicalDetails = {
-        "Replaces original RefPack decompressor at 0x4eb3b0 entirely",
+        "Replaces original RefPack decompressor entirely",
         "AVX2 path for modern CPUs, SSE2 fallback for older ones",
         "Optimizes quite a significant amount, probably one of the most impactful patches",
         "Essentially decompression/reading .package files big faster now yes :D yipeee"

@@ -222,7 +222,7 @@ REGISTER_PATCH(ResolutionSpooferPatch, {
     .description = "Injects spoofed high resolutions for downsampling goodness",
     .category = "Graphics",
     .experimental = true,
-    .targetVersion = GameVersion::All,//add something about like, restart the game after setting, etc., you'll need the UI patch, etc.
+    .supportedVersions = VERSION_ALL,  //add something about like, restart the game after setting, etc., you'll need the UI patch, etc.
     .technicalDetails = { 
         "Tricks the game into thinking other larger resolutions are available",
         "Great for AA/carity purposes, you will need a resolution patch for the UI as it gets very tiny (check readme)",

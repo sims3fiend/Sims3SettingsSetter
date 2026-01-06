@@ -18,6 +18,7 @@
 #include <strsafe.h>
 #include "qol.h"
 #include "config_value_cache.h"
+#include "patch_system.h"
 
 //Avert thine gaze, I said I was going to make the code clean and I lied
 //https://www.youtube.com/watch?v=C6iAzyhm0p0
@@ -621,6 +622,13 @@ DWORD WINAPI HookThread(LPVOID lpParameter) {
 #endif
 
         LOG_INFO("Hook thread started");
+
+        // Detect game version from PE timestamp
+        if (DetectGameVersion()) {
+            LOG_INFO(std::format("Detected game version: {}", GetGameVersionName()));
+        } else {
+            LOG_WARNING("Unknown game version - patches may not work correctly");
+        }
 
         // Initialize CPU feature detection
         const auto& cpuFeatures = CPUFeatures::Get();

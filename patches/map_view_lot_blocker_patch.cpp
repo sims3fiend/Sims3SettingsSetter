@@ -8,17 +8,49 @@
 
 class MapViewLotBlockerPatch : public OptimizationPatch {
 private:
+    // Address definitions
+    // Sims3::World::WorldManager::Update
+    static inline const AddressInfo worldManagerUpdate = {
+        .name = "Sims3::World::WorldManager::Update",
+        .addresses = {
+            {GameVersion::Retail, 0x00c6d3b0},
+            {GameVersion::Steam,  0x00c6d570},
+            {GameVersion::EA,     0x00c6c8f0},
+        },
+        .pattern = "55 8B EC 83 E4 F0 83 EC 64 53 56 8B F1 83 BE B4 01 00 00 00 57 75",
+        .expectedBytes = {0x55, 0x8B, 0xEC, 0x83, 0xE4, 0xF0},
+    };
+
+    // ScriptCore.CameraController::Camera_EnableMapViewMode
+    static inline const AddressInfo cameraEnableMapView = {
+        .name = "ScriptCore.CameraController::Camera_EnableMapViewMode",
+        .addresses = {
+            {GameVersion::Retail, 0x0073e080},
+            {GameVersion::Steam,  0x0073dfb0},
+            {GameVersion::EA,     0x0073ec70},
+        },
+        .pattern = "E8 ?? ?? ?? ?? 85 C0 74 ?? 8B C8 E8 ?? ?? ?? ?? 85 C0 74 ?? 8B C8 E8 ?? ?? ?? ?? 85 C0 74 ?? 8B 10 8B C8 8B 42 0C 68 89 DD 0F 11 FF D0 85 C0 74 ?? D9 44 24 04 6A 00 51 8B C8 D9 1C 24",
+        .expectedBytes = {0xE8},
+    };
+
+    // ScriptCore.CameraController::Camera_DisableMapViewMode
+    static inline const AddressInfo cameraDisableMapView = {
+        .name = "ScriptCore.CameraController::Camera_DisableMapViewMode",
+        .addresses = {
+            {GameVersion::Retail, 0x0073e0d0},
+            {GameVersion::Steam,  0x0073e000},
+            {GameVersion::EA,     0x0073ecc0},
+        },
+        .pattern = "E8 ?? ?? ?? ?? 85 C0 74 ?? 8B C8 E8 ?? ?? ?? ?? 85 C0 74 ?? 8B C8 E8 ?? ?? ?? ?? 85 C0 74 ?? 8B 10 8B C8 8B 42 0C 68 89 DD 0F 11 FF D0 85 C0 74 ?? D9 44 24 0C 6A 00 83 EC 0C D9 5C 24 08 8B C8 D9 44 24 18 D9 5C 24 04 D9 44 24 14 D9 1C 24",
+        .expectedBytes = {0xE8},
+    };
+
     std::vector<DetourHelper::Hook> hooks;
     std::thread delayThread;
     std::condition_variable threadCV;
     std::mutex threadMutex;
     std::atomic<bool> shouldExit{ false };
-    std::atomic<bool> blockLotStreaming{ false };  // Changed from isCurrentlyPatched
-
-    // Function addresses
-    static const uintptr_t SPEC_WORLD_MANAGER_UPDATE = 0x00C6D570;
-    static const uintptr_t CAMERA_ENABLE_MAP_VIEW_MODE = 0x0073DFB0;
-    static const uintptr_t CAMERA_DISABLE_MAP_VIEW_MODE = 0x0073E000;
+    std::atomic<bool> blockLotStreaming{ false };
 
     // WorldManager offset for lot streaming skip flag
     static const uintptr_t WORLD_MANAGER_LOT_SKIP_OFFSET = 0x258;
@@ -140,20 +172,19 @@ public:
         lastError.clear();
         LOG_INFO("[MapViewLotBlocker] Installing...");
 
-        // Validate that target addresses are accessible
-        MEMORY_BASIC_INFORMATION mbi;
-        if (VirtualQuery((LPVOID)SPEC_WORLD_MANAGER_UPDATE, &mbi, sizeof(mbi)) == 0) {
-            return Fail("Target function address not accessible");
-        }
+        // Resolve addresses
+        auto addrWorldMgr = worldManagerUpdate.Resolve();
+        auto addrEnable = cameraEnableMapView.Resolve();
+        auto addrDisable = cameraDisableMapView.Resolve();
 
-        if (mbi.State != MEM_COMMIT) {
-            return Fail("Target function memory not committed");
+        if (!addrWorldMgr || !addrEnable || !addrDisable) {
+            return Fail("Could not resolve required addresses");
         }
 
         // Set up function pointers
-        originalWorldManagerUpdate = reinterpret_cast<WorldManager_Update_t>(SPEC_WORLD_MANAGER_UPDATE);
-        originalEnableMapView = reinterpret_cast<Camera_EnableMapViewMode_t>(CAMERA_ENABLE_MAP_VIEW_MODE);
-        originalDisableMapView = reinterpret_cast<Camera_DisableMapViewMode_t>(CAMERA_DISABLE_MAP_VIEW_MODE);
+        originalWorldManagerUpdate = reinterpret_cast<WorldManager_Update_t>(*addrWorldMgr);
+        originalEnableMapView = reinterpret_cast<Camera_EnableMapViewMode_t>(*addrEnable);
+        originalDisableMapView = reinterpret_cast<Camera_DisableMapViewMode_t>(*addrDisable);
 
         // Set up hooks
         hooks = {
@@ -169,9 +200,9 @@ public:
 
         isEnabled = true;
         LOG_INFO("[MapViewLotBlocker] Successfully installed with function hooks");
-        LOG_INFO("[MapViewLotBlocker] Hooked SPEC_WorldManager_Update at 0x" + std::to_string(SPEC_WORLD_MANAGER_UPDATE));
-        LOG_INFO("[MapViewLotBlocker] Hooked Camera_EnableMapViewMode at 0x" + std::to_string(CAMERA_ENABLE_MAP_VIEW_MODE));
-        LOG_INFO("[MapViewLotBlocker] Hooked Camera_DisableMapViewMode at 0x" + std::to_string(CAMERA_DISABLE_MAP_VIEW_MODE));
+        LOG_INFO(std::format("[MapViewLotBlocker] Hooked SPEC_WorldManager_Update at {:#010x}", *addrWorldMgr));
+        LOG_INFO(std::format("[MapViewLotBlocker] Hooked Camera_EnableMapViewMode at {:#010x}", *addrEnable));
+        LOG_INFO(std::format("[MapViewLotBlocker] Hooked Camera_DisableMapViewMode at {:#010x}", *addrDisable));
         return true;
     }
 
@@ -213,11 +244,11 @@ REGISTER_PATCH(MapViewLotBlockerPatch, {
     .description = "Prevents lot loading while in map view mode, reduces stutter/slowdown when exiting/entering map view.",
     .category = "Performance",
     .experimental = true,
-    .targetVersion = GameVersion::Steam,
+    .supportedVersions = VERSION_ALL,
     .technicalDetails = {
-        "Hooks SPEC_WorldManager_Update at 0x00C6D570",
-        "Hooks Camera_EnableMapViewMode at 0x0073DFB0",
-        "Hooks Camera_DisableMapViewMode at 0x0073E000",
+        "Hooks SPEC_WorldManager_Update",
+        "Hooks Camera_EnableMapViewMode",
+        "Hooks Camera_DisableMapViewMode",
         "Sets WorldManager skip flag at offset +0x258 to block lot processing",
         "Blocks lot streaming when entering map view",
         "Restores lot streaming 1 second after exiting map view (for zoom animation)",

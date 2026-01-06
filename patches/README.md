@@ -56,7 +56,7 @@ REGISTER_PATCH(MySimplePatch, {
     .description = "Does something cool",
     .category = "Performance",  // or "Graphics", "Experimental", "Quality of Life", etc. Try and use an existing one pls.
     .experimental = false, //adds a [EXPERIMENTAL] tag
-    .targetVersion = GameVersion::Steam,  // Steam, EA, or All
+    .supportedVersions = VERSION_STEAM,  // VERSION_STEAM, VERSION_EA, VERSION_RETAIL, or VERSION_ALL
     .technicalDetails = { //Just a mini-readme, I should change the naming actually... Shows on hover.
         "Modifies address 0x12345678",
         "Changes JZ to JMP for better performance"
@@ -64,86 +64,98 @@ REGISTER_PATCH(MySimplePatch, {
 })
 ```
 
-### Complex Pattern-Based Patches
+### Pattern-Based Patches with AddressInfo (Recommended!)
 
-You can also do patches that need pattern scanning or complex logic:
+Pattern scanning is the easiest way to make patches work across all game versions. Use `AddressInfo` with a decent pattern:
 
 ```cpp
 #include "../patch_system.h"
 #include "../patch_helpers.h"
 #include "../logger.h"
-#include <Psapi.h>
 
-class ComplexPatch : public OptimizationPatch {
+class PatternPatch : public OptimizationPatch {
 private:
     std::vector<PatchHelper::PatchLocation> patchedLocations;
 
+    // Supports nibble (lol) wildcards: "FF" = exact, "??" = any, "?F" = low nibble, "F?" = high nibble
+    static inline const AddressInfo myTarget = {
+        .name = "PatternPatch::target",
+        .pattern = "48 89 5C 24 ?? 57 48 83",  // Copy from disassembler
+        .patternOffset = 0,                     // Offset from match to your patch location
+        .expectedBytes = {0x48, 0x89},          // Optional validation
+    };
+
 public:
-    ComplexPatch() : OptimizationPatch("ComplexPatch", nullptr) {}
+    PatternPatch() : OptimizationPatch("PatternPatch", nullptr) {}
 
     bool Install() override {
         if (isEnabled) return true;
 
         lastError.clear();
-        LOG_INFO("[ComplexPatch] Installing...");
+        LOG_INFO("[PatternPatch] Installing...");
 
-        // Get module info
-        HMODULE hModule = GetModuleHandle(NULL);
-        BYTE* baseAddr;
-        size_t imageSize;
-        if (!PatchHelper::GetModuleInfo(hModule, &baseAddr, &imageSize)) {
-            return Fail("Failed to get module information");
+        // Resolve() finds the pattern automatically
+        auto addr = myTarget.Resolve();
+        if (!addr) {
+            return Fail("Failed to find pattern");
         }
 
-        int patchCount = 0;
-
-        // String-based pattern - just copypaste from the disassembler
-        BYTE* found = baseAddr;
-        while ((found = (BYTE*)PatchHelper::ScanPattern(found, imageSize - (found - baseAddr),
-                                                         "48 89 5C 24 ?"))) {
-            // Patch at offset from pattern
-            if (PatchHelper::WriteByte((uintptr_t)(found + 12), 0xEB, &patchedLocations)) {
-                patchCount++;
-                LOG_DEBUG("[ComplexPatch] Patched at 0x" + std::to_string((uintptr_t)(found + 12)));
-            }
-            found += 5;  // Move past this match
-        }
-
-        if (patchCount == 0) {
-            return Fail("Failed to find any matching patterns");
+        BYTE expectedOld = 0x74;
+        if (!PatchHelper::WriteByte(*addr, 0xEB, &patchedLocations, &expectedOld)) {
+            return Fail("Failed to patch at resolved address");
         }
 
         isEnabled = true;
-        LOG_INFO("[ComplexPatch] Successfully installed (" + std::to_string(patchCount) + " patches)");
+        LOG_INFO("[PatternPatch] Successfully installed");
         return true;
     }
 
     bool Uninstall() override {
         if (!isEnabled) return true;
-
         lastError.clear();
-
         if (!PatchHelper::RestoreAll(patchedLocations)) {
             return Fail("Failed to restore original bytes");
         }
-
         isEnabled = false;
         return true;
     }
 };
 
-REGISTER_PATCH(ComplexPatch, {
-    .displayName = "Complex Pattern Patch",
-    .description = "Uses pattern scanning to find and patch multiple locations",
+REGISTER_PATCH(PatternPatch, {
+    .displayName = "Pattern-Based Patch",
+    .description = "Uses pattern scanning - works across all versions",
     .category = "Performance",
     .experimental = true,
-    .targetVersion = GameVersion::All,
+    .supportedVersions = VERSION_ALL,
     .technicalDetails = {
-        "Scans for pattern: 48 89 5C 24 ?",
-        "lalalala"
+        "Scans for pattern: 48 89 5C 24 ?? 57 48 83",
+        "Does something"
     }
 })
 ```
+
+### AddressInfo with Known Addresses
+
+If you've verified exact addresses for specific game versions, you can add them. The pattern becomes a fallback for unknown versions:
+
+```cpp
+static inline const AddressInfo myTarget = {
+    .name = "MyPatch::target",
+    .addresses = {                            // Known good addresses (optional)
+        {GameVersion::Retail, 0x00ABC123},
+        {GameVersion::Steam,  0x00ABC456},
+        {GameVersion::EA,     0x00ABC789},
+    },
+    .pattern = "8B 45 ?? 89 44 24 ??",       // Optional Fallback for unknown versions
+    .patternOffset = 0, //Optional offset
+    .expectedBytes = {0x8B, 0x45},
+};
+```
+
+**AddressInfo resolution:**
+1. Known version + has address -> use that address (fails if expectedBytes validation fails)
+2. Known version + no address -> try pattern scan
+3. Unknown version -> try pattern scan
 
 ### Patches with Configurable Settings
 
@@ -237,8 +249,7 @@ public:
 
     // Override to add custom ImGui controls
     void RenderCustomUI() override {
-        #ifdef IMGUI_VERSION
-        if (!ImGui::GetCurrentContext()) return;
+        SAFE_IMGUI_BEGIN();
 
         // Integer slider
         if (ImGui::SliderInt("My Setting", &mySetting, 0, 100)) {
@@ -269,7 +280,6 @@ public:
         ImGui::Separator();
         ImGui::TextDisabled("Current values: Int=%d, Float=%.2f, Bool=%s",
                           mySetting, floatSetting, boolSetting ? "true" : "false");
-        #endif
     }
 
     // OPTIONAL: Save/load state for settings persistence in presets
@@ -307,7 +317,7 @@ REGISTER_PATCH(CustomUIPatch, {
     .description = "A patch with configurable settings",
     .category = "Experimental",
     .experimental = false,
-    .targetVersion = GameVersion::Steam,
+    .supportedVersions = VERSION_STEAM,
     .technicalDetails = {
         "Supports custom configuration",
         "Can be adjusted at runtime"
@@ -328,7 +338,7 @@ REGISTER_PATCH(MyExistingPatchClass, {
     .description = "Registers an existing patch class",
     .category = "Performance",
     .experimental = false,
-    .targetVersion = GameVersion::All,
+    .supportedVersions = VERSION_ALL,
     .technicalDetails = {
         "Implementation in my_existing_patch.h/cpp"
     }
@@ -360,11 +370,16 @@ All write functions automatically:
 - `ReadDWORD(address)` - Read a 4-byte value
 
 #### Pattern Scanning
-- `ScanPattern(start, size, "48 89 5C ? ? 08")` - String-based pattern scanning with wildcards
+- `ScanPattern(start, size, "48 89 5C ?? ?? 08")` - Pattern scanning with nibble-level wildcards:
+  - `FF` = exact byte match
+  - `??` = any byte (full wildcard)
+  - `?F` = match low nibble only (e.g., matches `0F`, `1F`, `AF`, etc.)
+  - `F?` = match high nibble only (e.g., matches `F0`, `F1`, `FA`, etc.)
 
 #### Utilities
 - `RestoreAll(locations)` - Restore all patched locations
 - `ValidateBytes(address, expected, size)` - Check if bytes match
+- `IsMemoryWritable(address, outMbi)` - Check if memory is writable (useful for CRITICAL_SECTION patching etc.)
 - `GetModuleInfo(hModule, &baseAddr, &imageSize)` - Get module info
 - `CalculateRelativeOffset(from, to, instructionSize)` - Calculate relative jump/call offset
 
@@ -536,11 +551,14 @@ Currently arbitrary, defaults to "General"
 
 ## Version Targeting
 
-Patches can specify which game version they support using the `targetVersion` field:
+Patches specify which game versions they support using the `supportedVersions` field with bitmasks:
 
-- **GameVersion::Steam** - Works only on ts3w.exe (Steam version).
-- **GameVersion::EA** - Works only on ts3.exe (EA/Origin version).
-- **GameVersion::All** - Works on all versions, for when you've got a banger pattern/using IAT stuff
+- **VERSION_STEAM** - Works only on ts3w.exe (Steam version 1.67.2.024037)
+- **VERSION_EA** - Works only on ts3.exe (EA App version 1.69.47.024017)
+- **VERSION_RETAIL** - Works only on disc version (1.67.2.024002)
+- **VERSION_ALL** - Works on all versions (combines all three)
+
+You can also combine them: `VERSION_STEAM | VERSION_EA` for Steam + EA only.
 
 Patches incompatible with the current version will be shown in the GUI but greyed out and unselectable, mostly to further add to EA users misery.
 
@@ -563,8 +581,9 @@ if (currentByte != 0x74) {
 ### Pattern Scanning (wildcards yipee!)
 
 ```cpp
-// Chuck pattern in from dissasembler
-BYTE* addr = (BYTE*)PatchHelper::ScanPattern(baseAddr, imageSize, "48 89 5C ? ? 08");
+// Chuck pattern in from disassembler
+// "FF" = exact, "??" = any byte, "?F" = low nibble, "F?" = high nibble
+BYTE* addr = (BYTE*)PatchHelper::ScanPattern(baseAddr, imageSize, "48 89 5C ?? ?2 08");
 if (addr) {
     // Patch at offset
     PatchHelper::WriteByte((uintptr_t)(addr + 5), 0xEB, &patchedLocations);
@@ -573,7 +592,7 @@ if (addr) {
 // Multiple matches
 BYTE* found = baseAddr;
 while ((found = (BYTE*)PatchHelper::ScanPattern(found, imageSize - (found - baseAddr),
-                                                 "E8 ? ? ? ?"))) {
+                                                 "8? ?? ?? ?? ?? ?D"))) {
     // Process each match
     found += 5;  // Move past this match, etc.
 }
@@ -721,7 +740,7 @@ REGISTER_PATCH(DrawCallCounterPatch, {
     .description = "Counts and displays DrawIndexedPrimitive calls per frame",
     .category = "Debug",
     .experimental = false,
-    .targetVersion = GameVersion::All,
+    .supportedVersions = VERSION_ALL,
     .technicalDetails = {
         "Hooks DrawIndexedPrimitive with Last priority",
         "Non-intrusive monitoring only"

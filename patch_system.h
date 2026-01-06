@@ -1,47 +1,79 @@
 #pragma once
 #include "optimization.h"
+#include <array>
 #include <functional>
 #include <memory>
 #include <vector>
 #include <string>
 #include <windows.h>
 
-// Game version targeting for patches
-enum class GameVersion {
-    All,    // Works on all versions (pattern-based or IAT hooks)
-    Steam,  // ts3w.exe only
-    EA      // ts3.exe only (includes disk versions)
+// Specific game versions we support
+enum class GameVersion : uint8_t {
+    Retail  = 0,   // 1.67.2.024002 - Disc
+    Steam   = 1,   // 1.67.2.024037 - Steam
+    EA      = 2,   // 1.69.47.024017 - EA App
+    Unknown = 255
 };
 
-// Detect current game version from executable name
-inline GameVersion DetectGameVersion() {
-    static GameVersion cachedVersion = []() {
-        wchar_t exePath[MAX_PATH];
-        GetModuleFileNameW(nullptr, exePath, MAX_PATH);
+constexpr size_t GAME_VERSION_COUNT = 3;
 
-        // Extract just the filename
-        std::wstring exeName = exePath;
-        size_t lastSlash = exeName.find_last_of(L"\\/");
-        if (lastSlash != std::wstring::npos) {
-            exeName = exeName.substr(lastSlash + 1);
+// Bitmask for declaring which versions a patch supports
+using GameVersionMask = uint8_t;
+constexpr GameVersionMask VERSION_RETAIL = (1 << static_cast<uint8_t>(GameVersion::Retail));
+constexpr GameVersionMask VERSION_STEAM  = (1 << static_cast<uint8_t>(GameVersion::Steam));
+constexpr GameVersionMask VERSION_EA     = (1 << static_cast<uint8_t>(GameVersion::EA));
+constexpr GameVersionMask VERSION_ALL    = VERSION_RETAIL | VERSION_STEAM | VERSION_EA;
+
+// TimeDateStamp field from PE header
+constexpr std::array<uint32_t, GAME_VERSION_COUNT> VERSION_TIMESTAMPS = {
+    0x52D872DA,  // Retail 1.67.2.024002
+    0x52DEC247,  // Steam 1.67.2.024037
+    0x6707155C,  // EA 1.69.47.024017
+};
+
+constexpr std::array<const char*, GAME_VERSION_COUNT> VERSION_NAMES = {
+    "Retail 1.67.2.024002",
+    "Steam 1.67.2.024037",
+    "EA 1.69.47.024017",
+};
+
+// Global game version - set once at init via DetectGameVersion()
+inline GameVersion g_gameVersion = GameVersion::Unknown;
+
+// Detect current game version from PE header timestamp
+// Return true if version was recognized, false otherwise
+inline bool DetectGameVersion() {
+    const auto exe = reinterpret_cast<uintptr_t>(GetModuleHandleW(nullptr));
+    const auto dos = reinterpret_cast<const IMAGE_DOS_HEADER*>(exe);
+    const auto pe = reinterpret_cast<const IMAGE_NT_HEADERS*>(exe + dos->e_lfanew);
+
+    uint32_t timestamp = pe->FileHeader.TimeDateStamp;
+
+    for (size_t i = 0; i < GAME_VERSION_COUNT; i++) {
+        if (VERSION_TIMESTAMPS[i] == timestamp) {
+            g_gameVersion = static_cast<GameVersion>(i);
+            return true;
         }
+    }
 
-        // Convert to lowercase for comparison
-        for (auto& c : exeName) {
-            c = towlower(c);
-        }
+    g_gameVersion = GameVersion::Unknown;
+    return false;
+}
 
-        if (exeName == L"ts3w.exe") {
-            return GameVersion::Steam;
-        } else if (exeName == L"ts3.exe") {
-            return GameVersion::EA;
-        }
+// Helper to get version name string
+inline const char* GetGameVersionName() {
+    if (g_gameVersion == GameVersion::Unknown) {
+        return "Unknown";
+    }
+    return VERSION_NAMES[static_cast<size_t>(g_gameVersion)];
+}
 
-        // Default to EA if we can't determine
-        return GameVersion::EA;
-    }();
-
-    return cachedVersion;
+// Check if current version matches a version mask
+inline bool IsVersionSupported(GameVersionMask mask) {
+    if (g_gameVersion == GameVersion::Unknown) {
+        return false;
+    }
+    return (mask & (1 << static_cast<uint8_t>(g_gameVersion))) != 0;
 }
 
 // Metadata for patch description and categorization
@@ -50,7 +82,7 @@ struct PatchMetadata {
     std::string description;
     std::string category = "General";
     bool experimental = false;
-    GameVersion targetVersion = GameVersion::All;
+    GameVersionMask supportedVersions = VERSION_ALL;
     std::vector<std::string> technicalDetails;
 };
 

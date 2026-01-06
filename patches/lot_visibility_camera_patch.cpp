@@ -3,10 +3,19 @@
 #include "../logger.h"
 
 // Lot visibility camera patch - prevents distance-based lot loading
-// Steam only - modifies game memory
 class LotVisibilityCameraPatch : public OptimizationPatch {
 private:
-    static const uintptr_t VISIBILITY_CONDITION_ADDRESS = 0x00c63015;
+    static inline const AddressInfo visibilityCondition = {
+        .name = "LotVisibilityCamera::visibilityCondition",
+        .addresses = {
+            {GameVersion::Retail, 0x00c62ae5},
+            {GameVersion::Steam,  0x00c63015},
+            {GameVersion::EA,     0x00c623a5},
+        },
+        .pattern = "74 ?? F3 0F 10 44 24 08 F3 0F 5C 87 E0 00 00 00 F3 0F 11 44 24 08 D9 44 24 08 5F 5E 8B E5 5D C2 0C 00",
+        .expectedBytes = {0x74},  // JZ instruction
+    };
+
     std::vector<PatchHelper::PatchLocation> patchedLocations;
 
 public:
@@ -18,20 +27,15 @@ public:
         lastError.clear();
         LOG_INFO("[LotVisibilityCameraPatch] Installing...");
 
-        // Validate the visibility condition address is accessible before patching
-        MEMORY_BASIC_INFORMATION mbi;
-        if (VirtualQuery((LPVOID)VISIBILITY_CONDITION_ADDRESS, &mbi, sizeof(mbi)) == 0) {
-            return Fail("Target address 0x" + std::to_string(VISIBILITY_CONDITION_ADDRESS) + " is not accessible");
-        }
-
-        if (mbi.State != MEM_COMMIT) {
-            return Fail("Target address 0x" + std::to_string(VISIBILITY_CONDITION_ADDRESS) + " is not committed memory");
+        auto addr = visibilityCondition.Resolve();
+        if (!addr) {
+            return Fail("Could not resolve visibility condition address");
         }
 
         // Change JZ to JMP (0x74 -> 0xEB) - prevents distance-based lot loading
         BYTE expectedOld = 0x74;
-        if (!PatchHelper::WriteByte(VISIBILITY_CONDITION_ADDRESS, 0xEB, &patchedLocations, &expectedOld)) {
-            return Fail("Failed to patch visibility condition at 0x" + std::to_string(VISIBILITY_CONDITION_ADDRESS));
+        if (!PatchHelper::WriteByte(*addr, 0xEB, &patchedLocations, &expectedOld)) {
+            return Fail(std::format("Failed to patch visibility condition at {:#010x}", *addr));
         }
         LOG_INFO("[LotVisibilityCameraPatch] + Visibility condition patched (JZ -> JMP)");
 
@@ -46,7 +50,6 @@ public:
         lastError.clear();
         LOG_INFO("[LotVisibilityCameraPatch] Uninstalling...");
 
-        // RestoreAll automatically restores all tracked patches
         if (!PatchHelper::RestoreAll(patchedLocations)) {
             return Fail("Failed to restore original values");
         }
@@ -63,9 +66,9 @@ REGISTER_PATCH(LotVisibilityCameraPatch, {
     .description = "Disables view-based lot loading by patching the camera visibility check.",
     .category = "Performance",
     .experimental = false,
-    .targetVersion = GameVersion::Steam,
+    .supportedVersions = VERSION_ALL,
     .technicalDetails = {
-        "Modifies a conditional jump at 0x00c63015 (JZ -> JMP)",
+        "Modifies a conditional jump (JZ -> JMP)",
         "Prevents lot loading/unloading based on camera view"
     }
 })

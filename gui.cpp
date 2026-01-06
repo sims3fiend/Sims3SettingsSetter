@@ -265,10 +265,7 @@ namespace SettingsGui {
                 // Patches tab (the hell formerly known as Optimizations) - Rewrite inc, this is way too bloated a section lol, maybe helper? Or method to OptimiationPatch?
                 if (ImGui::BeginTabItem("Patches")) {
                     // Show detected game version
-                    GameVersion detectedVersion = DetectGameVersion();
-                    const char* versionStr = (detectedVersion == GameVersion::Steam) ? "Steam (ts3w.exe)" :
-                                           (detectedVersion == GameVersion::EA) ? "EA/Origin (ts3.exe)" : "Unknown";
-                    ImGui::TextColored(ImVec4(0.5f, 1.0f, 0.5f, 1.0f), "Detected Version: %s", versionStr);
+                    ImGui::TextColored(ImVec4(0.5f, 1.0f, 0.5f, 1.0f), "Detected Version: %s", GetGameVersionName());
                     ImGui::TextDisabled("Incompatible patches will be greyed out and disabled");
                     ImGui::Separator();
 
@@ -385,12 +382,7 @@ namespace SettingsGui {
                                             // Show incompatibility warning first
                                             if (!compatible) {
                                                 ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 0.6f, 0.0f, 1.0f));
-                                                const char* currentVersionStr = (detectedVersion == GameVersion::Steam) ? "Steam" :
-                                                                               (detectedVersion == GameVersion::EA) ? "EA/Origin" : "Unknown";
-                                                const char* requiredVersionStr = meta && meta->targetVersion == GameVersion::Steam ? "Steam" :
-                                                                                meta && meta->targetVersion == GameVersion::EA ? "EA/Origin" : "All";
-                                                ImGui::Text("INCOMPATIBLE: This patch requires %s version, but you're running %s",
-                                                          requiredVersionStr, currentVersionStr);
+                                                ImGui::Text("INCOMPATIBLE: This patch does not support %s", GetGameVersionName());
                                                 ImGui::PopStyleColor();
                                                 if (!desc.empty() || hasError) {
                                                     ImGui::Separator();
@@ -526,12 +518,7 @@ namespace SettingsGui {
 
                                             if (!compatible) {
                                                 ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 0.6f, 0.0f, 1.0f));
-                                                const char* currentVersionStr = (detectedVersion == GameVersion::Steam) ? "Steam" :
-                                                                               (detectedVersion == GameVersion::EA) ? "EA/Origin" : "Unknown";
-                                                const char* requiredVersionStr = meta && meta->targetVersion == GameVersion::Steam ? "Steam" :
-                                                                                meta && meta->targetVersion == GameVersion::EA ? "EA/Origin" : "All";
-                                                ImGui::Text("INCOMPATIBLE: This patch requires %s version, but you're running %s",
-                                                          requiredVersionStr, currentVersionStr);
+                                                ImGui::Text("INCOMPATIBLE: This patch does not support %s", GetGameVersionName());
                                                 ImGui::PopStyleColor();
                                                 if (!desc.empty() || hasError) {
                                                     ImGui::Separator();

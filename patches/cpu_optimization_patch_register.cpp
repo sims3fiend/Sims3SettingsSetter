@@ -7,7 +7,7 @@ REGISTER_PATCH(CPUOptimizationPatch, {
     .description = "Optimizes thread placement for modern CPUs to better utilize modern CPU architectures.",
     .category = "Performance",
     .experimental = false,
-    .targetVersion = GameVersion::All,
+    .supportedVersions = VERSION_ALL,
     .technicalDetails = {
         "Intel Hybrid (P/E-cores): Prioritizes Performance cores",
         "AMD: Distributes threads across the first CCX (L3 cache group)",

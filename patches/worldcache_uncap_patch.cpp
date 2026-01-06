@@ -4,6 +4,17 @@
 
 class WorldCacheSizePatch : public OptimizationPatch {
 private:
+    static inline const AddressInfo worldCacheSizeCheck = {
+        .name = "WorldCache::sizeCheck",
+        .addresses = {
+            {GameVersion::Retail, 0x005bd114},
+            //{GameVersion::Steam,  0x005bc8b4},
+            {GameVersion::EA,     0x005bd704},
+        },
+        .pattern = "0F 82 ?? ?? ?? ?? 8B 0F E8",
+        .expectedBytes = {0x0F, 0x82},  // JC instruction prefix
+    };
+
     std::vector<PatchHelper::PatchLocation> patchedLocations;
 
 public:
@@ -16,7 +27,12 @@ public:
 
         LOG_INFO("[WorldCacheSizePatch] Installing...");
 
-        // 0x005bc8b4: JC 005bca49 -> Force jump to success path + nop
+        auto addr = worldCacheSizeCheck.Resolve();
+        if (!addr) {
+            return Fail("Could not resolve WorldCache size check address");
+        }
+
+        // JC -> JMP (force jump to success path) + nop
         // This bypasses the cache size check xoxo. I had another version of this but lost the file tehehe~ Hope this works!
 
         std::vector<BYTE> newBytes = {
@@ -28,8 +44,8 @@ public:
             0x0F, 0x82, 0x8F, 0x01, 0x00, 0x00  // JC instruction
         };
 
-        if (!PatchHelper::WriteBytes(0x005bc8b4, newBytes, &patchedLocations, &expectedOld)) {
-            return Fail("Failed to patch WorldCache size check at 0x005bc8b4");
+        if (!PatchHelper::WriteBytes(*addr, newBytes, &patchedLocations, &expectedOld)) {
+            return Fail(std::format("Failed to patch WorldCache size check at {:#010x}", *addr));
         }
 
         isEnabled = true;
@@ -60,9 +76,9 @@ REGISTER_PATCH(WorldCacheSizePatch, {
     .description = "Removes the 512MB limit on WorldCache files, allowing larger caches",
     .category = "Performance",
     .experimental = true,
-    .targetVersion = GameVersion::Steam,
+    .supportedVersions = VERSION_ALL,
     .technicalDetails = {
-        "Patches the cache size check at 0x005bc8b4",
+        "Patches the cache size check (JC -> JMP)",
         "Allows WorldCache files (Documents\\EA\\The Sims 3\\WorldCaches) to grow beyond 512mb",
         "This hopefully removes some of the lag assosiated with constantly adding and removing object from the caches",
         "This removes the limit entirely from the entirely, which may break past 2gb. If this happens please let me know!",

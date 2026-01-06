@@ -2,8 +2,6 @@
 #include "../patch_helpers.h"
 #include "../logger.h"
 #include <winternl.h>
-//Might break into generic hook patches + steam specific since the some stuff is all steam specific, RIP EA once again
-//This is still a WIP however I don't know if it's worth continuing or even keeping tbh
 #pragma comment(lib, "winmm.lib")
 
 typedef NTSTATUS(WINAPI* NtSetTimerResolution_t)(ULONG DesiredResolution, BOOLEAN SetResolution, PULONG CurrentResolution);
@@ -11,6 +9,34 @@ typedef NTSTATUS(WINAPI* NtQueryTimerResolution_t)(PULONG MinimumResolution, PUL
 
 class TimerOptimizationPatch : public OptimizationPatch {
 private:
+    // Address definitions for critical section targets, TODO better ways to double check these
+    static inline const AddressInfo monoMethodCacheTimer = {
+        .name = "TimerOpt::monoMethodCacheTimer", // marshal_mutex, global lock for hash tables, need to double check that this is sane but should be fine x
+        .addresses = {
+            {GameVersion::Retail, 0x011f53e4},
+            {GameVersion::Steam,  0x011f43e4},
+            {GameVersion::EA,     0x0124e474},
+        },
+    };
+
+    static inline const AddressInfo browserTimer = {
+        .name = "TimerOpt::browserTimer",
+        .addresses = {
+            {GameVersion::Retail, 0x011eb210},
+            {GameVersion::Steam,  0x011ea210},
+            {GameVersion::EA,     0x01244260},
+        },
+    };
+
+    static inline const AddressInfo unknownTimer = {
+        .name = "TimerOpt::unknownTimer",
+        .addresses = {
+            {GameVersion::Retail, 0x011f53a8},
+            {GameVersion::Steam,  0x011f43a8},
+            {GameVersion::EA,     0x0124e438},
+        },
+    };
+
     typedef void (WINAPI* InitializeCriticalSectionFn)(LPCRITICAL_SECTION lpCriticalSection);
     typedef BOOL (WINAPI* InitializeCriticalSectionAndSpinCountFn)(LPCRITICAL_SECTION lpCriticalSection, DWORD dwSpinCount);
     typedef DWORD (WINAPI* SetCriticalSectionSpinCountFn)(LPCRITICAL_SECTION lpCriticalSection, DWORD dwSpinCount);
@@ -19,18 +45,17 @@ private:
     InitializeCriticalSectionAndSpinCountFn originalInitializeCriticalSectionAndSpinCount;
     SetCriticalSectionSpinCountFn originalSetCriticalSectionSpinCount;
 
-    static const DWORD DEFAULT_SPIN_COUNT = 4000;       // Standard "good enough" spin count
+    static const DWORD DEFAULT_SPIN_COUNT = 4000;
     static const UINT TARGET_TIMER_RES = 1;
 
-    // Configuration structure for tiered critical section optimization
+    // Runtime configuration structure for critical section optimization
     struct CriticalSectionConfig {
         uintptr_t address;
         DWORD spinCount;
         const char* debugName;
     };
 
-    // Tiered critical section targets
-    static const std::vector<CriticalSectionConfig> CS_TARGETS;
+    std::vector<CriticalSectionConfig> csTargets;  // Built at runtime from AddressInfo
 
     ULONG originalTimerResolution = 0;
     std::vector<DetourHelper::Hook> hooks;
@@ -44,14 +69,11 @@ private:
         }
 
         if (instance->originalInitializeCriticalSectionAndSpinCount) {
-            // Redirect to the version with spin count
             instance->originalInitializeCriticalSectionAndSpinCount(lpCriticalSection, DEFAULT_SPIN_COUNT);
         } else {
-            // Fallback
             if (instance->originalInitializeCriticalSection) {
                 instance->originalInitializeCriticalSection(lpCriticalSection);
             }
-            // Try to set it afterwards if we have the setter
             if (instance->originalSetCriticalSectionSpinCount) {
                 instance->originalSetCriticalSectionSpinCount(lpCriticalSection, DEFAULT_SPIN_COUNT);
             }
@@ -59,7 +81,6 @@ private:
     }
 
     static BOOL WINAPI HookedInitializeCriticalSectionAndSpinCount(LPCRITICAL_SECTION lpCriticalSection, DWORD dwSpinCount) {
-        // Upgrade pathetic spin counts (like 0 or 10) to something useful
         if (dwSpinCount < DEFAULT_SPIN_COUNT) {
             dwSpinCount = DEFAULT_SPIN_COUNT;
         }
@@ -81,7 +102,6 @@ private:
         return ::SetCriticalSectionSpinCount(lpCriticalSection, dwSpinCount);
     }
 
-    //helpers
     bool SetHighResolutionTimer() {
         HMODULE ntdll = GetModuleHandleW(L"ntdll.dll");
         if (!ntdll) {
@@ -105,8 +125,7 @@ private:
             NTSTATUS status = NtSetTimerResolution(10000, TRUE, &newRes);
 
             if (status == 0) {
-                LOG_INFO("[TimerOpt] Timer resolution: " +
-                         std::to_string(newRes / 10000.0) + "ms");
+                LOG_INFO(std::format("[TimerOpt] Timer resolution: {}ms", newRes / 10000.0));
             }
         }
 
@@ -130,25 +149,42 @@ private:
         }
     }
 
+    bool BuildCSTargets() {
+        csTargets.clear();
+
+        // Build CS targets from AddressInfo, resolving for current version
+        auto monoAddr = monoMethodCacheTimer.Resolve();
+        auto browserAddr = browserTimer.Resolve();
+        auto unkAddr = unknownTimer.Resolve();
+
+        if (monoAddr) {
+            csTargets.push_back({*monoAddr, 24000, "Mono_MethodCache"});
+        }
+        if (browserAddr) {
+            csTargets.push_back({*browserAddr, 20000, "Browser"});
+        }
+        if (unkAddr) {
+            csTargets.push_back({*unkAddr, 8000, "Unk_LookAtLater"});
+        }
+
+        return !csTargets.empty();
+    }
+
     bool PatchSpecificCriticalSections() {
         int successCount = 0;
 
         LOG_INFO("[TimerOpt] Applying tiered Critical Section patching...");
 
-        for (const auto& config : CS_TARGETS) {
+        for (const auto& config : csTargets) {
             LPCRITICAL_SECTION critSec = (LPCRITICAL_SECTION)config.address;
 
-            // 1. Memory Safety Check
             MEMORY_BASIC_INFORMATION mbi;
             if (!PatchHelper::IsMemoryWritable(critSec, &mbi)) {
-                char buf[128];
-                sprintf_s(buf, "[TimerOpt] Skipped %s (Invalid Memory at 0x%08X; State: 0x%08X; Protect: 0x%08X)",
-                          config.debugName, (unsigned int)config.address, (unsigned int)mbi.State, (unsigned int)mbi.Protect);
-                LOG_WARNING(buf);
+                LOG_WARNING(std::format("[TimerOpt] Skipped {} (Invalid Memory at {:#010x}; State: {:#x}; Protect: {:#x})",
+                          config.debugName, config.address, mbi.State, mbi.Protect));
                 continue;
             }
 
-            // 2. Apply the tiered spin count
             DWORD prevCount = 0;
             if (originalSetCriticalSectionSpinCount) {
                 prevCount = originalSetCriticalSectionSpinCount(critSec, config.spinCount);
@@ -156,20 +192,14 @@ private:
                 prevCount = ::SetCriticalSectionSpinCount(critSec, config.spinCount);
             }
 
-            // 3. Log the upgrade
-            // Only log if we actually changed it
             if (prevCount != config.spinCount) {
-                char addressBuffer[32];
-                sprintf_s(addressBuffer, "0x%08X", (unsigned int)config.address);
-
-                LOG_INFO("[TimerOpt] Tuned " + std::string(config.debugName) +
-                         " (" + std::string(addressBuffer) + ")" +
-                         " Spin: " + std::to_string(prevCount) + " -> " + std::to_string(config.spinCount));
+                LOG_INFO(std::format("[TimerOpt] Tuned {} ({:#010x}) Spin: {} -> {}",
+                         config.debugName, config.address, prevCount, config.spinCount));
                 successCount++;
             }
         }
 
-        LOG_INFO("[TimerOpt] Successfully tuned " + std::to_string(successCount) + "/" + std::to_string(CS_TARGETS.size()) + " critical sections");
+        LOG_INFO(std::format("[TimerOpt] Successfully tuned {}/{} critical sections", successCount, csTargets.size()));
         return true;
     }
 
@@ -195,6 +225,11 @@ public:
 
         lastError.clear();
         LOG_INFO("[TimerOpt] Installing timer optimization patch...");
+
+        // Build CS targets for current version
+        if (!BuildCSTargets()) {
+            LOG_WARNING("[TimerOpt] No critical section targets available for this version");
+        }
 
         HMODULE hKernel = GetModuleHandle(L"kernel32.dll");
         if (!hKernel) return Fail("Failed to get kernel32.dll handle");
@@ -229,7 +264,7 @@ public:
         }
 
         // Patch the specific critical sections that are already initialized by the game
-        if (!PatchSpecificCriticalSections()) {
+        if (!csTargets.empty() && !PatchSpecificCriticalSections()) {
             DetourHelper::RemoveHooks(hooks);
             RestoreTimerResolution();
             instance = nullptr;
@@ -239,7 +274,8 @@ public:
         isEnabled = true;
         LOG_INFO("[TimerOpt] Timer optimization patch installed successfully");
         LOG_INFO("[TimerOpt] + Timer resolution: 1ms");
-        LOG_INFO("[TimerOpt] + Critical sections: Default spin count " + std::to_string(DEFAULT_SPIN_COUNT) + " (new), tiered spin counts for " + std::to_string(CS_TARGETS.size()) + " hot sections");
+        LOG_INFO(std::format("[TimerOpt] + Critical sections: Default spin count {} (new), tiered spin counts for {} hot sections",
+                 DEFAULT_SPIN_COUNT, csTargets.size()));
         return true;
     }
 
@@ -267,28 +303,16 @@ public:
 
 TimerOptimizationPatch* TimerOptimizationPatch::instance = nullptr;
 
-// Define the tiered critical section targets
-const std::vector<TimerOptimizationPatch::CriticalSectionConfig> TimerOptimizationPatch::CS_TARGETS = {
-    // CRITICAL TIER: (Short hold, high frequency)
-    {0x011f43e4, 24000, "Mono_MethodCache"},
-
-    // HIGH TIER: Many references, rarely contended
-    {0x011ea210, 20000, "Browser"}, //idk if this ever gets used but would be kind of... scary if it was
-
-    // MEDIUM TIER: The original optimization target, I forgor
-    {0x011f43a8, 8000,  "Unk_LookAtLater"},
-};
-
 REGISTER_PATCH(TimerOptimizationPatch, {
     .displayName = "Timer & Threading Optimizations (Updated!)",
     .description = "Fixes several timing and threading inefficiencies to reduce CPU usage, stutter, etc. for smoother gameplay.",
     .category = "Performance",
     .experimental = false,
-    .targetVersion = GameVersion::Steam,
+    .supportedVersions = VERSION_ALL,
     .technicalDetails = {
         "Sets system timer to 1ms via NtSetTimerResolution + timeBeginPeriod",
         "Hooks InitializeCriticalSection(AndSpinCount) to force 4000 spin count for new crit sections, reducing context switches",
-        "Tiered critical section optimization for static critical sections (more to come, currently 3/47)", //me when I lie
+        "Tiered critical section optimization for static critical sections (more to come, currently 3/47)",
         "Once enabled, static address patches will remain active even when disabled",
         "Should make performance good, idfk lmao"
     }

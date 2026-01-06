@@ -27,16 +27,7 @@ bool OptimizationPatch::IsCompatibleWithCurrentVersion() const {
         return true; // No metadata = assume compatible
     }
 
-    GameVersion current = DetectGameVersion();
-    GameVersion target = metadata->targetVersion;
-
-    // All means it works on any version
-    if (target == GameVersion::All) {
-        return true;
-    }
-
-    // Otherwise must match exactly
-    return current == target;
+    return IsVersionSupported(metadata->supportedVersions);
 }
 
 void OptimizationPatch::MaybeSampleMinimal(LONG currentCalls) {

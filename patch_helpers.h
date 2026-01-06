@@ -4,12 +4,15 @@
 #include <d3d9.h>
 #include <detours/detours.h>
 #include <vector>
+#include <array>
 #include <cstring>
 #include <variant>
+#include <optional>
 #include <fstream>
 #include "logger.h"
 #include "settings.h"
 #include "utils.h"
+#include "patch_system.h"  // For GameVersion, g_gameVersion, GAME_VERSION_COUNT
 
 // Forward declarations for ImGui
 struct ImGuiContext;
@@ -217,11 +220,20 @@ namespace PatchHelper {
         return true;
     }
 
-    // String-based pattern scanning: "48 89 5C ? ? 08" where ? is wildcard
-    // Just copy/paste patterns from your disassembler!
+    // String-based pattern scanning with nibble-level wildcards, can you believe ts is called a nibble?
+    // Supports: "FF" (exact), "??" (full wildcard), "?F" (match low nibble), "F?" (match high nibble) yum!
+    // e.g. "0F 82 ?? ?? ?0 8B"  -> matches 0F 82 <any> <any> <any ending in 0> 8B
     inline uintptr_t ScanPattern(BYTE* start, size_t size, const char* pattern) {
         std::vector<BYTE> bytes;
-        std::string mask;
+        std::vector<BYTE> masks;  // Per-byte mask, 0xFF = exact, 0xF0 = high nibble, 0x0F = low nibble, 0x00 = wildcard
+
+        // Helper to parse a single hex nibble
+        auto parseNibble = [](char c) -> BYTE {
+            if (c >= '0' && c <= '9') return c - '0';
+            if (c >= 'A' && c <= 'F') return 10 + (c - 'A');
+            if (c >= 'a' && c <= 'f') return 10 + (c - 'a');
+            return 0;
+        };
 
         const char* p = pattern;
         while (*p) {
@@ -229,24 +241,42 @@ namespace PatchHelper {
             while (*p == ' ') p++;
             if (!*p) break;
 
-            // Check for wildcard
-            if (*p == '?') {
-                bytes.push_back(0x00);  // Dummy byte
-                mask += '?';
-                p++;
+            char hiChar = *p;
+            char loChar = *(p + 1);
+
+            // Need two characters for a byte
+            if (!loChar || loChar == ' ') {
+                LOG_ERROR("ScanPattern: Invalid pattern format (incomplete byte) at: " + std::string(p));
+                return 0;
             }
-            // Parse hex byte
-            else if (isxdigit(*p) && isxdigit(*(p + 1))) {
-                char byteStr[3] = { *p, *(p + 1), '\0' };
-                bytes.push_back((BYTE)strtol(byteStr, nullptr, 16));
-                mask += 'x';
-                p += 2;
-            }
-            else {
-                // Invalid format
+
+            bool hiWild = (hiChar == '?');
+            bool loWild = (loChar == '?');
+            bool hiHex = isxdigit(hiChar);
+            bool loHex = isxdigit(loChar);
+
+            // Validate each nibby must be hex or wildcard
+            if ((!hiWild && !hiHex) || (!loWild && !loHex)) {
                 LOG_ERROR("ScanPattern: Invalid pattern format at: " + std::string(p));
                 return 0;
             }
+
+            // Build the byte and mask
+            BYTE byteVal = 0;
+            BYTE maskVal = 0;
+
+            if (hiHex) {
+                byteVal |= (parseNibble(hiChar) << 4);
+                maskVal |= 0xF0;
+            }
+            if (loHex) {
+                byteVal |= parseNibble(loChar);
+                maskVal |= 0x0F;
+            }
+
+            bytes.push_back(byteVal);
+            masks.push_back(maskVal);
+            p += 2;
         }
 
         if (bytes.empty()) {
@@ -254,12 +284,11 @@ namespace PatchHelper {
             return 0;
         }
 
-        // Perform the scan
+        // Perform the scan with mask comparison
         for (size_t i = 0; i <= size - bytes.size(); i++) {
             bool found = true;
             for (size_t j = 0; j < bytes.size(); j++) {
-                if (mask[j] == '?') continue;  // Wildcard
-                if (start[i + j] != bytes[j]) {
+                if ((start[i + j] & masks[j]) != (bytes[j] & masks[j])) {
                     found = false;
                     break;
                 }
@@ -270,6 +299,105 @@ namespace PatchHelper {
         }
         return 0;
     }
+
+} 
+
+// known version address OR pattern scan for unknown versions
+// Strategy is:
+// If version is KNOWN and we have an address for it -> use that address directly
+// If version is UNKNOWN and we have a pattern -> try pattern scan
+// Always validate with expectedBytes if provided to prevent patching the wrong area if the users exe is weird idk, should be fine but better safe
+struct AddressInfo {
+    struct VersionAddress {
+        GameVersion version;
+        uintptr_t address;
+    };
+
+    const char* name;                                    // For logging
+    std::vector<VersionAddress> addresses;               // Explicit version → address mapping
+    const char* pattern = nullptr;                       // Pattern scan string (nullptr = no pattern)
+    int patternOffset = 0;                               // Offset to add to pattern match
+    std::vector<uint8_t> expectedBytes = {};             // Bytes to validate (empty = skip)
+
+    // Get address for a specific version (0 if not found)
+    uintptr_t GetAddressForVersion(GameVersion version) const {
+        for (const auto& va : addresses) {
+            if (va.version == version) {
+                return va.address;
+            }
+        }
+        return 0;
+    }
+
+    // Resolve address for current game version
+    std::optional<uintptr_t> Resolve() const {
+        // If we know the version and have an address, use it
+        if (g_gameVersion != GameVersion::Unknown) {
+            uintptr_t addr = GetAddressForVersion(g_gameVersion);
+            if (addr != 0) {
+                LOG_DEBUG(std::format("[{}] Using address for {}: {:#010x}",
+                    name, VERSION_NAMES[static_cast<size_t>(g_gameVersion)], addr));
+
+                if (Validate(addr)) {
+                    return addr;
+                }
+                LOG_ERROR(std::format("[{}] Address {:#010x} failed validation for {}",
+                    name, addr, VERSION_NAMES[static_cast<size_t>(g_gameVersion)]));
+                return std::nullopt;  // Don't fall through - known version, wrong bytes = bad
+            }
+            // No address for this known version - fall through to try pattern scan
+            LOG_DEBUG(std::format("[{}] No address defined for {}, trying pattern scan...",
+                name, VERSION_NAMES[static_cast<size_t>(g_gameVersion)]));
+        }
+
+        // or Try pattern scan for unknown versions or known versions without addresses
+        if (pattern && pattern[0] != '\0') {
+            MODULEINFO modInfo;
+            HMODULE hModule = GetModuleHandleW(nullptr);
+            if (GetModuleInformation(GetCurrentProcess(), hModule, &modInfo, sizeof(modInfo))) {
+                if (auto addr = PatchHelper::ScanPattern(
+                        static_cast<BYTE*>(modInfo.lpBaseOfDll),
+                        modInfo.SizeOfImage,
+                        pattern)) {
+                    uintptr_t result = addr + patternOffset;
+                    LOG_DEBUG(std::format("[{}] Pattern scan found: {:#010x}", name, result));
+
+                    if (Validate(result)) {
+                        LOG_INFO(std::format("[{}] Pattern matched on unknown version at {:#010x}", name, result));
+                        return result;
+                    }
+                    LOG_WARNING(std::format("[{}] Pattern match at {:#010x} failed validation", name, result));
+                }
+            }
+            LOG_ERROR(std::format("[{}] Pattern scan failed on unknown version", name));
+        } else {
+            LOG_ERROR(std::format("[{}] Unknown version and no pattern available", name));
+        }
+
+        return std::nullopt;
+    }
+
+    // Validate that address contains expected bytes
+    bool Validate(uintptr_t addr) const {
+        if (expectedBytes.empty()) {
+            return true;  // No validation requested
+        }
+
+        MEMORY_BASIC_INFORMATION mbi;
+        if (!VirtualQuery(reinterpret_cast<void*>(addr), &mbi, sizeof(mbi))) {
+            return false;
+        }
+        if (mbi.State != MEM_COMMIT) {
+            return false;
+        }
+
+        return std::memcmp(reinterpret_cast<void*>(addr),
+                          expectedBytes.data(),
+                          expectedBytes.size()) == 0;
+    }
+};
+
+namespace PatchHelper {
 
     // Read helpers for inspecting memory before patching
     inline BYTE ReadByte(uintptr_t address) {

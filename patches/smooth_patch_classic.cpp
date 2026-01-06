@@ -111,7 +111,7 @@ REGISTER_PATCH(SmoothPatchClassic, {
     .description = "It's smooth patch alright",
     .category = "Performance",
     .experimental = false,
-    .targetVersion = GameVersion::All,
+    .supportedVersions = VERSION_ALL,
     .technicalDetails = {
         "Basically 1-1 of smooth patch",
         "Hardcodes sleep duration to whatever the maths says",
