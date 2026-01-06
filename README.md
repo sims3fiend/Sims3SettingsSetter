@@ -1,4 +1,4 @@
-# Sims 3 Settings Setter v1.1
+# Sims 3 Settings Setter v1.2
 
 Performance improvements and settings editor for The Sims 3
 
