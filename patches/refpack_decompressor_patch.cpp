@@ -163,9 +163,7 @@ private:
                 }
 
                 // Backref Copy
-                // Bounds check: output and backref source validity
-                // Check (dst - offset < dstStart) to prevent reading before the buffer, could potentially skip but risky...
-                if (dst - offset < dstStart || dst + match_len > dstEnd) goto error_overflow;
+                if (offset > (uint32_t)(dst - dstStart) || dst + match_len > dstEnd) goto error_overflow;
 
                 CopyOverlapping<Strategy>(dst, dst - offset, match_len);
                 dst += match_len;
@@ -188,7 +186,7 @@ private:
                     dst += literal_len; src += literal_len;
                 }
 
-                if (dst - offset < dstStart || dst + match_len > dstEnd) goto error_overflow;
+                if (offset > (uint32_t)(dst - dstStart) || dst + match_len > dstEnd) goto error_overflow;
                 CopyOverlapping<Strategy>(dst, dst - offset, match_len);
                 dst += match_len;
             }
@@ -211,7 +209,7 @@ private:
                     dst += literal_len; src += literal_len;
                 }
 
-                if (dst - offset < dstStart || dst + match_len > dstEnd) goto error_overflow;
+                if (offset > (uint32_t)(dst - dstStart) || dst + match_len > dstEnd) goto error_overflow;
                 CopyOverlapping<Strategy>(dst, dst - offset, match_len);
                 dst += match_len;
             }
@@ -227,9 +225,8 @@ private:
                         dst[0] = src[0];
                         if (len > 1) dst[1] = src[1];
                         if (len > 2) dst[2] = src[2];
-                        dst += len;
                     }
-                    break;
+                    return (int)expectedSize;
                 }
 
                 if (src + len > srcEnd || dst + len > dstEnd) goto error_overflow;
@@ -237,7 +234,7 @@ private:
                 dst += len; src += len;
             }
         }
-        return (int)(dst - dstStart); //original returns expectedSize from header, we return actual bytes written, IMO this is better and shouldn't cause issues... h-haha...
+        return 0; // Source exhausted without stop code = malformed data
 
     error_truncated:
     error_overflow:

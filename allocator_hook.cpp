@@ -7,6 +7,7 @@
 #include <detours/detours.h>
 #include <string>
 #include <vector>
+#include <fstream>
 #include <algorithm>
 #include <direct.h>
 #include <dbghelp.h>
@@ -143,17 +144,48 @@ bool ShouldEnableAllocatorHooks() {
         strcpy_s(iniPath, "S3SS.ini");
     }
 
-    // Check if file exists
-    DWORD attr = GetFileAttributesA(iniPath);
-    if (attr == INVALID_FILE_ATTRIBUTES) {
-        // File doesn't exist, default to FALSE (user must explicitly enable)
+    // Use manual file parsing :) idiot, same logic as OptimizationManager::LoadState
+    std::ifstream file(iniPath);
+    if (!file.is_open()) {
         return false;
     }
 
-    // Read value - default to false if key doesn't exist
-    char value[32];
-    GetPrivateProfileStringA("Optimization_Mimalloc", "Enabled", "false", value, 32, iniPath);
-    return _stricmp(value, "true") == 0;
+    std::string line;
+    bool inMimallocSection = false;
+
+    while (std::getline(file, line)) {
+        // Strip trailing \r (Windows line endings)
+        if (!line.empty() && line.back() == '\r') {
+            line.pop_back();
+        }
+
+        // Skip empty lines and comments
+        if (line.empty() || line[0] == ';') {
+            continue;
+        }
+
+        // Check for section header
+        if (!line.empty() && line[0] == '[' && line.back() == ']') {
+            // Check if this is the Mimalloc section
+            inMimallocSection = (line == "[Optimization_Mimalloc]");
+            continue;
+        }
+
+        // Parse key=value pairs within Mimalloc section
+        if (inMimallocSection) {
+            size_t equalPos = line.find('=');
+            if (equalPos != std::string::npos) {
+                std::string key = line.substr(0, equalPos);
+                std::string value = line.substr(equalPos + 1);
+
+                if (_stricmp(key.c_str(), "Enabled") == 0) {
+                    return _stricmp(value.c_str(), "true") == 0;
+                }
+            }
+        }
+    }
+
+    return false;
 }
 
 void InitializeAllocatorHooks() {
