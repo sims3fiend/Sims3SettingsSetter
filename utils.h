@@ -11,6 +11,31 @@
 extern HMODULE GetDllModuleHandle();
 
 namespace Utils {
+    // Get the directory containing the main executable
+    // Cache after first call for "performance"
+    inline const std::string& GetExeDirectory() {
+        static std::string exeDir;
+        if (exeDir.empty()) {
+            char exePath[MAX_PATH];
+            GetModuleFileNameA(NULL, exePath, MAX_PATH);
+            char* lastSlash = strrchr(exePath, '\\');
+            if (lastSlash) {
+                exeDir.assign(exePath, lastSlash + 1); // Include trailing backslash
+            }
+        }
+        return exeDir;
+    }
+
+    // Get the absolute path to a file in the game's exe directory. We use this instead of relative paths to avoid CWD issues (e.g., SysWOW64????) h-haha...
+    inline std::string GetGameFilePath(const char* filename) {
+        return GetExeDirectory() + filename;
+    }
+
+    // Convenience function for the main INI file
+    inline std::string GetDefaultINIPath() {
+        return GetGameFilePath("S3SS.ini");
+    }
+
     inline std::wstring Utf8ToWide(const std::string& str) {
         if (str.empty()) return std::wstring();
         int size_needed = MultiByteToWideChar(CP_UTF8, 0, str.c_str(), (int)str.size(), nullptr, 0);

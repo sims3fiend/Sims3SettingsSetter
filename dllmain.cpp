@@ -227,7 +227,7 @@ class VariableRegistryHook : public SettingsHook {
 
                 // Save default settings to a file
                 std::string error;
-                if (!settingsManager.SaveDefaultValues("S3SS_defaults.ini", &error)) {
+                if (!settingsManager.SaveDefaultValues(Utils::GetGameFilePath("S3SS_defaults.ini"), &error)) {
                     LOG_ERROR("Failed to save default settings: " + error);
                 }
                 else {
@@ -613,7 +613,7 @@ HMODULE GetDllModuleHandle() {
 DWORD WINAPI HookThread(LPVOID lpParameter) {
     try {
         // Initialize logger
-        if (!Logger::Handler::Initialize("S3SS_LOG.txt")) {
+        if (!Logger::Handler::Initialize(Utils::GetGameFilePath("S3SS_LOG.txt"))) {
             OutputDebugStringA("Failed to initialize logger\n");
         }
         Logger::Handler::SetFileLogging(true);
@@ -638,11 +638,12 @@ DWORD WINAPI HookThread(LPVOID lpParameter) {
             ", FMA: " + (cpuFeatures.hasFMA ? "Yes" : "No"));
 
         // Load UI settings first
-        UISettings::Get().LoadFromINI("S3SS.ini");
+        std::string iniPath = Utils::GetDefaultINIPath();
+        UISettings::Get().LoadFromINI(iniPath.c_str());
 
         // If settings need to be saved (file doesn't exist or missing QoL section), save them
         if (UISettings::Get().HasUnsavedChanges()) {
-            UISettings::Get().SaveToINI("S3SS.ini");
+            UISettings::Get().SaveToINI(iniPath.c_str());
             UISettings::Get().MarkAsSaved();
         }
 
@@ -674,7 +675,7 @@ DWORD WINAPI HookThread(LPVOID lpParameter) {
 
                 // Load saved settings
                 std::string error;
-                if (!SettingsManager::Get().LoadConfig("S3SS.ini", &error)) {
+                if (!SettingsManager::Get().LoadConfig(iniPath, &error)) {
                     LOG_WARNING("Failed to load settings at startup: " + error);
                 }
                 else {
@@ -683,8 +684,8 @@ DWORD WINAPI HookThread(LPVOID lpParameter) {
             }
 
             // Load QoL settings
-            MemoryMonitor::Get().LoadSettings("S3SS.ini");
-            BorderlessWindow::Get().LoadSettings("S3SS.ini");
+            MemoryMonitor::Get().LoadSettings(iniPath.c_str());
+            BorderlessWindow::Get().LoadSettings(iniPath.c_str());
             LOG_INFO("Successfully loaded QoL settings");
         }
         catch (const std::exception& e) {
@@ -702,7 +703,7 @@ DWORD WINAPI HookThread(LPVOID lpParameter) {
         try {
             LOG_INFO("Loading saved patch states...");
             auto& patchManager = OptimizationManager::Get();
-            if (!patchManager.LoadState("S3SS.ini")) {
+            if (!patchManager.LoadState(iniPath)) {
                 LOG_WARNING("Failed to load patch states");
             }
             else {

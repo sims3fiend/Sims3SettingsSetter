@@ -83,7 +83,7 @@ bool PresetManager::LoadPresetWithStrategy(const std::string& name, PresetLoadSt
         
         if (strategy == PresetLoadStrategy::Overwrite) {
             // First try to load values from defaults file if it exists
-            std::string defaultsPath = "S3SS_defaults.ini";
+            std::string defaultsPath = Utils::GetGameFilePath("S3SS_defaults.ini");
             if (fs::exists(defaultsPath)) {
                 std::string loadError;
                 if (SettingsManager::Get().LoadDefaultValues(defaultsPath, &loadError)) {
@@ -118,9 +118,10 @@ bool PresetManager::LoadPresetWithStrategy(const std::string& name, PresetLoadSt
             
             // Auto-save after applying preset
             std::string saveError;
-            bool saveSuccess = SettingsManager::Get().SaveConfig("S3SS.ini", &saveError);
+            std::string iniPath = Utils::GetDefaultINIPath();
+            bool saveSuccess = SettingsManager::Get().SaveConfig(iniPath, &saveError);
             // Also save optimization settings
-            saveSuccess &= OptimizationManager::Get().SaveState("S3SS.ini");
+            saveSuccess &= OptimizationManager::Get().SaveState(iniPath);
             
             if (!saveSuccess) {
                 LOG_WARNING("[PresetManager] Auto-save after preset load failed: " + saveError);

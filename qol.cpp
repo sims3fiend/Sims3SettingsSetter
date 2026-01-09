@@ -52,7 +52,7 @@ void MemoryMonitor::SetWarningThreshold(float gigabytes) {
     auto& settingsManager = SettingsManager::Get();
     std::wstring settingName = L"QoL:MemoryMonitor:WarningThreshold";
     settingsManager.UpdateConfigValue(settingName, std::to_wstring(m_warningThresholdGB));
-    settingsManager.SaveConfig("S3SS.ini", nullptr); // Specify nullptr for error parameter
+    settingsManager.SaveConfig(Utils::GetDefaultINIPath(), nullptr); // Specify nullptr for error parameter
 }
 
 void MemoryMonitor::SetEnabled(bool enabled) {
@@ -62,7 +62,7 @@ void MemoryMonitor::SetEnabled(bool enabled) {
     auto& settingsManager = SettingsManager::Get();
     std::wstring settingName = L"QoL:MemoryMonitor:Enabled";
     settingsManager.UpdateConfigValue(settingName, enabled ? L"true" : L"false");
-    settingsManager.SaveConfig("S3SS.ini", nullptr); // Specify nullptr for error parameter
+    settingsManager.SaveConfig(Utils::GetDefaultINIPath(), nullptr); // Specify nullptr for error parameter
 }
 
 void MemoryMonitor::SetWarningStyle(WarningStyle style) {
@@ -72,7 +72,7 @@ void MemoryMonitor::SetWarningStyle(WarningStyle style) {
     auto& settingsManager = SettingsManager::Get();
     std::wstring settingName = L"QoL:MemoryMonitor:WarningStyle";
     settingsManager.UpdateConfigValue(settingName, style == WarningStyle::Modal ? L"modal" : L"overlay");
-    settingsManager.SaveConfig("S3SS.ini", nullptr); // Specify nullptr for error parameter
+    settingsManager.SaveConfig(Utils::GetDefaultINIPath(), nullptr); // Specify nullptr for error parameter
 }
 
 void MemoryMonitor::LoadSettings(const std::string& filename) {
@@ -153,7 +153,7 @@ void UISettings::SetUIToggleKey(UINT key) {
     auto& settingsManager = SettingsManager::Get();
     std::wstring settingName = L"QoL:UIToggleKey";
     settingsManager.UpdateConfigValue(settingName, std::to_wstring(key));
-    settingsManager.SaveConfig("S3SS.ini", nullptr);
+    settingsManager.SaveConfig(Utils::GetDefaultINIPath(), nullptr);
 }
 
 void UISettings::SetDisableHooks(bool disable) {
@@ -164,7 +164,7 @@ void UISettings::SetDisableHooks(bool disable) {
     auto& settingsManager = SettingsManager::Get();
     std::wstring settingName = L"QoL:DisableHooks";
     settingsManager.UpdateConfigValue(settingName, disable ? L"true" : L"false");
-    settingsManager.SaveConfig("S3SS.ini", nullptr);
+    settingsManager.SaveConfig(Utils::GetDefaultINIPath(), nullptr);
 }
 
 bool UISettings::SaveToINI(const std::string& filename) const {
@@ -284,7 +284,7 @@ void BorderlessWindow::SetMode(BorderlessMode mode) {
         case BorderlessMode::Fullscreen: modeValue = L"fullscreen"; break;
     }
     settingsManager.UpdateConfigValue(settingName, modeValue);
-    settingsManager.SaveConfig("S3SS.ini", nullptr);
+    settingsManager.SaveConfig(Utils::GetDefaultINIPath(), nullptr);
 }
 
 void BorderlessWindow::Apply() {

@@ -10,7 +10,7 @@
 #include "utils.h"
 #include "config_value_cache.h"
 #include "logger.h"
-
+//File theme: https://www.youtube.com/watch?v=i2vctV4x5aQ
 // Helper function to write a vector to string
 template<typename T>
 std::string VectorToString(const T& vec) {
@@ -834,7 +834,7 @@ void SettingsManager::ManualInitialize() {
     
     // Save default settings to a file
     std::string error;
-    if (!SaveDefaultValues("S3SS_defaults.ini", &error)) {
+    if (!SaveDefaultValues(Utils::GetGameFilePath("S3SS_defaults.ini"), &error)) {
         LOG_ERROR("Failed to save default settings during manual init: " + error);
     }
     else {

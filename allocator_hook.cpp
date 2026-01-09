@@ -1,4 +1,5 @@
 #include "allocator_hook.h"
+#include "utils.h"
 #include <windows.h>
 #include <mimalloc.h>
 #pragma comment(lib, "mimalloc.lib")
@@ -14,7 +15,7 @@
 #pragma comment(lib, "dbghelp.lib")
 #pragma comment(lib, "dbghelp.lib")
 #include "logger.h"
-
+//https://www.youtube.com/watch?v=M7g8YY0FZfU
 bool g_mimallocActive = false;
 
 // Function pointers for original functions
@@ -133,18 +134,10 @@ void* __cdecl SafeRecalloc(void* p, size_t count, size_t size) {
 
 // Helper to check if hooks should be enabled from config
 bool ShouldEnableAllocatorHooks() {
-    char iniPath[MAX_PATH];
-    GetModuleFileNameA(NULL, iniPath, MAX_PATH);
-    char* lastSlash = strrchr(iniPath, '\\');
-    if (lastSlash) {
-        *(lastSlash + 1) = '\0';
-        strcat_s(iniPath, "S3SS.ini");
-    }
-    else {
-        strcpy_s(iniPath, "S3SS.ini");
-    }
+    std::string iniPath = Utils::GetDefaultINIPath();
 
     // Use manual file parsing :) idiot, same logic as OptimizationManager::LoadState
+    // All these tweaks and the issue was completely unreleate LOVE IT!!! SLAY!!!
     std::ifstream file(iniPath);
     if (!file.is_open()) {
         return false;
@@ -154,9 +147,14 @@ bool ShouldEnableAllocatorHooks() {
     bool inMimallocSection = false;
 
     while (std::getline(file, line)) {
-        // Strip trailing \r (Windows line endings)
-        if (!line.empty() && line.back() == '\r') {
+        // Strip trailing \r and whitespace (Windows line endings, editor quirks)
+        while (!line.empty() && (line.back() == '\r' || line.back() == ' ' || line.back() == '\t')) {
             line.pop_back();
+        }
+        // Strip leading whitespace
+        size_t start = line.find_first_not_of(" \t");
+        if (start != std::string::npos && start > 0) {
+            line = line.substr(start);
         }
 
         // Skip empty lines and comments
@@ -166,8 +164,8 @@ bool ShouldEnableAllocatorHooks() {
 
         // Check for section header
         if (!line.empty() && line[0] == '[' && line.back() == ']') {
-            // Check if this is the Mimalloc section
-            inMimallocSection = (line == "[Optimization_Mimalloc]");
+            // Check if this is the Mimalloc section (case-insensitive)
+            inMimallocSection = (_stricmp(line.c_str(), "[Optimization_Mimalloc]") == 0);
             continue;
         }
 
@@ -177,6 +175,11 @@ bool ShouldEnableAllocatorHooks() {
             if (equalPos != std::string::npos) {
                 std::string key = line.substr(0, equalPos);
                 std::string value = line.substr(equalPos + 1);
+
+                // Trim key and value (handles "Enabled = true" with spaces)
+                while (!key.empty() && (key.back() == ' ' || key.back() == '\t')) key.pop_back();
+                while (!value.empty() && (value.front() == ' ' || value.front() == '\t')) value.erase(0, 1);
+                while (!value.empty() && (value.back() == ' ' || value.back() == '\t')) value.pop_back();
 
                 if (_stricmp(key.c_str(), "Enabled") == 0) {
                     return _stricmp(value.c_str(), "true") == 0;
@@ -196,9 +199,10 @@ void InitializeAllocatorHooks() {
 
     LOG_INFO("Initializing Allocator Hooks (mimalloc via Detours)...");
 
-    HMODULE hMsvcr80 = GetModuleHandleA("MSVCR80.dll");
+    // Use LoadLibrary instead of GetModuleHandle - at DLL_PROCESS_ATTACH time, MSVCR80.dll may not be loaded yet...
+    HMODULE hMsvcr80 = LoadLibraryA("MSVCR80.dll");
     if (!hMsvcr80) {
-        LOG_ERROR("MSVCR80.dll not loaded! Cannot install hooks.");
+        LOG_ERROR("Failed to load MSVCR80.dll! Cannot install hooks.");
         return;
     }
 

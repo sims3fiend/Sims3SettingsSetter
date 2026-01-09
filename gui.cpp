@@ -71,11 +71,12 @@ namespace SettingsGui {
                 if (ImGui::BeginMenu("File")) {
                     if (ImGui::MenuItem("Save Settings")) {
                         std::string error;
-                        bool settingsSuccess = SettingsManager::Get().SaveConfig("S3SS.ini", &error);
+                        std::string iniPath = Utils::GetDefaultINIPath();
+                        bool settingsSuccess = SettingsManager::Get().SaveConfig(iniPath, &error);
                         // Also save optimization settings
-                        bool optimizationSuccess = OptimizationManager::Get().SaveState("S3SS.ini");
+                        bool optimizationSuccess = OptimizationManager::Get().SaveState(iniPath);
                         // Ensure UI settings are in the file (append if needed)
-                        UISettings::Get().EnsureInINI("S3SS.ini");
+                        UISettings::Get().EnsureInINI(iniPath.c_str());
 
                         if (settingsSuccess && optimizationSuccess) {
                             UISettings::Get().MarkAsSaved();
@@ -91,9 +92,10 @@ namespace SettingsGui {
                     }
                     if (ImGui::MenuItem("Load Settings")) {
                         std::string error;
-                        bool settingsSuccess = SettingsManager::Get().LoadConfig("S3SS.ini", &error);
+                        std::string iniPath = Utils::GetDefaultINIPath();
+                        bool settingsSuccess = SettingsManager::Get().LoadConfig(iniPath, &error);
                         // Also load optimization settings
-                        bool optimizationSuccess = OptimizationManager::Get().LoadState("S3SS.ini");
+                        bool optimizationSuccess = OptimizationManager::Get().LoadState(iniPath);
 
                         if (settingsSuccess && optimizationSuccess) {
                             LOG_INFO("Settings loaded successfully");
@@ -782,7 +784,7 @@ namespace SettingsGui {
                                     UISettings::Get().SetUIToggleKey(key);
                                     waitingForKey = false;
                                     // Auto-save when changed
-                                    UISettings::Get().EnsureInINI("S3SS.ini");
+                                    UISettings::Get().EnsureInINI(Utils::GetDefaultINIPath().c_str());
                                     UISettings::Get().MarkAsSaved();
                                     break;
                                 }
@@ -798,7 +800,7 @@ namespace SettingsGui {
                                     UISettings::Get().SetUIToggleKey(key);
                                     waitingForKey = false;
                                     // Auto-save when changed
-                                    UISettings::Get().EnsureInINI("S3SS.ini");
+                                    UISettings::Get().EnsureInINI(Utils::GetDefaultINIPath().c_str());
                                     UISettings::Get().MarkAsSaved();
                                     break;
                                 }
