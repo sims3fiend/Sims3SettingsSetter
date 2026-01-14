@@ -60,6 +60,7 @@
       <Filter>patches</Filter>
     </ClCompile>
     <ClCompile Include="patches\smooth_patch_precise.cpp" />
+    <ClCompile Include="patches\uncompressed_sim_textures_patch.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="config_value_cache.h" />
