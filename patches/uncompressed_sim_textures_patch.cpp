@@ -19,9 +19,6 @@ private:
     // the main difference being that the CAS version always uses the D3DFMT_A8R8G8B8 surface format.
 
     static constexpr uintptr_t offsetOfMoveSurfaceFormatIntoECX = 205;
-    // I don't know if this is what this boolean actually denotes,
-    // but the CAS version of the function has it as 1, whereas the Game version has it as 0.
-    static constexpr uintptr_t offsetOfPushIsUncompressedBoolean = 261;
 
     static constexpr uint8_t kSurfaceFormat_A8R8G8B8 = 0x3D;
 
@@ -53,7 +50,6 @@ public:
 
         successful &= PatchHelper::WriteProtectedMemory(reinterpret_cast<uint8_t*>(base + offsetOfMoveSurfaceFormatIntoECX),
                                                         moveSurfaceFormatIntoECX, 6, &tx.locations);
-        successful &= PatchHelper::WriteByte(base + offsetOfPushIsUncompressedBoolean + 1, true, &tx.locations);
 
         if (!successful || !PatchHelper::CommitTransaction(tx)) {
             PatchHelper::RollbackTransaction(tx);
