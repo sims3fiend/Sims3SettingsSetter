@@ -33,12 +33,18 @@ namespace SettingsGui {
     bool CaseInsensitiveSearch(const std::string& haystack, const std::string& needle) {
         auto toLower = [](const std::string& s) {
             std::string lower = s;
-            std::transform(lower.begin(), lower.end(), lower.begin(), 
+            std::transform(lower.begin(), lower.end(), lower.begin(),
                            [](unsigned char c){ return std::tolower(c); });
             return lower;
         };
-        
         return toLower(haystack).find(toLower(needle)) != std::string::npos;
+    }
+
+    // Check if there are any unsaved changes across all systems
+    bool HasAnyUnsavedChanges() {
+        return SettingsManager::Get().HasAnyUnsavedChanges() ||
+               OptimizationManager::Get().HasUnsavedChanges() ||
+               UISettings::Get().HasUnsavedChanges();
     }
     
     void Initialize() {
@@ -66,7 +72,13 @@ namespace SettingsGui {
         wasVisible = m_visible;
     //AAAAAAAAAAAAAAAAAAAAAHHHHHHHHHH
         ImGui::SetNextWindowSize(ImVec2(400, 600), ImGuiCond_FirstUseEver);
-        if (ImGui::Begin("Sims 3 Settings", &m_visible, ImGuiWindowFlags_MenuBar)) {
+
+        // Window title with unsaved indicator
+        // ### gives a stable window ID so position/size persists when title changes :D I love ImGUI!!!!!!!!!!
+        bool hasUnsaved = HasAnyUnsavedChanges();
+        const char* windowTitle = hasUnsaved ? "Sims 3 Settings | Unsaved Changes. Go to File -> Save Settings to save###S3SSWindow" : "Sims 3 Settings###S3SSWindow";
+
+        if (ImGui::Begin(windowTitle, &m_visible, ImGuiWindowFlags_MenuBar)) {
             if (ImGui::BeginMenuBar()) {
                 if (ImGui::BeginMenu("File")) {
                     if (ImGui::MenuItem("Save Settings")) {
@@ -344,15 +356,17 @@ namespace SettingsGui {
                                         bool checkboxState = enabled;
                                         if (ImGui::Checkbox("##checkbox", &checkboxState)) {
                                             if (checkboxState) {
-                                                if (!patch->Install()) {
-                                                    // Install failed, checkbox should revert to unchecked
-                                                    // The patch->IsEnabled() will be false, so next frame it'll be correct
+                                                if (patch->Install()) {
+                                                    OptimizationManager::Get().SetUnsavedChanges(true);
                                                 }
+                                                // Install failed: checkbox should revert to unchecked
+                                                // The patch->IsEnabled() will be false, so next frame it'll be correct
                                             } else {
-                                                if (!patch->Uninstall()) {
-                                                    // Uninstall failed, checkbox should revert to checked
-                                                    // The patch->IsEnabled() will be true, so next frame it'll be correct
+                                                if (patch->Uninstall()) {
+                                                    OptimizationManager::Get().SetUnsavedChanges(true);
                                                 }
+                                                // Uninstall failed, checkbox should revert to checked
+                                                // The patch->IsEnabled() will be true, so next frame it'll be correct
                                             }
                                         }
 
@@ -489,9 +503,13 @@ namespace SettingsGui {
                                         bool checkboxState = enabled;
                                         if (ImGui::Checkbox("##checkbox", &checkboxState)) {
                                             if (checkboxState) {
-                                                patch->Install();
+                                                if (patch->Install()) {
+                                                    OptimizationManager::Get().SetUnsavedChanges(true);
+                                                }
                                             } else {
-                                                patch->Uninstall();
+                                                if (patch->Uninstall()) {
+                                                    OptimizationManager::Get().SetUnsavedChanges(true);
+                                                }
                                             }
                                         }
 

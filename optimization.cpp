@@ -111,7 +111,11 @@ const std::vector<std::unique_ptr<OptimizationPatch>>& OptimizationManager::GetP
 bool OptimizationManager::EnablePatch(const std::string& name) {
     for (auto& patch : patches) {
         if (patch->GetName() == name) {
-            return patch->Install();
+            bool result = patch->Install();
+            if (result) {
+                m_hasUnsavedChanges = true;
+            }
+            return result;
         }
     }
     return false;
@@ -120,7 +124,11 @@ bool OptimizationManager::EnablePatch(const std::string& name) {
 bool OptimizationManager::DisablePatch(const std::string& name) {
     for (auto& patch : patches) {
         if (patch->GetName() == name) {
-            return patch->Uninstall();
+            bool result = patch->Uninstall();
+            if (result) {
+                m_hasUnsavedChanges = true;
+            }
+            return result;
         }
     }
     return false;
@@ -187,6 +195,7 @@ bool OptimizationManager::SaveState(const std::string& filename) {
             patch->SaveState(outFile);
         }
 
+        m_hasUnsavedChanges = false;
         return true;
     }
     catch (const std::exception& e) {

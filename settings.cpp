@@ -842,4 +842,13 @@ void SettingsManager::ManualInitialize() {
     }
     
     LOG_INFO("Manual initialization completed");
+}
+
+bool SettingsManager::HasAnyUnsavedChanges() const {
+    for (const auto& [name, setting] : m_settings) {
+        if (setting->HasUnsavedChanges()) {
+            return true;
+        }
+    }
+    return false;
 } 

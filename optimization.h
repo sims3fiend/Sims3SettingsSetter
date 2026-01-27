@@ -226,17 +226,21 @@ struct CPUFeatures {
 // Manager for all game patches (keeps the name for backward compatibility, remove later)
 class OptimizationManager {
     std::vector<std::unique_ptr<OptimizationPatch>> patches;
+    bool m_hasUnsavedChanges = false;
 
 public:
     static OptimizationManager& Get();
-    
+
     void RegisterPatch(std::unique_ptr<OptimizationPatch> patch);
     const std::vector<std::unique_ptr<OptimizationPatch>>& GetPatches() const;
-    
+
     bool EnablePatch(const std::string& name);
     bool DisablePatch(const std::string& name);
 
-
     bool SaveState(const std::string& filename);
     bool LoadState(const std::string& filename);
+
+    // Unsaved changes tracking
+    bool HasUnsavedChanges() const { return m_hasUnsavedChanges; }
+    void SetUnsavedChanges(bool unsaved) { m_hasUnsavedChanges = unsaved; }
 }; 

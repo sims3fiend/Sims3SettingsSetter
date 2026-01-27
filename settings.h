@@ -127,6 +127,9 @@ public:
     // Manual initialization method
     void ManualInitialize();
 
+    // Check if any setting has unsaved changes
+    bool HasAnyUnsavedChanges() const;
+
 private:
     SettingsManager() : m_initialized(false) {}
     std::unordered_map<std::wstring, std::unique_ptr<Setting>> m_settings;
