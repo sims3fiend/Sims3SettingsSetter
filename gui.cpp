@@ -284,6 +284,11 @@ namespace SettingsGui {
                     } else {
                         ImGui::TextColored(ImVec4(0.5f, 1.0f, 0.5f, 1.0f), "Detected Version: %s", GetGameVersionName());
                     }
+
+                    if (IsVersionOutdated(g_gameVersion, g_exeTimeDateStamp)) {
+                        ImGui::TextColored(ImVec4(1.0f, 1.0f, 0.0f, 1.0f), "This version of the game is out-of-date\nPlease update or repair your game");
+                    }
+
                     ImGui::TextDisabled("Incompatible patches will be greyed out and disabled");
                     ImGui::Separator();
 

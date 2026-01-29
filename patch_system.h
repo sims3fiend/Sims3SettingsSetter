@@ -70,6 +70,11 @@ inline const char* GetGameVersionName() {
     return VERSION_NAMES[static_cast<size_t>(g_gameVersion)];
 }
 
+// Check if a version is outdated for its distribution platform
+inline bool IsVersionOutdated(GameVersion version, uint32_t timeDateStamp) {
+    return !(version <= GameVersion::EA) & (timeDateStamp < VERSION_TIMESTAMPS[static_cast<size_t>(GameVersion::EA)]);
+}
+
 // Check if current version matches a version mask
 inline bool IsVersionSupported(GameVersionMask mask) {
     if (g_gameVersion == GameVersion::Unknown) {
