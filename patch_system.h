@@ -39,6 +39,7 @@ constexpr std::array<const char*, GAME_VERSION_COUNT> VERSION_NAMES = {
 
 // Global game version - set once at init via DetectGameVersion()
 inline GameVersion g_gameVersion = GameVersion::Unknown;
+inline uint32_t g_exeTimeDateStamp = 0;
 
 // Detect current game version from PE header timestamp
 // Return true if version was recognized, false otherwise
@@ -48,6 +49,7 @@ inline bool DetectGameVersion() {
     const auto pe = reinterpret_cast<const IMAGE_NT_HEADERS*>(exe + dos->e_lfanew);
 
     uint32_t timestamp = pe->FileHeader.TimeDateStamp;
+    g_exeTimeDateStamp = timestamp;
 
     for (size_t i = 0; i < GAME_VERSION_COUNT; i++) {
         if (VERSION_TIMESTAMPS[i] == timestamp) {

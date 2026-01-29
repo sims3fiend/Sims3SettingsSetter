@@ -625,9 +625,9 @@ DWORD WINAPI HookThread(LPVOID lpParameter) {
 
         // Detect game version from PE timestamp
         if (DetectGameVersion()) {
-            LOG_INFO(std::format("Detected game version: {}", GetGameVersionName()));
+            LOG_INFO(std::format("Detected game version: {} [0x{:08X}]", GetGameVersionName(), g_exeTimeDateStamp));
         } else {
-            LOG_WARNING("Unknown game version - patches may not work correctly");
+            LOG_WARNING(std::format("Unknown game version [0x{:08X}] - patches may not work correctly", g_exeTimeDateStamp));
         }
 
         // Initialize CPU feature detection
