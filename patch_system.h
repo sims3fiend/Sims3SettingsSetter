@@ -9,11 +9,11 @@
 
 // Specific game versions we support
 enum class GameVersion : uint8_t {
-    Retail  = 0,   // 1.67.2.024002 - Disc
-    Steam   = 1,   // 1.67.2.024037 - Steam
-    EA      = 2,   // 1.69.47.024017 - EA App
+    Retail     = 0,   // 1.67.2.024002 - Disc
+    Steam      = 1,   // 1.67.2.024037 - Steam
+    EA         = 2,   // 1.69.47.024017 - EA App
     EA_1_69_43 = 3,   // 1.69.43.024017 - EA App/Origin
-    Unknown = 255
+    Unknown    = 255
 };
 
 constexpr size_t GAME_VERSION_COUNT = 4;
