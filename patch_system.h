@@ -12,10 +12,11 @@ enum class GameVersion : uint8_t {
     Retail  = 0,   // 1.67.2.024002 - Disc
     Steam   = 1,   // 1.67.2.024037 - Steam
     EA      = 2,   // 1.69.47.024017 - EA App
+    EA_1_69_43 = 3,   // 1.69.43.024017 - EA App/Origin
     Unknown = 255
 };
 
-constexpr size_t GAME_VERSION_COUNT = 3;
+constexpr size_t GAME_VERSION_COUNT = 4;
 
 // Bitmask for declaring which versions a patch supports
 using GameVersionMask = uint8_t;
@@ -29,12 +30,14 @@ constexpr std::array<uint32_t, GAME_VERSION_COUNT> VERSION_TIMESTAMPS = {
     0x52D872DA,  // Retail 1.67.2.024002
     0x52DEC247,  // Steam 1.67.2.024037
     0x6707155C,  // EA 1.69.47.024017
+    0x568D4BAC,  // EA 1.69.43.024017
 };
 
 constexpr std::array<const char*, GAME_VERSION_COUNT> VERSION_NAMES = {
     "Retail 1.67.2.024002",
     "Steam 1.67.2.024037",
     "EA 1.69.47.024017",
+    "EA 1.69.43.024017",
 };
 
 // Global game version - set once at init via DetectGameVersion()
