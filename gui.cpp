@@ -386,6 +386,23 @@ namespace SettingsGui {
                                             ImGui::TextDisabled("[EXPERIMENTAL]");
                                         }
 
+                                        if (enabled & patch->PendingReinstall()) {
+                                            auto then = patch->GetLastSettingChange();
+                                            auto when = then + OptimizationPatch::SETTING_CHANGE_DEBOUNCE;
+                                            auto now = std::chrono::steady_clock::now();
+                                            auto how = when - now;
+
+                                            if (when > now) {
+                                                auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(how).count();
+                                                ImGui::SameLine();
+                                                ImGui::TextColored(ImVec4(0.89f, 0.11f, 0.89f, 1.0f),
+                                                                   "| Reinstalling in %.2f second%c", ms / 1000.0f, ms == 1000 ? ' ' : 's');
+                                            } else {
+                                                ImGui::SameLine();
+                                                ImGui::TextColored(ImVec4(0.89f, 0.11f, 0.89f, 1.0f), "| Reinstalling...");
+                                            }
+                                        }
+
                                         if (hasError || !compatible || experimental) {
                                             ImGui::PopStyleColor();
                                         }

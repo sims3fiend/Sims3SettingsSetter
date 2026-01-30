@@ -21,12 +21,12 @@ public:
         std::chrono::steady_clock::time_point start;
     };
 
+    static constexpr auto SETTING_CHANGE_DEBOUNCE = std::chrono::seconds(2);
 protected:
     std::mutex statsMutex;
     std::mutex patchMutex;
     SampleWindow currentWindow;
     static constexpr auto SAMPLE_INTERVAL = std::chrono::seconds(5);
-    static constexpr auto SETTING_CHANGE_DEBOUNCE = std::chrono::seconds(2);
 
     void* originalFunc;
     std::string patchName;
@@ -143,6 +143,8 @@ public:
     bool IsEnabled() const { return isEnabled.load(); }
     double GetLastSampleRate() const { return lastSampleRate; }
     const std::string& GetLastError() const { return lastError; }
+    bool PendingReinstall() const { return pendingReinstall; }
+    std::chrono::steady_clock::time_point GetLastSettingChange() const { return lastSettingChange; }
 
     // Metadata management
     void SetMetadata(const PatchMetadata& meta);
