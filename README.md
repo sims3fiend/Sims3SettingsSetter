@@ -22,10 +22,11 @@ Some package mods sometimes tweak some of these, so this can also be a way of do
 ### Config Editor
 View and edit Config values from `GraphicsRules.sgr`. This shows what's actually loaded in memory (not just what's in the file which can sometimes be wrong/changed after init) and includes hidden settings that don't appear in the original files. Much clearer and easier than editing the .sgr file manually IMO.
 
-### Performance Patches
+### Patches
 The main point of the mod now. Collection of ASM patches for performance improvements. **All compatible with Steam, EA App/Origin and Retail versions! Woo!**
+There's also a lot of helper functions and easy to use things if you'd like to make your own, see **[patches/README.md](patches/README.md)** for technical details on how to write your own.
 
-**Available Patches (⭐ - Recommended)**
+**Performance Patches (⭐ - Recommended)**
 - **RefPack Decompressor Optimization ⭐⭐⭐** - Completely rewrote the game's refpack .package file decompressor with AVX2/SSE2 SIMD intrinsics. This is probably the most impactful patch, faster loading screens, less stuttering when streaming assets, optimises one of the heaviest functions in the game.
 - **Mimalloc Allocator ⭐** - Replaces the Sims 3's old crusty memory allocator with [mimalloc](https://github.com/microsoft/mimalloc) for better memory management and performance. Requires a restart to apply.
 - **Optimized Lot Streaming Settings ⭐** - Enables lot throttling and tweaks camera speed threshold settings so lots load more smoothly when you stop moving. Major improvement.
@@ -38,7 +39,10 @@ The main point of the mod now. Collection of ASM patches for performance improve
 - **CreateFileW Random Access** - Improves file I/O performance by hinting random access pattern.
 - **GC_stop_world() Optimization** - Early exit for a GC function called ~once per frame, very minor improvement, driveby patch.
 
-**Experimental Patches:**
+**Graphics Patches**
+- **Uncompressed Sim Textures** - Forces textures for Sims to be uncompressed during gameplay, like they are in CAS. It is not recommended to use this patch unless you are also using DXVK, as otherwise the game may run out of memory or experience Error 12. This improves the graphical fidelity of Sims by avoiding lossy compression and by preventing compression artefacts.
+
+**Experimental Patches**
 - **GC Finalizer Throttle** - Prevents (or tries to) the garbage collector finalizer loop from blocking the simulation thread, reducing large stutters. Increases the frame threshold before triggering the blocking loop and caps it to one batch of finalizers per frame instead of an infinite loop.
   - May slightly increase memory usage on very long play sessions
 - **Adaptive Thread Waiting** - Hybrid spin-wait that adapts between 50-500μs based on success rate. Trades a bit of CPU usage for lower frame time variance.
@@ -49,8 +53,6 @@ The main point of the mod now. Collection of ASM patches for performance improve
   - Still working on this, may replace with a more targeted patch that shouldn't require a UI mod (using the pseudoresolution setting). This can also crash your game when set too high for your setup. It **may also crash when using other Borderless Fullscreen implementations**. I do some special handling in the mod for this.
 - **Map View Lot Streaming Blocker** - Prevents lot streaming while in map view, makes going in and out of map a lot less stuttery.
   - Experimental as it has a known issue where the toggle gets stuck on the "don't load" path. If your lots aren't loading in, try disabling this first
-
-There's also a lot of helper functions and easy to use things if you'd like to make your own, see **[patches/README.md](patches/README.md)** for technical details on how to write your own.
 
 ### Quality of Life Features
 - **Memory Monitor**: Get warned when approaching the 4GB limit (Error 12) so you can save before you crash and lose it all
