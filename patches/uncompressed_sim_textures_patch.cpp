@@ -1,55 +1,79 @@
 #include "../patch_system.h"
 #include "../patch_helpers.h"
 #include "../logger.h"
+#include "../settings.h"
 
 class UncompressedSimTexturesPatch : public OptimizationPatch {
 private:
-    // This is Sims3::ModelBuilder::CreateOverlayTexture_Game, which creates a sim's texture during gameplay.
-    static inline const AddressInfo createOverlayTexture_GameFunctionAddressInfo = {
-        .name = "UncompressedSimTexturesPatch::createOverlayTexture_GameFunction",
+    // This is a branch within Sims3::CAS::ModelBuilder::SetBuildOptions
+    // that sets an uncompressed surface-format for low-LOD sims.
+    static inline const AddressInfo setBuildOptionsUncompressedBranchAddressInfo = {
+        .name = "UncompressedSimTexturesPatch::setBuildOptionsUncompressedBranch",
         .addresses = {
-            {GameVersion::Retail, 0x005d0420},
-            {GameVersion::Steam,  0x005cfa90},
-            {GameVersion::EA,     0x005d0c90},
+            {GameVersion::Retail, 0x005c9099},
+            {GameVersion::Steam,  0x005c8649},
+            {GameVersion::EA,     0x005c99e9},
         },
-        .pattern = "83 EC 08 53 55 8B 6C 24 20 56 8B D9 8D 44 24 24 C1 E5 10 0B 6C 24 20 50 8D 4C 24 10 8D B3 8C 00 00 00 51 8B CE 89 6C 24 2C",
+        .pattern = "83 B9 A0 01 00 00 02 8A 44 24 0C 88 81 A4 01 00 00 73 21 8A 54 24 08 8A 44 24 10 F6 DA 88 81 A5 01 00 00 1B D2 83 E2 CD",
     };
-    // Also of interest is Sims3::ModelBuilder::CreateOverlayTexture_CAS, which creates a sim's texture in CAS.
-    // The two functions are very similar,
-    // the main difference being that the CAS version always uses the D3DFMT_A8R8G8B8 surface format.
 
-    static constexpr uintptr_t offsetOfMoveSurfaceFormatIntoECX = 205;
+    static constexpr uintptr_t offsetOfLODLevelThreshold = 6;
+    static constexpr uintptr_t offsetOfConditionalSurfaceFormatDeltaMask = 39;
 
-    static constexpr uint8_t kSurfaceFormat_A8R8G8B8 = 0x3D;
-
+    bool onlyForLOD0;
     std::vector<PatchHelper::PatchLocation> patchedLocations;
+
+    bool WillHaveAnyEffect() const {
+        if (!onlyForLOD0) {
+            return true;
+        }
+
+        const auto config = SettingsManager::Get().GetConfigValues();
+        const auto minSimLODEntry = config.find(L"MinSimLOD");
+
+        if (minSimLODEntry == config.end()) {
+            return true;
+        }
+
+        const std::wstring& minSimLOD = minSimLODEntry->second.currentValue;
+
+        return *minSimLOD.data() == '0';
+    }
 public:
     UncompressedSimTexturesPatch() : OptimizationPatch("UncompressedSimTexturesPatch", nullptr) {
+        RegisterBoolSetting(&onlyForLOD0, "onlyForLOD0", true,
+                            "When enabled, uncompressed textures will take effect only for sims using the lowest (most detailed) LOD (which is LOD0), "
+                            "which are sims close to the camera when the \"Sim Detail\" setting is \"Very High\".\n"
+                            "This will reduce VRAM usage somewhat.\n"
+                            "When disabled, uncompressed textures will take effect for LOD1 sims also, regardless of the \"Sim Detail\" setting.");
     }
 
     bool Install() override {
         if (isEnabled) return true;
         lastError.clear();
         LOG_INFO("[UncompressedSimTexturesPatch] Installing...");
+        LOG_INFO(std::format("[UncompressedSimTexturesPatch] onlyForLOD0: {}", onlyForLOD0));
 
-        auto createOverlayTexture_GameFunctionAddress = createOverlayTexture_GameFunctionAddressInfo.Resolve();
+        auto setBuildOptionsUncompressedBranchAddress = setBuildOptionsUncompressedBranchAddressInfo.Resolve();
 
-        if (!createOverlayTexture_GameFunctionAddress) {
-            return Fail("Could not resolve createOverlayTexture_GameFunction address");
+        if (!setBuildOptionsUncompressedBranchAddress) {
+            return Fail("Could not resolve setBuildOptionsUncompressedBranch address");
         }
 
-        uintptr_t base = *createOverlayTexture_GameFunctionAddress;
+        uintptr_t base = *setBuildOptionsUncompressedBranchAddress;
 
         bool successful = true;
         auto tx = PatchHelper::BeginTransaction();
 
-        uint8_t moveSurfaceFormatIntoECX[6] = {
-            /* An inert DS prefix is used to pad the instruction to six bytes. */
-            0x3E, 0xB9, kSurfaceFormat_A8R8G8B8, 0x00, 0x00, 0x00, // ds: mov ecx, kSurfaceFormat_A8R8G8B8
-        };
+        if (onlyForLOD0) {
+            // Change a `cmp dword ptr [ecx + 0x1a0], 2` to `cmp dword ptr [ecx + 0x1a0], 1`.
+            // Such that the subsequent check becomes `if (lodLevel < 1) {/* Use uncompressed textures. */}`
+            successful &= PatchHelper::WriteByte(base + offsetOfLODLevelThreshold, 1, &tx.locations);
+        }
 
-        successful &= PatchHelper::WriteProtectedMemory(reinterpret_cast<uint8_t*>(base + offsetOfMoveSurfaceFormatIntoECX),
-                                                        moveSurfaceFormatIntoECX, 6, &tx.locations);
+        // Turn an `and edx, -51` into `and edx, 0` so that kSurfaceFormat_A8R8G8B8
+        // is used regardless of what the function's third parameter was supplied as.
+        successful &= PatchHelper::WriteByte(base + offsetOfConditionalSurfaceFormatDeltaMask, 0, &tx.locations);
 
         if (!successful || !PatchHelper::CommitTransaction(tx)) {
             PatchHelper::RollbackTransaction(tx);
@@ -57,6 +81,11 @@ public:
         }
 
         patchedLocations = tx.locations;
+
+        if (!WillHaveAnyEffect()) {
+            lastError = "This patch will have no effect because \"onlyForLOD0\" is checked, but \"MinSimLOD\" is not 0.\n"
+                        "Either set the game's \"Sim Detail\" setting to \"Very High\", or uncheck \"onlyForLOD0\", for this patch to take effect.";
+        }
 
         isEnabled = true;
         LOG_INFO("[UncompressedSimTexturesPatch] Successfully installed");
@@ -86,16 +115,18 @@ REGISTER_PATCH(UncompressedSimTexturesPatch, {
                    "It is not recommended to use this patch unless you are also using DXVK, as otherwise the game may run out of memory or experience Error 12.\n"
                    "This improves the graphical fidelity of sims by avoiding lossy compression and by preventing compression artefacts.\n"
                    "However, this also makes sims' textures 4 times larger in memory, so be mindful of VRAM usage.\n"
-                   "For example, an uncompressed 4096x4096 texture occupies 64MB of VRAM, whereas a compressed 4096x4096 texture would occupy only 16MB of VRAM.",
+                   "Specifically, when the \"Sim Detail\" setting is \"Very High\", sim textures are 2048x2048 in size: an uncompressed 2048x2048 texture occupies 16MB of VRAM, whereas a compressed 2048x2048 texture would occupy only 4MB of VRAM.\n"
+                   "When using an HQ mod (a \"GraphicsRules.sgr\" edit), sim textures may be 4096x4096 in size: an uncompressed 4096x4096 texture occupies 64MB of VRAM, whereas a compressed 4096x4096 texture occupies 16MB of VRAM.\n\n\n"
+                   "After enabling/disabling this patch, a sim's textures will not change until: their outfit is changed; or they are edited in CAS; or the game's \"simCompositorCache.package\" cache is cleared (or the \"<World>_sims.package\" world-cache for custom worlds).\n\n\n"
+                   "If you experience crashes when this patch is enabled, try reducing the value set for the \"d3d9.textureMemory\" setting in the \"dxvk.conf\" file.",
     .category = "Graphics",
     .experimental = false,
     .supportedVersions = VERSION_ALL,
     .technicalDetails = {
-        "Typically, sims' textures use the D3DFMT_DXT5 surface-format during gameplay. This patch forces them to use D3DFMT_A8R8G8B8, like in CAS.",
+        "Typically, sims' textures use the D3DFMT_DXT5 surface-format during gameplay. This patch allows them to use D3DFMT_A8R8G8B8, like in CAS.",
         "The reason why DXVK is borderline-required to use this patch is because native D3D9 stores textures in both VRAM and virtual memory,\n"
         "which means the larger uncompressed textures may quickly fill the game's 4GB address-space.\n"
         "This is not an issue with DXVK as it stores only a small portion of textures in virtual memory.",
-        "This patch was authored by \"Just Harry\", with significant reverse-engineering assistance from sims3fiend.",
     }
 })
 
