@@ -35,7 +35,6 @@ There's also a lot of helper functions and easy to use things if you'd like to m
 - **Smooth Patch (Original Flavour)** - LazyDuchess's original Smooth Patch implementation in S3SS.
 - **Lot Visibility Camera Override** - Stops lot loading based on camera view, should make it so they only load around you. Might not do anything.
 - **CPU Thread Optimization** - Optimizes thread placement for modern CPUs with P/E-cores or multiple CCXs.
-- **Intersection Optimization** - SIMD optimization for navmesh/pathing calculations, a lot faster but rarely called in normal gameplay, is called very heavily when loading CC/uncached worlds though.
 - **CreateFileW Random Access** - Improves file I/O performance by hinting random access pattern.
 - **GC_stop_world() Optimization** - Early exit for a GC function called ~once per frame, very minor improvement, driveby patch.
 
@@ -43,6 +42,7 @@ There's also a lot of helper functions and easy to use things if you'd like to m
 - **Uncompressed Sim Textures** - Forces textures for Sims to be uncompressed during gameplay, like they are in CAS. It is not recommended to use this patch unless you are also using DXVK, as otherwise the game may run out of memory or experience Error 12. This improves the graphical fidelity of Sims by avoiding lossy compression and by preventing compression artefacts.
 
 **Experimental Patches**
+- **Intersection Optimization** - SIMD optimization for navmesh/pathing calculations, a lot faster but rarely called in normal gameplay, is called very heavily when loading CC/uncached worlds though. May cause issues with sims entering rabitholes, still need to investigate
 - **GC Finalizer Throttle** - Prevents (or tries to) the garbage collector finalizer loop from blocking the simulation thread, reducing large stutters. Increases the frame threshold before triggering the blocking loop and caps it to one batch of finalizers per frame instead of an infinite loop.
   - May slightly increase memory usage on very long play sessions
 - **Adaptive Thread Waiting** - Hybrid spin-wait that adapts between 50-500μs based on success rate. Trades a bit of CPU usage for lower frame time variance.

@@ -117,7 +117,7 @@ class BorderlessWindow {
 
     bool IsEnabled() const {
         std::lock_guard<std::mutex> lock(m_mutex);
-        return m_mode != BorderlessMode::Disabled;
+        return m_mode != BorderlessMode::Disabled && m_wasApplied;
     }
 
     BorderlessMode GetMode() const {
