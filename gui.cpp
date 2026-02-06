@@ -8,13 +8,15 @@
 #include <map>
 #include <sstream>
 #include <unordered_map>
-#include "preset_manager.h"
 #include "optimization.h"
 #include "patch_system.h"
 #include "qol.h"
 #include "intersection_patch.h"
 #include "cpu_optimization.h"
 #include "d3d9_hook.h"
+#include "config/config_store.h"
+#include "config/config_value_manager.h"
+#include "config/migration.h"
 
 //I hate ImGui I hate ImGui I hate ImGui
 //https://www.youtube.com/watch?v=lKntlVofKqU
@@ -26,9 +28,6 @@ extern LPDIRECT3DDEVICE9 g_pd3dDevice;
 namespace SettingsGui {
     bool m_visible = false;
     bool m_needsSort = true;
-    bool m_showPresetLoadDialog = false;
-    std::string m_pendingPresetToLoad;
-    
     // function for case-insensitive search
     bool CaseInsensitiveSearch(const std::string& haystack, const std::string& needle) {
         auto toLower = [](const std::string& s) {
@@ -43,8 +42,7 @@ namespace SettingsGui {
     // Check if there are any unsaved changes across all systems
     bool HasAnyUnsavedChanges() {
         return SettingsManager::Get().HasAnyUnsavedChanges() ||
-               OptimizationManager::Get().HasUnsavedChanges() ||
-               UISettings::Get().HasUnsavedChanges();
+               OptimizationManager::Get().HasUnsavedChanges();
     }
     
     void Initialize() {
@@ -83,40 +81,18 @@ namespace SettingsGui {
                 if (ImGui::BeginMenu("File")) {
                     if (ImGui::MenuItem("Save Settings")) {
                         std::string error;
-                        std::string iniPath = Utils::GetDefaultINIPath();
-                        bool settingsSuccess = SettingsManager::Get().SaveConfig(iniPath, &error);
-                        // Also save optimization settings
-                        bool optimizationSuccess = OptimizationManager::Get().SaveState(iniPath);
-                        // Ensure UI settings are in the file (append if needed)
-                        UISettings::Get().EnsureInINI(iniPath.c_str());
-
-                        if (settingsSuccess && optimizationSuccess) {
-                            UISettings::Get().MarkAsSaved();
+                        if (ConfigStore::Get().SaveAll(&error)) {
                             LOG_INFO("Settings saved successfully");
-                        } else if (settingsSuccess && !optimizationSuccess) {
-                            UISettings::Get().MarkAsSaved();  // Settings did save
-                            LOG_WARNING("Settings saved but optimization state save failed");
-                        } else if (!settingsSuccess && optimizationSuccess) {
-                            LOG_WARNING("Optimization state saved but settings save failed: " + error);
                         } else {
-                            LOG_ERROR("Failed to save both settings and optimization state: " + error);
+                            LOG_ERROR("Failed to save settings: " + error);
                         }
                     }
                     if (ImGui::MenuItem("Load Settings")) {
                         std::string error;
-                        std::string iniPath = Utils::GetDefaultINIPath();
-                        bool settingsSuccess = SettingsManager::Get().LoadConfig(iniPath, &error);
-                        // Also load optimization settings
-                        bool optimizationSuccess = OptimizationManager::Get().LoadState(iniPath);
-
-                        if (settingsSuccess && optimizationSuccess) {
+                        if (ConfigStore::Get().LoadAll(&error)) {
                             LOG_INFO("Settings loaded successfully");
-                        } else if (settingsSuccess && !optimizationSuccess) {
-                            LOG_WARNING("Settings loaded but optimization state load failed");
-                        } else if (!settingsSuccess && optimizationSuccess) {
-                            LOG_WARNING("Optimization state loaded but settings load failed: " + error);
                         } else {
-                            LOG_ERROR("Failed to load both settings and optimization state: " + error);
+                            LOG_ERROR("Failed to load settings: " + error);
                         }
                     }
                     
@@ -125,57 +101,6 @@ namespace SettingsGui {
                         SettingsManager::Get().ResetAllSettings();
                     }
 
-                    // TODO: Preset system temporarily disabled - needs save/load logic fixes, nobody uses this anyway soooo
-                    /*
-                    ImGui::Separator();
-
-                    if (ImGui::BeginMenu("Presets")) {
-                        static char presetName[256] = "";
-                        static char presetDesc[1024] = "";
-
-                        // Save new preset
-                        ImGui::InputText("Name", presetName, sizeof(presetName));
-                        ImGui::InputText("Description", presetDesc, sizeof(presetDesc));
-                        if (ImGui::Button("Save New Preset")) {
-                            if (strlen(presetName) > 0) {
-                                std::string error;
-                                bool presetSuccess = PresetManager::Get().SavePreset(presetName, presetDesc, &error);
-                                // Save optimization settings to the preset
-                                bool optimizationSuccess = true;
-                                if (presetSuccess) {
-                                    std::string presetPath = PresetManager::Get().GetPresetPath(presetName);
-                                    optimizationSuccess = OptimizationManager::Get().SaveState(presetPath);
-                                }
-
-                                if (presetSuccess && optimizationSuccess) {
-                                    LOG_INFO("Preset saved successfully");
-                                } else if (presetSuccess && !optimizationSuccess) {
-                                    LOG_WARNING("Preset saved but optimization state save failed");
-                                } else {
-                                    LOG_ERROR("Failed to save preset: " + error);
-                                }
-                            }
-                        }
-
-                        ImGui::Separator();
-
-                        // List available presets
-                        auto presets = PresetManager::Get().GetAvailablePresets();
-                        for (const auto& preset : presets) {
-                            if (ImGui::MenuItem(preset.name.c_str(), preset.description.c_str())) {
-                                // Instead of loading immediately, set the pending preset and show dialog
-                                m_pendingPresetToLoad = preset.name;
-                                m_showPresetLoadDialog = true;
-                                LOG_INFO("Selected preset: " + preset.name + ", showing dialog");
-                            }
-                            if (ImGui::IsItemHovered() && !preset.description.empty()) {
-                                ImGui::SetTooltip("%s", preset.description.c_str());
-                            }
-                        }
-
-                        ImGui::EndMenu();
-                    }
-                    */
                     ImGui::EndMenu();
                 }
                 ImGui::EndMenuBar();
@@ -210,7 +135,7 @@ namespace SettingsGui {
                     }
                     else {
                         //cute little message owo
-                        ImGui::TextWrapped("These are 'Variable' settings, and can be edited live ingame. Right click to edit a value beyond its bounds, reset to default, or remove from ini (clear override). You can save/load settings in File, and you can right click a setting to clear its override/remove it from the ini (will need to save to apply)");
+                        ImGui::TextWrapped("These are 'Variable' settings, and can be edited live ingame. Right click to edit a value beyond its bounds, reset to default, or clear override. You can save/load settings in File, and you can right click a setting to clear its override (will need to save to apply)");
                         ImGui::Separator();
                         static char searchBuffer[256] = "";
                         ImGui::InputText("Search", searchBuffer, sizeof(searchBuffer));
@@ -632,7 +557,7 @@ namespace SettingsGui {
                 // Config Values tab
                 if (ImGui::BeginTabItem("Config Values")) {
 
-                    ImGui::TextWrapped("These are Config category values, typically found in the GraphicsRules.sgr file, this reflects what is actually loaded, which may be different from the file itself. To reset a value, right click the value and click 'Clear Override', or delete from the ini file.\n\nPlease note some will crash your game when set to certain values, if you find one of these lmk");
+                    ImGui::TextWrapped("These are Config category values, typically found in the GraphicsRules.sgr file, this reflects what is actually loaded, which may be different from the file itself. To reset a value, right click the value and click 'Clear Override'.\n\nPlease note some will crash your game when set to certain values, if you find one of these lmk");
                     ImGui::Separator();
 
                     static char searchBuffer[256] = "";
@@ -644,7 +569,7 @@ namespace SettingsGui {
 
                     ImGui::BeginChild("ConfigList", ImVec2(0, 0), true);
                     {
-                        const auto& configValues = SettingsManager::Get().GetConfigValues();
+                        const auto& configValues = ConfigValueManager::Get().GetConfigValues();
                         
                         // Create a sorted list of configs for consistent ordering
                         std::vector<std::pair<std::wstring, const ConfigValueInfo*>> sortedConfigs;
@@ -684,8 +609,8 @@ namespace SettingsGui {
                             
                             ImGui::PushID(label.c_str());
                             if (ImGui::InputText("##value", buffer, sizeof(buffer))) {
-                                // Always update the value using the ConfigValueCache system
-                                SettingsManager::Get().UpdateConfigValue(name, Utils::Utf8ToWide(buffer));
+                                // Update the config value (provides stable buffer for game)
+                                ConfigValueManager::Get().UpdateConfigValue(name, Utils::Utf8ToWide(buffer));
                             }
                             ImGui::SameLine();
                             ImGui::Text("%s", label.c_str());
@@ -700,11 +625,11 @@ namespace SettingsGui {
                                     ConfigValueInfo resetInfo = *info;
                                     resetInfo.isModified = false;
                                     resetInfo.currentValue = L"";  // Reset to empty
-                                    SettingsManager::Get().AddConfigValue(name, resetInfo);
+                                    ConfigValueManager::Get().AddConfigValue(name, resetInfo);
                                 }
                                 if (ImGui::IsItemHovered()) {
                                     ImGui::BeginTooltip();
-                                    ImGui::Text("Remove this setting from the ini file\nand let the game manage its value\nChanges will apply on next save");
+                                    ImGui::Text("Remove this override and let the\ngame manage its value\nChanges will apply on next save");
                                     ImGui::EndTooltip();
                                 }
 
@@ -807,6 +732,21 @@ namespace SettingsGui {
 
                     // UI Settings section
                     if (ImGui::CollapsingHeader("UI Settings")) {
+                        // Font scale setting
+                        float fontScale = UISettings::Get().GetFontScale();
+                        if (ImGui::SliderFloat("Font Size", &fontScale, 0.5f, 3.0f, "%.1f")) {
+                            UISettings::Get().SetFontScale(fontScale);
+                        }
+                        if (ImGui::IsItemHovered()) {
+                            ImGui::SetTooltip("Adjust the UI font size\nDefault: 1.0\nSetting is saved automatically");
+                        }
+                        ImGui::SameLine();
+                        if (ImGui::Button("Reset##FontScale")) {
+                            UISettings::Get().SetFontScale(1.0f);
+                        }
+
+                        ImGui::Separator();
+
                         // Toggle key setting
                         static bool waitingForKey = false;
                         UINT currentKey = UISettings::Get().GetUIToggleKey();
@@ -827,9 +767,6 @@ namespace SettingsGui {
                                 if (GetAsyncKeyState(key) & 0x8000) {
                                     UISettings::Get().SetUIToggleKey(key);
                                     waitingForKey = false;
-                                    // Auto-save when changed
-                                    UISettings::Get().EnsureInINI(Utils::GetDefaultINIPath().c_str());
-                                    UISettings::Get().MarkAsSaved();
                                     break;
                                 }
                             }
@@ -843,9 +780,6 @@ namespace SettingsGui {
                                 if (GetAsyncKeyState(key) & 0x8000) {
                                     UISettings::Get().SetUIToggleKey(key);
                                     waitingForKey = false;
-                                    // Auto-save when changed
-                                    UISettings::Get().EnsureInINI(Utils::GetDefaultINIPath().c_str());
-                                    UISettings::Get().MarkAsSaved();
                                     break;
                                 }
                             }
@@ -873,9 +807,9 @@ namespace SettingsGui {
     void Render() {
         // Always render the memory warning if needed
         RenderMemoryWarning();
-        
-        // TODO: Preset system temporarily disabled
-        // RenderPresetLoadDialog();
+
+        // Migration popup (shown once after INI -> TOML migration)
+        Migration::RenderMigrationPopup();
 
         // Only render the main UI if visible
         RenderUI();
@@ -1075,7 +1009,7 @@ namespace SettingsGui {
             }
             if (ImGui::IsItemHovered()) {
                 ImGui::BeginTooltip();
-                ImGui::Text("Remove this setting from the ini file\nand let the game manage its value\nChanges will apply on next save");
+                ImGui::Text("Remove this override and let the\ngame manage its value\nChanges will apply on next save");
                 ImGui::EndTooltip();
             }
 
@@ -1085,7 +1019,7 @@ namespace SettingsGui {
             }
             if (ImGui::IsItemHovered()) {
                 ImGui::BeginTooltip();
-                ImGui::Text("Reset this setting to its default value\nThis will be saved to the ini file");
+                ImGui::Text("Reset this setting to its default value\nThis will be saved to the config file");
                 ImGui::EndTooltip();
             }
 
@@ -1242,95 +1176,4 @@ namespace SettingsGui {
         }
     }
 
-    // Update the RenderPresetLoadDialog function to mention auto-save
-    void RenderPresetLoadDialog() {
-        if (!m_showPresetLoadDialog) return;
-        
-        // Center the popup
-        ImVec2 center = ImGui::GetMainViewport()->GetCenter();
-        ImGui::SetNextWindowPos(center, ImGuiCond_Always, ImVec2(0.5f, 0.5f));
-        
-        // First, make sure the popup is open
-        if (!ImGui::IsPopupOpen("Load Preset")) {
-            ImGui::OpenPopup("Load Preset");
-            LOG_INFO("Opening preset load dialog");
-        }
-        
-        if (ImGui::BeginPopupModal("Load Preset", &m_showPresetLoadDialog, 
-                                  ImGuiWindowFlags_AlwaysAutoResize | 
-                                  ImGuiWindowFlags_NoMove)) {
-            
-            ImGui::Text("How would you like to load the preset \"%s\"?", m_pendingPresetToLoad.c_str());
-            ImGui::Separator();
-            
-            ImGui::TextWrapped(
-                "Merge: Apply preset values on top of current settings\n"
-                "(Existing settings not in the preset will be preserved)");
-            
-            ImGui::TextWrapped(
-                "Overwrite: Reset all settings to defaults, then apply preset\n"
-                "(This gives a clean slate with only the preset's values)");
-            
-            ImGui::Separator();
-            ImGui::TextDisabled("Settings will be automatically saved after applying the preset");
-            ImGui::Separator();
-            
-            // Create two buttons side by side
-            float windowWidth = ImGui::GetWindowSize().x;
-            float buttonWidth = (windowWidth - ImGui::GetStyle().ItemSpacing.x - 20.0f) / 2.0f;
-            
-            if (ImGui::Button("Merge", ImVec2(buttonWidth, 0))) {
-                std::string error;
-                bool presetSuccess = PresetManager::Get().LoadPresetWithStrategy(
-                    m_pendingPresetToLoad, PresetLoadStrategy::Merge, &error);
-
-                // Load optimization settings from the preset
-                bool optimizationSuccess = true;
-                if (presetSuccess) {
-                    std::string presetPath = PresetManager::Get().GetPresetPath(m_pendingPresetToLoad);
-                    optimizationSuccess = OptimizationManager::Get().LoadState(presetPath);
-                }
-
-                if (presetSuccess && optimizationSuccess) {
-                    LOG_INFO("Preset loaded successfully (merge)");
-                } else if (presetSuccess && !optimizationSuccess) {
-                    LOG_WARNING("Preset loaded but optimization state load failed");
-                } else {
-                    LOG_ERROR("Failed to load preset: " + error);
-                }
-
-                m_showPresetLoadDialog = false;
-                ImGui::CloseCurrentPopup();
-            }
-            
-            ImGui::SameLine();
-            
-            if (ImGui::Button("Overwrite", ImVec2(buttonWidth, 0))) {
-                std::string error;
-                bool presetSuccess = PresetManager::Get().LoadPresetWithStrategy(
-                    m_pendingPresetToLoad, PresetLoadStrategy::Overwrite, &error);
-
-                // Load optimization settings from the preset
-                bool optimizationSuccess = true;
-                if (presetSuccess) {
-                    std::string presetPath = PresetManager::Get().GetPresetPath(m_pendingPresetToLoad);
-                    optimizationSuccess = OptimizationManager::Get().LoadState(presetPath);
-                }
-
-                if (presetSuccess && optimizationSuccess) {
-                    LOG_INFO("Preset loaded successfully (overwrite)");
-                } else if (presetSuccess && !optimizationSuccess) {
-                    LOG_WARNING("Preset loaded but optimization state load failed");
-                } else {
-                    LOG_ERROR("Failed to load preset: " + error);
-                }
-
-                m_showPresetLoadDialog = false;
-                ImGui::CloseCurrentPopup();
-            }
-            
-            ImGui::SetItemDefaultFocus();
-            ImGui::EndPopup();
-        }
-    }
 }

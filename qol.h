@@ -3,6 +3,9 @@
 #include <string>
 #include <mutex>
 
+// Forward declare toml table
+namespace toml { inline namespace v3 { class table; } }
+
 enum class WarningStyle {
     Overlay,
     Modal       // Modal dialog that requires user confirmation
@@ -24,11 +27,11 @@ public:
     WarningStyle GetWarningStyle() const { return m_warningStyle; }
     void SetWarningStyle(WarningStyle style);
 
-    // Save/load settings
-    void SaveSettings(const std::string& filename) const;
-    void LoadSettings(const std::string& filename);
+    // TOML serialization (writes/reads qol.memory_monitor section)
+    void SaveToToml(toml::table& qolTable) const;
+    void LoadFromToml(const toml::table& qolTable);
 
-    void ResetWarning();  // Just the declaration
+    void ResetWarning();
 
 private:
     MemoryMonitor() : m_warningThresholdGB(3.5f), m_enabled(false), m_currentMemoryGB(0.0f), 
@@ -69,22 +72,17 @@ public:
 
     void SetDisableHooks(bool disable);
 
-    // Save/Load
-    bool SaveToINI(const std::string& filename) const;
-    bool LoadFromINI(const std::string& filename);
-    
-    // Ensure settings exist in INI (called after main save)
-    bool EnsureInINI(const std::string& filename) const { return SaveToINI(filename); }
-
-    bool HasUnsavedChanges() const {
+    // Font Scale
+    float GetFontScale() const {
         std::lock_guard<std::mutex> lock(m_mutex);
-        return m_hasUnsavedChanges;
+        return m_fontScale;
     }
 
-    void MarkAsSaved() {
-        std::lock_guard<std::mutex> lock(m_mutex);
-        m_hasUnsavedChanges = false;
-    }
+    void SetFontScale(float scale);
+
+    // TOML serialization (writes/reads qol.ui section)
+    void SaveToToml(toml::table& qolTable) const;
+    void LoadFromToml(const toml::table& qolTable);
 
     // Helper to get key name for display
     static std::string GetKeyName(UINT vkCode);
@@ -93,12 +91,12 @@ private:
     UISettings() :
         m_uiToggleKey(VK_INSERT),
         m_disableHooks(false),
-        m_hasUnsavedChanges(false) {}
+        m_fontScale(1.0f) {}
 
     mutable std::mutex m_mutex;
     UINT m_uiToggleKey;
     bool m_disableHooks;
-    bool m_hasUnsavedChanges;
+    float m_fontScale;
 };
 
 // Borderless Window Mode
@@ -130,8 +128,9 @@ public:
     void Apply();  // Apply current state to window
     void SetWindowHandle(HWND hwnd);
 
-    // Save/Load
-    void LoadSettings(const std::string& filename);
+    // TOML serialization (writes/reads qol.borderless_window section)
+    void SaveToToml(toml::table& qolTable) const;
+    void LoadFromToml(const toml::table& qolTable);
 
 private:
     BorderlessWindow() : m_mode(BorderlessMode::Disabled), m_hwnd(nullptr),

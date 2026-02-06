@@ -8,6 +8,7 @@
 #include "cpu_optimization.h"
 #include "utils.h"
 #include "logger.h"
+#include <toml++/toml.hpp>
 
 // Metadata storage for patches (use unique_ptr to avoid pointer invalidation on reallocation)
 static std::vector<std::unique_ptr<PatchMetadata>>& GetMetadataStorage() {
@@ -134,189 +135,50 @@ bool OptimizationManager::DisablePatch(const std::string& name) {
     return false;
 }
 
-bool OptimizationManager::SaveState(const std::string& filename) {
-    try {
-        // First, read entire file content
-        std::vector<std::string> existingContent;
-        {
-            std::ifstream inFile(filename);
-            if (inFile.is_open()) {
-                std::string line;
-                while (std::getline(inFile, line)) {
-                    existingContent.push_back(line);
-                }
-            }
-        }
+void OptimizationManager::SaveToToml(toml::table& root) {
+    toml::table patchesTable;
 
-        // Find and remove existing patch settings section
-        bool inSection = false;
-        auto it = existingContent.begin();
-        while (it != existingContent.end()) {
-            if (*it == "; Patch Settings" || *it == "; Optimization Settings") {  // Support both old and new format
-                inSection = true;
-                it = existingContent.erase(it);
-            }
-            else if (inSection) {
-                // Check if we've reached a new section (starts with [ or ; at beginning of line)
-                if (!it->empty() && ((*it)[0] == '[' || ((*it)[0] == ';' && it->find("; Optimization") != 0))) {
-                    // Found a new section, stop removing
-                    inSection = false;
-                    it++;
-                } else {
-                    // Still in optimization section, remove this line
-                    it = existingContent.erase(it);
-                }
-            }
-            else {
-                it++;
-            }
-        }
-
-        // Write back file with updated content
-        std::ofstream outFile(filename);
-        if (!outFile.is_open()) {
-            LOG_ERROR("[PatchSystem] Failed to open file for saving: " + filename);
-            return false;
-        }
-
-        // Write existing content
-        for (const auto& line : existingContent) {
-            outFile << line << "\n";
-        }
-
-        // Ensure there's a blank line before optimization section
-        if (!existingContent.empty() && !existingContent.back().empty()) {
-            outFile << "\n";
-        }
-
-        // Write patch settings section
-        outFile << "; Patch Settings\n";
-        for (const auto& patch : patches) {
-            patch->SaveState(outFile);
-        }
-
-        m_hasUnsavedChanges = false;
-        return true;
+    for (const auto& patch : patches) {
+        toml::table patchTable;
+        patch->SaveToToml(patchTable);
+        patchesTable.insert(patch->GetName(), std::move(patchTable));
     }
-    catch (const std::exception& e) {
-        LOG_ERROR(std::string("[PatchSystem] Error saving state: ") + e.what());
-        return false;
+
+    if (!patchesTable.empty()) {
+        root.insert("patches", std::move(patchesTable));
     }
+
+    m_hasUnsavedChanges = false;
 }
 
-bool OptimizationManager::LoadState(const std::string& filename) {
-    try {
-        LOG_DEBUG("[PatchSystem] Attempting to load from: " + filename);
+void OptimizationManager::LoadFromToml(const toml::table& root) {
+    auto patchesNode = root["patches"].as_table();
+    if (!patchesNode) {
+        LOG_DEBUG("[PatchSystem] No patches section found in TOML");
+        return;
+    }
 
-        std::ifstream file(filename);
-        if (!file.is_open()) {
-            LOG_ERROR("[PatchSystem] Failed to open file for loading: " + filename);
-            return false;
-        }
+    for (auto& [patchName, patchNode] : *patchesNode) {
+        auto* patchTable = patchNode.as_table();
+        if (!patchTable) continue;
 
-        // Look for patch settings section
-        std::string line;
-        bool foundOptSection = false;
-        while (std::getline(file, line)) {
-            if (line == "; Patch Settings" || line == "; Optimization Settings") { // Support old format too
-                foundOptSection = true;
-                LOG_DEBUG("[PatchSystem] Found patch settings section");
+        std::string name(patchName.str());
+
+        // Find the matching patch
+        OptimizationPatch* patch = nullptr;
+        for (auto& p : patches) {
+            if (p->GetName() == name) {
+                patch = p.get();
                 break;
             }
         }
 
-        if (!foundOptSection) {
-            LOG_DEBUG("[PatchSystem] No patch section found in file");
-            return true; // Not an error, just no settings
+        if (!patch) {
+            LOG_WARNING("[PatchSystem] No matching patch found for TOML section: " + name);
+            continue;
         }
 
-        // First pass collect all settings per patch
-        // We need to apply Settings.* BEFORE Enabled so patches install with correct values!!!!!!!!!!!!!!!!!
-        struct PatchSettings {
-            std::vector<std::pair<std::string, std::string>> settings;  // Settings.* entries
-            std::string enabledValue;  // "true" or "false" or empty if not specified
-        };
-        std::unordered_map<std::string, PatchSettings> patchSettingsMap;
-
-        std::string currentPatchName;
-        bool foundAnyOptimizations = false;
-
-        while (std::getline(file, line)) {
-            // Skip empty lines and comments
-            if (line.empty() || line[0] == ';') {
-                continue;
-            }
-
-            // Check for optimization section header like [Optimization_FrameRate]
-            if (!line.empty() && line[0] == '[' && line.back() == ']') {
-                size_t start = line.find('_'); // Find the underscore after "Optimization"
-                if (start != std::string::npos && start + 1 < line.length() - 1) {
-                    currentPatchName = line.substr(start + 1, line.length() - start - 2); // Extract patch name
-                    LOG_DEBUG("[PatchSystem] Found patch section: " + currentPatchName);
-                    foundAnyOptimizations = true;
-                } else {
-                    currentPatchName.clear(); // Invalid section header
-                }
-                continue;
-            }
-
-            // Parse key=value pairs within a valid section
-            size_t equalPos = line.find('=');
-            if (equalPos != std::string::npos && !currentPatchName.empty()) {
-                std::string key = line.substr(0, equalPos);
-                std::string value = line.substr(equalPos + 1);
-
-                LOG_DEBUG("[PatchSystem] Found setting for [" + currentPatchName + "] - Key: " + key + ", Value: " + value);
-
-                // Store in our map for later application
-                if (key == "Enabled") {
-                    patchSettingsMap[currentPatchName].enabledValue = value;
-                } else {
-                    patchSettingsMap[currentPatchName].settings.emplace_back(key, value);
-                }
-            }
-        }
-
-        // Second pass apply settings to patches in correct order
-        // First apply all Settings.* values (so patches have correct config before install)
-        // Then apply Enabled state (which may trigger Instal)
-        for (auto& [patchName, patchSettings] : patchSettingsMap) {
-            // Find the patch
-            OptimizationPatch* patch = nullptr;
-            for (auto& p : patches) {
-                if (p->GetName() == patchName) {
-                    patch = p.get();
-                    break;
-                }
-            }
-
-            if (!patch) {
-                LOG_WARNING("[PatchSystem] No matching patch found for section: " + patchName);
-                continue;
-            }
-
-            // Apply settings first (before Enabled)
-            for (const auto& [key, value] : patchSettings.settings) {
-                LOG_DEBUG("[PatchSystem] Applying setting to patch [" + patchName + "]: " + key + "=" + value);
-                patch->LoadState(key, value);
-            }
-
-            // Now apply Enabled state (may trigger Install with correct settings)
-            if (!patchSettings.enabledValue.empty()) {
-                LOG_DEBUG("[PatchSystem] Applying Enabled=" + patchSettings.enabledValue + " to patch: " + patchName);
-                patch->LoadState("Enabled", patchSettings.enabledValue);
-            }
-        }
-
-        if (!foundAnyOptimizations) {
-            LOG_DEBUG("[PatchSystem] No patch sections found in file");
-        }
-
-        return true;
-    }
-    catch (const std::exception& e) {
-        LOG_ERROR(std::string("[PatchSystem] Error loading state: ") + e.what());
-        return false;
+        patch->LoadFromToml(*patchTable);
     }
 }
 

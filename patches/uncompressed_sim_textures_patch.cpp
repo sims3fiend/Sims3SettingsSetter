@@ -2,6 +2,7 @@
 #include "../patch_helpers.h"
 #include "../logger.h"
 #include "../settings.h"
+#include "../config/config_value_manager.h"
 
 class UncompressedSimTexturesPatch : public OptimizationPatch {
 private:
@@ -28,7 +29,7 @@ private:
             return true;
         }
 
-        const auto config = SettingsManager::Get().GetConfigValues();
+        const auto& config = ConfigValueManager::Get().GetConfigValues();
         const auto minSimLODEntry = config.find(L"MinSimLOD");
 
         if (minSimLODEntry == config.end()) {
@@ -129,4 +130,3 @@ REGISTER_PATCH(UncompressedSimTexturesPatch, {
         "This is not an issue with DXVK as it stores only a small portion of textures in virtual memory.",
     }
 })
-

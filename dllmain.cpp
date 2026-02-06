@@ -7,7 +7,6 @@
 #include <memory>
 #include "d3d9_hook.h"
 #include "settings.h"
-#include "preset_manager.h"
 #include "logger.h"
 #include "pattern_scan.h"
 #include "vtable_manager.h"
@@ -17,7 +16,10 @@
 #include <iomanip>
 #include <strsafe.h>
 #include "qol.h"
-#include "config_value_cache.h"
+#include "config/config_value_manager.h"
+#include "config/config_paths.h"
+#include "config/config_store.h"
+#include "config/migration.h"
 #include "patch_system.h"
 
 //Avert thine gaze, I said I was going to make the code clean and I lied
@@ -225,9 +227,9 @@ class VariableRegistryHook : public SettingsHook {
                 LOG_INFO("All settings appear to be registered, saving default values");
                 settingsManager.SetInitialized(true);
 
-                // Save default settings to a file
+                // Save default settings
                 std::string error;
-                if (!settingsManager.SaveDefaultValues(Utils::GetGameFilePath("S3SS_defaults.ini"), &error)) {
+                if (!ConfigStore::Get().SaveDefaults(&error)) {
                     LOG_ERROR("Failed to save default settings: " + error);
                 }
                 else {
@@ -305,20 +307,18 @@ class ConfigRetrievalHook : public SettingsHook {
 
                 // Only process if category is "Config", Options is too risky since it overwrites the actual file which is stupid
                 if (categoryStr == L"Config") {
+                    auto& cvm = ConfigValueManager::Get();
+
                     // Check if we have a saved override for this config value
-                    auto& configValues = SettingsManager::Get().GetConfigValues();
+                    const auto& configValues = cvm.GetConfigValues();
                     auto it = configValues.find(keyStr);
                     if (it != configValues.end() && it->second.isModified) {
                         // We have a saved override, use our value instead
                         const std::wstring& savedValue = it->second.currentValue;
 
-                        // Use ConfigValueCache to get a persistent buffer for this value
-                        wchar_t* newBuffer = ConfigValueCache::Instance().GetBuffer(fullKey, savedValue, it->second.bufferSize);
+                        // Use ConfigValueManager to get a persistent buffer for this value
+                        wchar_t* newBuffer = cvm.GetOrCreateBuffer(fullKey, savedValue, it->second.bufferSize);
                         if (newBuffer) {
-                            // Replace the original buffer with our cached one
-                            if (*outValue) {
-                                // We don't need to free the original buffer as the game handles that
-                            }
                             *outValue = newBuffer;
                             return 1;
                         }
@@ -331,7 +331,7 @@ class ConfigRetrievalHook : public SettingsHook {
                         // Cache the original value for consistency
                         std::wstring originalValue = *outValue;
                         size_t requiredCapacity = wcslen(*outValue) + 1;
-                        wchar_t* cachedBuffer = ConfigValueCache::Instance().GetBuffer(fullKey, originalValue, requiredCapacity);
+                        wchar_t* cachedBuffer = cvm.GetOrCreateBuffer(fullKey, originalValue, requiredCapacity);
                         *outValue = cachedBuffer;
 
                         info.currentValue = originalValue;
@@ -345,11 +345,8 @@ class ConfigRetrievalHook : public SettingsHook {
                         info.valueType = ConfigValueType::Unknown;
                     }
                     info.isModified = false;
-                    SettingsManager::Get().AddConfigValue(keyStr, info);
+                    cvm.AddConfigValue(keyStr, info);
                 }
-
-                // Store the setting in our config settings map using validated strings
-                SettingsManager::Get().AddConfigSetting(keyStr.c_str(), categoryStr.c_str());
 
                 // Try to find and update the category for this setting
                 if (auto* setting = SettingsManager::Get().GetSetting(keyStr.c_str())) {
@@ -612,9 +609,13 @@ HMODULE GetDllModuleHandle() {
 
 DWORD WINAPI HookThread(LPVOID lpParameter) {
     try {
-        // Initialize logger
-        if (!Logger::Handler::Initialize(Utils::GetGameFilePath("S3SS_LOG.txt"))) {
-            OutputDebugStringA("Failed to initialize logger\n");
+        // 1. Ensure config directory exists and initialize logger
+        ConfigPaths::EnsureDirectoryExists();
+        if (!Logger::Handler::Initialize(ConfigPaths::GetLogPath())) {
+            // Fallback to Bin directory if Documents creation failed
+            if (!Logger::Handler::Initialize(Utils::GetGameFilePath("S3SS_LOG.txt"))) {
+                OutputDebugStringA("Failed to initialize logger\n");
+            }
         }
         Logger::Handler::SetFileLogging(true);
 #ifdef _DEBUG
@@ -623,47 +624,44 @@ DWORD WINAPI HookThread(LPVOID lpParameter) {
 
         LOG_INFO("Hook thread started");
 
-        // Detect game version from PE timestamp
+        // 2. Detect game version from PE timestamp
         if (DetectGameVersion()) {
             LOG_INFO(std::format("Detected game version: {} [0x{:08X}]", GetGameVersionName(), g_exeTimeDateStamp));
         } else {
             LOG_WARNING(std::format("Unknown game version [0x{:08X}] - patches may not work correctly", g_exeTimeDateStamp));
         }
 
-        // Initialize CPU feature detection
+        // 3. grab CPU features
         const auto& cpuFeatures = CPUFeatures::Get();
         LOG_INFO("[Optimization] CPU Features - SSE4.1: " +
             std::string(cpuFeatures.hasSSE41 ? "Yes" : "No") +
             ", AVX2: " + (cpuFeatures.hasAVX2 ? "Yes" : "No") +
             ", FMA: " + (cpuFeatures.hasFMA ? "Yes" : "No"));
 
-        // Load UI settings first
-        std::string iniPath = Utils::GetDefaultINIPath();
-        UISettings::Get().LoadFromINI(iniPath.c_str());
+        // 4. Migration check (old crusty INI ->  TOML)
+        Migration::CheckAndMigrate();
 
-        // If settings need to be saved (file doesn't exist or missing QoL section), save them
-        if (UISettings::Get().HasUnsavedChanges()) {
-            UISettings::Get().SaveToINI(iniPath.c_str());
-            UISettings::Get().MarkAsSaved();
-        }
-
-        LOG_INFO("UI settings initialized");
-
-        // Initialize patches (register only, don't load states yet)
+        // 5. Initialize patches (register only, states loaded from TOML below)
         try {
             auto& patchManager = OptimizationManager::Get();
             LOG_INFO("Patches registered successfully");
-
-            // NOTE: We'll load saved states AFTER D3D9 is initialized
-            // to ensure the game module is fully loaded
         }
         catch (const std::exception& e) {
             LOG_ERROR("Failed to initialize patch system: " + std::string(e.what()));
         }
 
-        // Initialize settings hooks
+        // 6. Load all settings from TOML (settings, config values, QoL, patches)
+        {
+            std::string error;
+            if (!ConfigStore::Get().LoadAll(&error)) {
+                LOG_WARNING("Failed to load config: " + error);
+            } else {
+                LOG_INFO("Successfully loaded config from TOML");
+            }
+        }
+
+        // 7. Initialize settings hooks
         try {
-            // Check if hooks should be disabled
             bool disableHooks = UISettings::Get().GetDisableHooks();
 
             if (disableHooks) {
@@ -672,46 +670,17 @@ DWORD WINAPI HookThread(LPVOID lpParameter) {
             else {
                 g_hookManager.Initialize();
                 LOG_INFO("Settings hooks initialized");
-
-                // Load saved settings
-                std::string error;
-                if (!SettingsManager::Get().LoadConfig(iniPath, &error)) {
-                    LOG_WARNING("Failed to load settings at startup: " + error);
-                }
-                else {
-                    LOG_INFO("Successfully loaded settings");
-                }
             }
-
-            // Load QoL settings
-            MemoryMonitor::Get().LoadSettings(iniPath.c_str());
-            BorderlessWindow::Get().LoadSettings(iniPath.c_str());
-            LOG_INFO("Successfully loaded QoL settings");
         }
         catch (const std::exception& e) {
             LOG_ERROR("Failed to initialize settings hooks: " + std::string(e.what()));
             return FALSE;
         }
 
-        // Initialize D3D hooks
+        // 8. Initialize D3D hooks
         if (!InitializeD3D9Hook()) {
             LOG_ERROR("Failed to initialize D3D9 hook");
             return FALSE;
-        }
-        
-        // Now that D3D9 is hooked and the game is running, it's safe to load patch states
-        try {
-            LOG_INFO("Loading saved patch states...");
-            auto& patchManager = OptimizationManager::Get();
-            if (!patchManager.LoadState(iniPath)) {
-                LOG_WARNING("Failed to load patch states");
-            }
-            else {
-                LOG_INFO("Successfully loaded patch states");
-            }
-        }
-        catch (const std::exception& e) {
-            LOG_ERROR("Failed to load patch states: " + std::string(e.what()));
         }
 
         LOG_INFO("Starting message loop");

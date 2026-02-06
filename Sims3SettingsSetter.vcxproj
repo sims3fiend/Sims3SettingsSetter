@@ -100,7 +100,9 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClInclude Include="allocator_hook.h" />
-    <ClInclude Include="config_value_cache.h" />
+    <ClInclude Include="config\config_store.h" />
+    <ClInclude Include="config\config_paths.h" />
+    <ClInclude Include="config\config_value_manager.h" />
     <ClInclude Include="cpu_optimization.h" />
     <ClInclude Include="d3d9_hook.h" />
     <ClInclude Include="d3d9_hook_registry.h" />
@@ -110,17 +112,21 @@
     <ClInclude Include="logger.h" />
     <ClInclude Include="optimization.h" />
     <ClInclude Include="pattern_scan.h" />
-    <ClInclude Include="preset_manager.h" />
     <ClInclude Include="qol.h" />
     <ClInclude Include="settings.h" />
     <ClInclude Include="settings_gui.h" />
     <ClInclude Include="utils.h" />
     <ClInclude Include="vtable_manager.h" />
+    <ClInclude Include="config\migration.h" />
     <ClInclude Include="patch_system.h" />
     <ClInclude Include="patch_helpers.h" />
+    <ClInclude Include="patch_settings.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="allocator_hook.cpp" />
+    <ClCompile Include="config\config_store.cpp" />
+    <ClCompile Include="config\config_paths.cpp" />
+    <ClCompile Include="config\config_value_manager.cpp" />
     <ClCompile Include="cpu_optimization.cpp" />
     <ClCompile Include="d3d9_hook.cpp" />
     <ClCompile Include="d3d9_hook_registry.cpp" />
@@ -142,8 +148,8 @@
     <ClCompile Include="patches\timer_optimization_patch.cpp" />
     <ClCompile Include="patches\uncompressed_sim_textures_patch.cpp" />
     <ClCompile Include="patches\worldcache_uncap_patch.cpp" />
+    <ClCompile Include="config\migration.cpp" />
     <ClCompile Include="pattern_scan.cpp" />
-    <ClCompile Include="preset_manager.cpp" />
     <ClCompile Include="qol.cpp" />
     <ClCompile Include="settings.cpp" />
     <ClCompile Include="vtable_manager.cpp" />

@@ -1,66 +1,14 @@
 #include <algorithm>
+#include <optional>
 #include <unordered_set>
-#include <set>
 #include "settings.h"
-#include <fstream>
-#include <sstream>
-#include <iomanip> 
-#include <chrono>
-#include <ctime>
 #include "utils.h"
-#include "config_value_cache.h"
+#include "config/config_value_manager.h"
+#include "config/config_store.h"
 #include "logger.h"
+#include <toml++/toml.hpp>
 //File theme: https://www.youtube.com/watch?v=i2vctV4x5aQ
-// Helper function to write a vector to string
-template<typename T>
-std::string VectorToString(const T& vec) {
-    std::stringstream ss;
-    if constexpr (std::is_same_v<T, Vector2>) {
-        ss << vec.x << "," << vec.y;
-    }
-    else if constexpr (std::is_same_v<T, Vector3>) {
-        ss << vec.x << "," << vec.y << "," << vec.z;
-    }
-    else if constexpr (std::is_same_v<T, Vector4>) {
-        ss << vec.x << "," << vec.y << "," << vec.z << "," << vec.w;
-    }
-    return ss.str();
-}
 
-// Helper function to parse a vector from string
-template<typename T>
-T StringToVector(const std::string& str) {
-    std::stringstream ss(str);
-    std::string item;
-    std::vector<float> values;
-    
-    while (std::getline(ss, item, ',')) {
-        // Trim whitespace
-        size_t start = item.find_first_not_of(" \t\r\n");
-        size_t end = item.find_last_not_of(" \t\r\n");
-        if (start == std::string::npos) {
-            continue; // skip empty tokens
-        }
-        std::string token = item.substr(start, end - start + 1);
-        try {
-            values.push_back(std::stof(token));
-        } catch (...) {
-            // Ignore malformed component
-        }
-    }
-    
-    if constexpr (std::is_same_v<T, Vector2>) {
-        return values.size() >= 2 ? Vector2{values[0], values[1]} : Vector2{0, 0};
-    }
-    else if constexpr (std::is_same_v<T, Vector3>) {
-        return values.size() >= 3 ? Vector3{values[0], values[1], values[2]} : Vector3{0, 0, 0};
-    }
-    else if constexpr (std::is_same_v<T, Vector4>) {
-        return values.size() >= 4 ? Vector4{values[0], values[1], values[2], values[3]} : Vector4{0, 0, 0, 0};
-    }
-}
-
-// 
 Setting::ValueType Setting::GetValue() const {
     return std::visit([this](auto&& value) -> ValueType {
         using T = std::decay_t<decltype(value)>;
@@ -148,359 +96,6 @@ const std::unordered_map<std::wstring, std::unique_ptr<Setting>>& SettingsManage
     return m_settings;
 }
 
-bool SettingsManager::SaveConfig(const std::string& filename, std::string* error) const {
-    try {
-        // Debug logging
-        LOG_DEBUG("[SettingsManager] Begin SaveConfig");
-
-        // Read existing content to preserve settings we're not rewriting
-        std::vector<std::string> preservedSettingsContent;  // Settings not being rewritten
-        std::set<std::string> settingsToWrite;  // Track which settings we'll write from m_settings
-
-        // Build set of settings we're going to write
-        for (const auto& [name, setting] : m_settings) {
-            if (setting->HasUnsavedChanges() && setting->IsOverridden()) {
-                settingsToWrite.insert(Utils::WideToUtf8(name));
-            }
-        }
-
-        {
-            std::ifstream inFile(filename);
-            if (inFile.is_open()) {
-                std::string line;
-                bool inUnknownSetting = false;
-                std::string currentSettingName;
-                std::vector<std::string> currentSettingLines;
-
-                while (std::getline(inFile, line)) {
-                    // Stop when we hit patch/optimization section - those are managed by OptimizationManager
-                    if (line == "; Patch Settings" || line == "; Optimization Settings") {
-                        // Flush any pending setting before stopping
-                        if (inUnknownSetting && !currentSettingLines.empty()) {
-                            for (const auto& l : currentSettingLines) {
-                                preservedSettingsContent.push_back(l);
-                            }
-                            preservedSettingsContent.push_back("");  // Empty line separator
-                        }
-                        break;  // Stop reading - OptimizationManager handles the rest
-                    }
-
-                    // Check for setting section header [SettingName]
-                    if (!line.empty() && line[0] == '[' && line.back() == ']') {
-                        // Flush previous unknown setting if any
-                        if (inUnknownSetting && !currentSettingLines.empty()) {
-                            for (const auto& l : currentSettingLines) {
-                                preservedSettingsContent.push_back(l);
-                            }
-                            preservedSettingsContent.push_back("");  // Empty line separator
-                        }
-
-                        currentSettingName = line.substr(1, line.size() - 2);
-                        currentSettingLines.clear();
-                        currentSettingLines.push_back(line);
-
-                        // Determine if we should preserve this setting from the INI
-                        // Skip (don't preserve) if we're gunna write it fresh (in settingsToWrite) or Config: section (handled separately under)
-                        // Preserve if it's not in settingsToWrite (either unknown or known but unchanged)
-                        if (currentSettingName.find("Config:") == 0) {
-                            // Config sections are handled separately, don't preserve
-                            inUnknownSetting = false;
-                        } else if (settingsToWrite.find(currentSettingName) != settingsToWrite.end()) {
-                            // We're writing this fresh, don't preserve old version
-                            inUnknownSetting = false;
-                        } else {
-                            // Preserve this setting - either unknown or known but not being rewritten
-                            inUnknownSetting = true;
-                        }
-                    }
-                    else if (inUnknownSetting) {
-                        // Continue collecting lines for unknown setting
-                        if (!line.empty()) {
-                            currentSettingLines.push_back(line);
-                        }
-                    }
-                }
-
-                // Flush final unknown setting if any
-                if (inUnknownSetting && !currentSettingLines.empty()) {
-                    for (const auto& l : currentSettingLines) {
-                        preservedSettingsContent.push_back(l);
-                    }
-                    preservedSettingsContent.push_back("");
-                }
-            }
-        }
-
-        std::ofstream file(filename);
-        if (!file.is_open()) {
-            if (error) *error = "Failed to open file for writing: " + filename;
-            LOG_ERROR("[SettingsManager] Failed to open settings file for writing: " + filename);
-            return false;
-        }
-
-        // Write header with timestamp
-        auto now = std::chrono::system_clock::now();
-        auto time = std::chrono::system_clock::to_time_t(now);
-        file << "; Sims 3 Settings Configuration\n";
-        file << "; Saved on: " << std::ctime(&time);
-        file << "; Format: [SettingName]\nValue=value\n\n";
-
-        int savedCount = 0;
-
-        // Write preserved settings that aren't in m_settings (from previous saves)
-        if (!preservedSettingsContent.empty()) {
-            for (const auto& line : preservedSettingsContent) {
-                file << line << "\n";
-            }
-            LOG_DEBUG("[SettingsManager] Preserved " + std::to_string(preservedSettingsContent.size()) + " lines of unknown settings");
-        }
-
-        for (const auto& [name, setting] : m_settings) {
-            // Debug log current setting status
-            std::string settingName = Utils::WideToUtf8(name);
-
-            // Only save settings that have unsaved changes
-            if (!setting->HasUnsavedChanges()) {
-                // skip log
-                continue;
-            }
-
-            // If override was explicitly cleared, skip saving it
-            if (!setting->IsOverridden()) {
-                setting->SetUnsavedChanges(false); // Clear the unsaved flag
-                // skip log
-                continue;
-            }
-
-            // Log saving this setting
-            // skip per-setting log
-            savedCount++;
-
-            file << "[" << settingName << "]\n";
-
-            // Write category if available
-            const auto& metadata = setting->GetMetadata();
-            if (!metadata.category.empty()) {
-                file << "Category=" << Utils::WideToUtf8(metadata.category) << "\n";
-            }
-
-            // Write value
-            std::visit([&](auto&& value) {
-                using T = std::decay_t<decltype(value)>;
-                file << "Value=";
-                if constexpr (std::is_same_v<T, bool>) {
-                    file << (value ? "true" : "false");
-                }
-                else if constexpr (std::is_same_v<T, float>) {
-                    file << std::fixed << std::setprecision(6) << value;
-                }
-                else if constexpr (std::is_same_v<T, Vector2> ||
-                                 std::is_same_v<T, Vector3> ||
-                                 std::is_same_v<T, Vector4>) {
-                    file << VectorToString(value);
-                }
-                else {
-                    file << value; // For int, unsigned int
-                }
-                file << "\n";
-            }, setting->GetValue());
-
-            // Write metadata
-            file << "Min=" << metadata.min << "\n";
-            file << "Max=" << metadata.max << "\n";
-            file << "Step=" << metadata.step << "\n\n";
-
-            // Mark as saved and overridden
-            setting->SetUnsavedChanges(false);
-            setting->SetOverridden(true);
-        }
-
-        LOG_INFO("[SettingsManager] Saved " + std::to_string(savedCount) + " settings");
-
-        // Save modified config values
-        int configCount = 0;
-        for (const auto& [name, info] : m_configValues) {
-            // Only save if the value has been modified from what the game provided
-            if (info.isModified) {
-                configCount++;
-                std::string settingName = Utils::WideToUtf8(name);
-                file << "[Config:" << settingName << "]\n";
-                file << "Value=" << Utils::WideToUtf8(info.currentValue) << "\n\n";
-            }
-        }
-        
-        LOG_INFO("[SettingsManager] Saved " + std::to_string(configCount) + " config values");
-
-        // Patch/Optimization sections are NOT written here - they are managed by OptimizationManager::SaveState() which "should" be called after SaveConfig()
-
-        LOG_DEBUG("[SettingsManager] End SaveConfig");
-
-        return true;
-    }
-    catch (const std::exception& e) {
-        if (error) *error = "Error saving config: " + std::string(e.what());
-        LOG_ERROR(std::string("[SettingsManager] Error saving config: ") + e.what());
-        return false;
-    }
-}
-
-bool SettingsManager::LoadConfig(const std::string& filename, std::string* error) {
-    try {
-        LOG_INFO("[SettingsManager] Loading from: " + filename);
-        
-        std::ifstream file(filename);
-        if (!file.is_open()) {
-            if (error) *error = "Failed to open file: " + filename;
-            LOG_ERROR("[SettingsManager] Failed to open file: " + filename);
-            return false;
-        }
-
-        int settingsCount = 0;
-        int configCount = 0;
-        std::string line;
-        std::wstring currentSetting;
-        bool inConfigSection = false;
-        ConfigValueInfo currentConfigInfo;
-        
-        // omit verbose parse begin log
-        
-        while (std::getline(file, line)) {
-            // Skip comments and empty lines
-            if (line.empty() || line[0] == ';') continue;
-
-            // Check for section header
-            if (line[0] == '[') {
-                size_t end = line.find(']');
-                if (end != std::string::npos) {
-                    std::string section = line.substr(1, end - 1);
-                    
-                    // Check if this is a config section
-                    if (section.substr(0, 7) == "Config:") {
-                        inConfigSection = true;
-                        currentSetting = Utils::Utf8ToWide(section.substr(7));
-                        currentConfigInfo = ConfigValueInfo();
-                        // Mark as modified since it's coming from saved file
-                        currentConfigInfo.isModified = true;
-                        // omit verbose per-section log
-                    } else {
-                        inConfigSection = false;
-                        currentSetting = Utils::Utf8ToWide(section);
-                        // omit verbose per-section log
-                    }
-                }
-                continue;
-            }
-
-            // Parse key=value pairs
-            size_t equalPos = line.find('=');
-            if (equalPos != std::string::npos && !currentSetting.empty()) {
-                std::string key = line.substr(0, equalPos);
-                std::string value = line.substr(equalPos + 1);
-
-                if (inConfigSection) {
-                    if (key == "Value") {
-                        currentConfigInfo.currentValue = Utils::Utf8ToWide(value);
-                        // Find existing config info to preserve other fields
-                        auto it = m_configValues.find(currentSetting);
-                        if (it != m_configValues.end()) {
-                            currentConfigInfo.category = it->second.category;
-                            currentConfigInfo.bufferSize = it->second.bufferSize;
-                            currentConfigInfo.valueType = it->second.valueType;
-                        }
-                        AddConfigValue(currentSetting, currentConfigInfo);
-                        configCount++;
-                        // omit verbose per-value log
-                    }
-                } else if (key == "Value") {
-                    // Try to apply immediately if setting exists
-                    auto* setting = GetSetting(currentSetting);
-                    if (setting) {
-                        try {
-                            settingsCount++;
-                            // omit verbose per-setting log
-                            
-                            std::visit([&](auto&& defaultVal) {
-                                using T = std::decay_t<decltype(defaultVal)>;
-                                Setting::ValueType newValue;
-                                
-                                if constexpr (std::is_same_v<T, bool>) {
-                                    newValue = value == "true";
-                                }
-                else if constexpr (std::is_same_v<T, float>) {
-                    newValue = std::stof(value);
-                                }
-                                else if constexpr (std::is_same_v<T, Vector2>) {
-                                    newValue = StringToVector<Vector2>(value);
-                                }
-                                else if constexpr (std::is_same_v<T, Vector3>) {
-                                    newValue = StringToVector<Vector3>(value);
-                                }
-                                else if constexpr (std::is_same_v<T, Vector4>) {
-                                    newValue = StringToVector<Vector4>(value);
-                                }
-                                else if constexpr (std::is_same_v<T, int>) {
-                                    newValue = std::stoi(value);
-                                }
-                                else if constexpr (std::is_same_v<T, unsigned int>) {
-                                    newValue = static_cast<unsigned int>(std::stoul(value));
-                                }
-                                
-                                // Set value and mark as overridden
-                                setting->SetValue(newValue);
-                                setting->SetOverridden(true);
-                                
-                            }, setting->GetDefaultValue());
-                        }
-                        catch (const std::exception& e) {
-                            LOG_WARNING(std::string("[SettingsManager] Error parsing value for ") + Utils::WideToUtf8(currentSetting) + ": " + e.what());
-                        }
-                    } else {
-                        // If setting doesn't exist yet, try to parse and store the value
-                        // omit verbose pending value log
-                        try {
-                            // Try each possible type
-                            if (value == "true" || value == "false") {
-                                StorePendingSavedValue(currentSetting, value == "true");
-                            } else if (value.find(',') != std::string::npos) {
-                                // Attempt to parse as vector
-                                auto parts = Utils::SplitString(value, ',');
-                                if (parts.size() == 2) {
-                                    StorePendingSavedValue(currentSetting, StringToVector<Vector2>(value));
-                                } else if (parts.size() == 3) {
-                                    StorePendingSavedValue(currentSetting, StringToVector<Vector3>(value));
-                                } else if (parts.size() == 4) {
-                                    StorePendingSavedValue(currentSetting, StringToVector<Vector4>(value));
-                                }
-                            } else {
-                                // Try as float first, then fallback to int
-                                try {
-                                    StorePendingSavedValue(currentSetting, std::stof(value));
-                                } catch (...) {
-                                    try {
-                                        StorePendingSavedValue(currentSetting, std::stoi(value));
-                                    } catch (...) {
-                                        LOG_WARNING("[SettingsManager] Could not parse value: " + value);
-                                    }
-                                }
-                            }
-                        } catch (const std::exception& e) {
-                            LOG_WARNING(std::string("[SettingsManager] Failed to parse pending value for ") + Utils::WideToUtf8(currentSetting) + ": " + e.what());
-                        }
-                    }
-                }
-            }
-        }
-
-        LOG_INFO("[SettingsManager] Applied " + std::to_string(settingsCount) + " settings and " + std::to_string(configCount) + " config values");
-        return true;
-    }
-    catch (const std::exception& e) {
-        if (error) *error = "Error loading config: " + std::string(e.what());
-        LOG_ERROR(std::string("[SettingsManager] Error loading config: ") + e.what());
-        return false;
-    }
-}
-
 void SettingsManager::SetSettingCategory(const std::wstring& name, const std::wstring& category) {
     auto it = m_settings.find(name);
     if (it != m_settings.end()) {
@@ -525,22 +120,6 @@ std::vector<std::wstring> SettingsManager::GetUniqueCategories() const {
     return categories;
 }
 
-void SettingsManager::AddConfigSetting(const std::wstring& name, const std::wstring& category) {
-    m_configSettings[name] = category;
-}
-
-const std::unordered_map<std::wstring, std::wstring>& SettingsManager::GetConfigSettings() const {
-    return m_configSettings;
-}
-
-void SettingsManager::AddConfigSettingInfo(const std::wstring& name, const ConfigSettingInfo& info) {
-    m_configSettingsInfo[name] = info;
-}
-
-const std::unordered_map<std::wstring, SettingsManager::ConfigSettingInfo>& 
-SettingsManager::GetConfigSettingsInfo() const {
-    return m_configSettingsInfo;
-}
 
 void SettingsManager::StorePendingSavedValue(const std::wstring& name, const Setting::ValueType& value) {
     m_pendingSavedValues[name].value = value;
@@ -551,7 +130,7 @@ void SettingsManager::StorePendingSavedValue(const std::wstring& name, const Set
     const size_t currentSize = m_pendingSavedValues.size();
     if (currentSize >= s_nextWarnAt) {
         LOG_WARNING("[SettingsManager] pendingSavedValues size=" + std::to_string(currentSize) +
-            ", possible obsolete or unknown settings in preset");
+            ", possible obsolete or unknown settings in config");
         if (s_nextWarnAt <= (SIZE_MAX / 2)) {
             s_nextWarnAt *= 2; // escalate threshold
         } else {
@@ -626,172 +205,6 @@ void SettingsManager::ApplyPendingSavedValue(const std::wstring& name) {
     }
 }
 
-void SettingsManager::AddConfigValue(const std::wstring& name, const ConfigValueInfo& info) {
-    m_configValues[name] = info;
-}
-
-const std::unordered_map<std::wstring, ConfigValueInfo>& SettingsManager::GetConfigValues() const {
-    return m_configValues;
-}
-
-bool SettingsManager::UpdateConfigValue(const std::wstring& name, const std::wstring& newValue) {
-    auto it = m_configValues.find(name);
-    if (it == m_configValues.end()) {
-        return false;
-    }
-
-    // Create a unique key for the config value cache
-    std::string fullKey = "Config." + Utils::WideToUtf8(name);
-    
-    // Update the value in our cache using the ConfigValueCache
-    size_t minCapacity = it->second.bufferSize > 0 ? it->second.bufferSize : (newValue.size() + 1);
-    ConfigValueCache::Instance().GetBuffer(fullKey, newValue, minCapacity);
-    
-    // Update our local copy as well
-    it->second.currentValue = newValue;
-    it->second.isModified = true;
-    return true;
-}
-
-bool SettingsManager::SaveDefaultValues(const std::string& filename, std::string* error) {
-    try {
-        std::ofstream file(filename);
-        if (!file.is_open()) {
-            if (error) *error = "Failed to open file for writing: " + filename;
-            return false;
-        }
-
-        // Write header with timestamp
-        auto now = std::chrono::system_clock::now();
-        auto time = std::chrono::system_clock::to_time_t(now);
-        file << "; Sims 3 Default Settings Configuration\n";
-        file << "; Saved on: " << std::ctime(&time);
-        file << "; Format: [SettingName]\nValue=value\n\n";
-
-        // Save all current values as defaults
-        for (const auto& [name, setting] : m_settings) {
-            std::string settingName = Utils::WideToUtf8(name);
-            
-            file << "[" << settingName << "]\n";
-            
-            // Write value
-            std::visit([&](auto&& value) {
-                using T = std::decay_t<decltype(value)>;
-                file << "Value=";
-                if constexpr (std::is_same_v<T, bool>) {
-                    file << (value ? "true" : "false");
-                }
-                else if constexpr (std::is_same_v<T, float>) {
-                    file << std::fixed << std::setprecision(6) << value;
-                }
-                else if constexpr (std::is_same_v<T, Vector2> || 
-                                 std::is_same_v<T, Vector3> || 
-                                 std::is_same_v<T, Vector4>) {
-                    file << VectorToString(value);
-                }
-                else {
-                    file << value; // For int, unsigned int
-                }
-                file << "\n\n";
-            }, setting->GetValue());
-            
-            // Also store in memory
-            m_defaultValues[name] = setting->GetValue();
-        }
-
-        return true;
-    }
-    catch (const std::exception& e) {
-        if (error) *error = "Error saving default values: " + std::string(e.what());
-        return false;
-    }
-}
-
-bool SettingsManager::LoadDefaultValues(const std::string& filename, std::string* error) {
-    try {
-        std::ifstream file(filename);
-        if (!file.is_open()) {
-            if (error) *error = "Failed to open defaults file: " + filename;
-            return false;
-        }
-
-        m_defaultValues.clear();
-        
-        std::string line;
-        std::wstring currentSetting;
-        
-        while (std::getline(file, line)) {
-            // Skip comments and empty lines
-            if (line.empty() || line[0] == ';') continue;
-
-            // Check for section header
-            if (line[0] == '[') {
-                size_t end = line.find(']');
-                if (end != std::string::npos) {
-                    std::string section = line.substr(1, end - 1);
-                    currentSetting = Utils::Utf8ToWide(section);
-                }
-                continue;
-            }
-
-            // Parse key=value pairs
-            size_t equalPos = line.find('=');
-            if (equalPos != std::string::npos && !currentSetting.empty()) {
-                std::string key = line.substr(0, equalPos);
-                std::string value = line.substr(equalPos + 1);
-
-                if (key == "Value") {
-                    // Try to parse and store the value
-                    try {
-                        auto* setting = GetSetting(currentSetting);
-                        if (setting) {
-                            std::visit([&](auto&& defaultVal) {
-                                using T = std::decay_t<decltype(defaultVal)>;
-                                Setting::ValueType newValue;
-                                
-                                if constexpr (std::is_same_v<T, bool>) {
-                                    newValue = value == "true";
-                                }
-                                else if constexpr (std::is_same_v<T, int>) {
-                                    newValue = std::stoi(value);
-                                }
-                                else if constexpr (std::is_same_v<T, unsigned int>) {
-                                    newValue = static_cast<unsigned int>(std::stoul(value));
-                                }
-                                else if constexpr (std::is_same_v<T, float>) {
-                                    newValue = std::stof(value);
-                                }
-                                else if constexpr (std::is_same_v<T, Vector2>) {
-                                    newValue = StringToVector<Vector2>(value);
-                                }
-                                else if constexpr (std::is_same_v<T, Vector3>) {
-                                    newValue = StringToVector<Vector3>(value);
-                                }
-                                else if constexpr (std::is_same_v<T, Vector4>) {
-                                    newValue = StringToVector<Vector4>(value);
-                                }
-                                
-                                // Store the default value
-                                m_defaultValues[currentSetting] = newValue;
-                                
-                            }, setting->GetDefaultValue());
-                        }
-                    }
-                    catch (const std::exception& e) {
-                        LOG_WARNING("Error parsing default value for " + 
-                            Utils::WideToUtf8(currentSetting) + ": " + e.what());
-                    }
-                }
-            }
-        }
-
-        return true;
-    }
-    catch (const std::exception& e) {
-        if (error) *error = "Error loading default values: " + std::string(e.what());
-        return false;
-    }
-}
 
 void SettingsManager::ResetSettingToDefault(const std::wstring& name) {
     auto settingIt = m_settings.find(name);
@@ -821,6 +234,254 @@ void SettingsManager::ResetAllSettings() {
     LOG_INFO("Reset all settings to default values");
 } 
 
+// TOML Serialization
+namespace {
+
+// Write a Setting::ValueType into a toml::table entry under the key "value".
+void InsertValueToToml(toml::table& entry, const Setting::ValueType& value) {
+    std::visit([&](auto&& v) {
+        using T = std::decay_t<decltype(v)>;
+        if constexpr (std::is_same_v<T, bool>) {
+            entry.insert("value", v);
+        }
+        else if constexpr (std::is_same_v<T, int>) {
+            entry.insert("value", static_cast<int64_t>(v));
+        }
+        else if constexpr (std::is_same_v<T, unsigned int>) {
+            entry.insert("value", static_cast<int64_t>(v));
+        }
+        else if constexpr (std::is_same_v<T, float>) {
+            entry.insert("value", static_cast<double>(v));
+        }
+        else if constexpr (std::is_same_v<T, Vector2>) {
+            entry.insert("value", toml::array{ static_cast<double>(v.x), static_cast<double>(v.y) });
+        }
+        else if constexpr (std::is_same_v<T, Vector3>) {
+            entry.insert("value", toml::array{ static_cast<double>(v.x), static_cast<double>(v.y), static_cast<double>(v.z) });
+        }
+        else if constexpr (std::is_same_v<T, Vector4>) {
+            entry.insert("value", toml::array{ static_cast<double>(v.x), static_cast<double>(v.y), static_cast<double>(v.z), static_cast<double>(v.w) });
+        }
+    }, value);
+}
+
+// Read a TOML "value" node into a ValueType, guided by the target type from a default value.
+// Returns std::nullopt if the node can't be converted (e.g. array too short).
+std::optional<Setting::ValueType> ReadValueFromToml(const toml::node_view<const toml::node>& valueNode,
+                                                     const Setting::ValueType& targetDefault) {
+    Setting::ValueType result;
+    bool ok = false;
+
+    std::visit([&](auto&& defaultVal) {
+        using T = std::decay_t<decltype(defaultVal)>;
+        if constexpr (std::is_same_v<T, bool>) {
+            result = valueNode.value_or(false);
+            ok = true;
+        }
+        else if constexpr (std::is_same_v<T, int>) {
+            result = static_cast<int>(valueNode.value_or(int64_t(0)));
+            ok = true;
+        }
+        else if constexpr (std::is_same_v<T, unsigned int>) {
+            result = static_cast<unsigned int>(valueNode.value_or(int64_t(0)));
+            ok = true;
+        }
+        else if constexpr (std::is_same_v<T, float>) {
+            result = static_cast<float>(valueNode.value_or(0.0));
+            ok = true;
+        }
+        else if constexpr (std::is_same_v<T, Vector2>) {
+            if (auto arr = valueNode.as_array(); arr && arr->size() >= 2) {
+                result = Vector2{
+                    static_cast<float>((*arr)[0].value_or(0.0)),
+                    static_cast<float>((*arr)[1].value_or(0.0))
+                };
+                ok = true;
+            }
+        }
+        else if constexpr (std::is_same_v<T, Vector3>) {
+            if (auto arr = valueNode.as_array(); arr && arr->size() >= 3) {
+                result = Vector3{
+                    static_cast<float>((*arr)[0].value_or(0.0)),
+                    static_cast<float>((*arr)[1].value_or(0.0)),
+                    static_cast<float>((*arr)[2].value_or(0.0))
+                };
+                ok = true;
+            }
+        }
+        else if constexpr (std::is_same_v<T, Vector4>) {
+            if (auto arr = valueNode.as_array(); arr && arr->size() >= 4) {
+                result = Vector4{
+                    static_cast<float>((*arr)[0].value_or(0.0)),
+                    static_cast<float>((*arr)[1].value_or(0.0)),
+                    static_cast<float>((*arr)[2].value_or(0.0)),
+                    static_cast<float>((*arr)[3].value_or(0.0))
+                };
+                ok = true;
+            }
+        }
+    }, targetDefault);
+
+    if (ok) return result;
+    return std::nullopt;
+}
+
+// Infer a ValueType from a TOML node's own type (for pending values where we don't know the target type yet).
+std::optional<Setting::ValueType> InferValueFromToml(const toml::node_view<const toml::node>& valueNode) {
+    if (valueNode.is_boolean()) {
+        return valueNode.value_or(false);
+    }
+    else if (valueNode.is_array()) {
+        auto arr = valueNode.as_array();
+        if (arr) {
+            if (arr->size() == 2) {
+                return Vector2{
+                    static_cast<float>((*arr)[0].value_or(0.0)),
+                    static_cast<float>((*arr)[1].value_or(0.0))
+                };
+            } else if (arr->size() == 3) {
+                return Vector3{
+                    static_cast<float>((*arr)[0].value_or(0.0)),
+                    static_cast<float>((*arr)[1].value_or(0.0)),
+                    static_cast<float>((*arr)[2].value_or(0.0))
+                };
+            } else if (arr->size() == 4) {
+                return Vector4{
+                    static_cast<float>((*arr)[0].value_or(0.0)),
+                    static_cast<float>((*arr)[1].value_or(0.0)),
+                    static_cast<float>((*arr)[2].value_or(0.0)),
+                    static_cast<float>((*arr)[3].value_or(0.0))
+                };
+            }
+        }
+    }
+    else if (valueNode.is_floating_point()) {
+        return static_cast<float>(valueNode.value_or(0.0));
+    }
+    else if (valueNode.is_integer()) {
+        return static_cast<int>(valueNode.value_or(int64_t(0)));
+    }
+    return std::nullopt;
+}
+
+}
+
+void SettingsManager::SaveToToml(toml::table& root) const {
+    toml::table settingsTable;
+
+    for (const auto& [name, setting] : m_settings) {
+        if (!setting->IsOverridden()) {
+            continue;
+        }
+
+        std::string settingName = Utils::WideToUtf8(name);
+        toml::table entry;
+
+        InsertValueToToml(entry, setting->GetValue());
+
+        settingsTable.insert(settingName, std::move(entry));
+
+        // Mark as saved (clears the UI "unsaved" indicator)
+        setting->SetUnsavedChanges(false);
+    }
+
+    if (!settingsTable.empty()) {
+        root.insert("settings", std::move(settingsTable));
+    }
+}
+
+void SettingsManager::LoadFromToml(const toml::table& root) {
+    auto settingsNode = root["settings"].as_table();
+    if (!settingsNode) {
+        return;
+    }
+
+    int settingsCount = 0;
+    for (const auto& [key, node] : *settingsNode) {
+        auto* entryTable = node.as_table();
+        if (!entryTable) continue;
+
+        std::wstring settingName = Utils::Utf8ToWide(std::string(key.str()));
+        auto valueNode = (*entryTable)["value"];
+
+        auto* setting = GetSetting(settingName);
+        if (setting) {
+            try {
+                auto parsed = ReadValueFromToml(valueNode, setting->GetDefaultValue());
+                if (parsed) {
+                    setting->SetValue(*parsed);
+                    setting->SetOverridden(true);
+                    settingsCount++;
+                }
+            }
+            catch (const std::exception& e) {
+                LOG_WARNING("[SettingsManager] Error loading TOML value for " + Utils::WideToUtf8(settingName) + ": " + e.what());
+            }
+        } else {
+            // Setting not registered yet, store as pending
+            try {
+                auto inferred = InferValueFromToml(valueNode);
+                if (inferred) {
+                    StorePendingSavedValue(settingName, *inferred);
+                }
+            }
+            catch (const std::exception& e) {
+                LOG_WARNING("[SettingsManager] Failed to parse pending TOML value for " + Utils::WideToUtf8(settingName) + ": " + e.what());
+            }
+        }
+    }
+
+    LOG_INFO("[SettingsManager] Loaded " + std::to_string(settingsCount) + " settings from TOML");
+}
+
+void SettingsManager::SaveDefaultsToToml(toml::table& root) {
+    toml::table settingsTable;
+
+    for (const auto& [name, setting] : m_settings) {
+        std::string settingName = Utils::WideToUtf8(name);
+        toml::table entry;
+
+        InsertValueToToml(entry, setting->GetValue());
+
+        settingsTable.insert(settingName, std::move(entry));
+
+        // Also store in memory
+        m_defaultValues[name] = setting->GetValue();
+    }
+
+    root.insert("settings", std::move(settingsTable));
+}
+
+void SettingsManager::LoadDefaultsFromToml(const toml::table& root) {
+    auto settingsNode = root["settings"].as_table();
+    if (!settingsNode) {
+        return;
+    }
+
+    m_defaultValues.clear();
+
+    for (const auto& [key, node] : *settingsNode) {
+        auto* entryTable = node.as_table();
+        if (!entryTable) continue;
+
+        std::wstring settingName = Utils::Utf8ToWide(std::string(key.str()));
+        auto valueNode = (*entryTable)["value"];
+
+        auto* setting = GetSetting(settingName);
+        if (!setting) continue;
+
+        try {
+            auto parsed = ReadValueFromToml(valueNode, setting->GetDefaultValue());
+            if (parsed) {
+                m_defaultValues[settingName] = *parsed;
+            }
+        }
+        catch (const std::exception& e) {
+            LOG_WARNING("[SettingsManager] Error parsing default TOML value for " + Utils::WideToUtf8(settingName) + ": " + e.what());
+        }
+    }
+}
+
 void SettingsManager::ManualInitialize() {
     if (m_initialized) {
         LOG_DEBUG("Settings already initialized, ignoring manual initialization request");
@@ -832,9 +493,9 @@ void SettingsManager::ManualInitialize() {
     // Set initialized flag
     m_initialized = true;
     
-    // Save default settings to a file
+    // Save default settings via ConfigStore
     std::string error;
-    if (!SaveDefaultValues(Utils::GetGameFilePath("S3SS_defaults.ini"), &error)) {
+    if (!ConfigStore::Get().SaveDefaults(&error)) {
         LOG_ERROR("Failed to save default settings during manual init: " + error);
     }
     else {

@@ -5,7 +5,6 @@
 #include <chrono>
 #include <mutex>
 #include <memory>
-#include <fstream>
 #include <atomic>
 #include "logger.h"
 #include "patch_settings.h"
@@ -175,44 +174,35 @@ public:
         return offsetof(SampleWindow, calls); 
     }
 
-    // Add methods for serialization
-    virtual void SaveState(std::ofstream& file) const {
-        file << "[Optimization_" << patchName << "]\n";  // Keep old format for backward compatibility, will remove later
-        file << "Enabled=" << (isEnabled.load() ? "true" : "false") << "\n";
+    // TOML serialization
+    virtual void SaveToToml(toml::table& patchTable) const {
+        patchTable.insert("enabled", isEnabled.load());
 
-        // Save all registered settings
         for (const auto& setting : settings) {
-            setting->SaveToStream(file);
+            setting->SaveToToml(patchTable);
         }
-
-        file << "\n";
     }
 
-    virtual bool LoadState(const std::string& key, const std::string& value) {
-        // Handle enabled/disabled state
-        if (key == "Enabled") {
+    virtual bool LoadFromToml(const toml::table& patchTable) {
+        // Load settings first (before Enabled, so patches install with correct values)
+        for (auto& setting : settings) {
+            setting->LoadFromToml(patchTable);
+        }
+
+        // Then handle Enabled state
+        auto enabled = patchTable["enabled"].value<bool>();
+        if (enabled.has_value()) {
             bool currentlyEnabled = isEnabled.load();
-            if (value == "true" && !currentlyEnabled) {
+            if (enabled.value() && !currentlyEnabled) {
                 return Install();
             }
-            else if (value == "false" && currentlyEnabled) {
+            else if (!enabled.value() && currentlyEnabled) {
                 return Uninstall();
             }
-            return true;
         }
-
-        // Handle custom settings (format: Settings.settingName)
-        if (key.find("Settings.") == 0) {
-            std::string settingName = key.substr(9); // Remove "Settings." prefix
-            for (auto& setting : settings) {
-                if (setting->GetName() == settingName) {
-                    return setting->LoadFromString(value);
-                }
-            }
-        }
-
-        return true; // Ignore unknown keys
+        return true;
     }
+
 };
 
 // CPU feature detection
@@ -239,8 +229,9 @@ public:
     bool EnablePatch(const std::string& name);
     bool DisablePatch(const std::string& name);
 
-    bool SaveState(const std::string& filename);
-    bool LoadState(const std::string& filename);
+    // TOML serialization
+    void SaveToToml(toml::table& root);
+    void LoadFromToml(const toml::table& root);
 
     // Unsaved changes tracking
     bool HasUnsavedChanges() const { return m_hasUnsavedChanges; }

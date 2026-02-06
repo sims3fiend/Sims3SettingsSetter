@@ -5,6 +5,9 @@
 #include <variant>
 #include <vector>
 
+// Forward declare toml table to avoid header dependency
+namespace toml { inline namespace v3 { class table; } }
+
 struct Vector2 { float x, y; };
 struct Vector3 { float x, y, z; };
 struct Vector4 { float x, y, z, w; };
@@ -86,38 +89,18 @@ public:
     Setting* GetSetting(const std::wstring& name);
     const std::unordered_map<std::wstring, std::unique_ptr<Setting>>& GetAllSettings() const;
     
-    void LoadConfig(const std::string& filename);
-    void SaveConfig(const std::string& filename) const;
-
     void SetSettingCategory(const std::wstring& name, const std::wstring& category);
     std::vector<std::wstring> GetUniqueCategories() const;
-
-    void AddConfigSetting(const std::wstring& name, const std::wstring& category);
-    const std::unordered_map<std::wstring, std::wstring>& GetConfigSettings() const;
-
-    struct ConfigSettingInfo {
-        std::wstring category;
-        std::wstring description;
-        std::wstring defaultValue;
-        bool isReadOnly = false;
-    };
-    
-    void AddConfigSettingInfo(const std::wstring& name, const ConfigSettingInfo& info);
-    const std::unordered_map<std::wstring, ConfigSettingInfo>& GetConfigSettingsInfo() const;
-
-    bool SaveConfig(const std::string& filename, std::string* error = nullptr) const;
-    bool LoadConfig(const std::string& filename, std::string* error = nullptr);
 
     void StorePendingSavedValue(const std::wstring& name, const Setting::ValueType& value);
     void ApplyPendingSavedValue(const std::wstring& name);
 
-    void AddConfigValue(const std::wstring& name, const ConfigValueInfo& info);
-    const std::unordered_map<std::wstring, ConfigValueInfo>& GetConfigValues() const;
-    bool UpdateConfigValue(const std::wstring& name, const std::wstring& newValue);
+    // TOML serialization
+    void SaveToToml(toml::table& root) const;
+    void LoadFromToml(const toml::table& root);
+    void SaveDefaultsToToml(toml::table& root);
+    void LoadDefaultsFromToml(const toml::table& root);
 
-    // New methods for default values
-    bool SaveDefaultValues(const std::string& filename, std::string* error = nullptr);
-    bool LoadDefaultValues(const std::string& filename, std::string* error = nullptr);
     void ResetSettingToDefault(const std::wstring& name);
     void ResetAllSettings();
     bool HasDefaultValues() const { return !m_defaultValues.empty(); }
@@ -133,11 +116,8 @@ public:
 private:
     SettingsManager() : m_initialized(false) {}
     std::unordered_map<std::wstring, std::unique_ptr<Setting>> m_settings;
-    std::unordered_map<std::wstring, std::wstring> m_configSettings;
-    std::unordered_map<std::wstring, ConfigSettingInfo> m_configSettingsInfo;
     std::unordered_map<std::wstring, PendingSetting> m_pendingSavedValues;
-    std::unordered_map<std::wstring, ConfigValueInfo> m_configValues;
-    
+
     // Map to store default values for each setting
     std::unordered_map<std::wstring, Setting::ValueType> m_defaultValues;
     bool m_initialized;

@@ -2,11 +2,13 @@
 #include "utils.h"
 #include "logger.h"
 #include "settings.h"
+#include "config/config_store.h"
 #include <Psapi.h>
 #include <fstream>
 #include <sstream>
 #include <vector>
 #include <unordered_map>
+#include <toml++/toml.hpp>
 
 MemoryMonitor& MemoryMonitor::Get() {
     static MemoryMonitor instance;
@@ -46,96 +48,36 @@ void MemoryMonitor::Update() {
 
 void MemoryMonitor::SetWarningThreshold(float gigabytes) {
     m_warningThresholdGB = gigabytes;
-    m_hasWarned = false; // Reset warning state when threshold changes
-    
-    // Register setting with SettingsManager
-    auto& settingsManager = SettingsManager::Get();
-    std::wstring settingName = L"QoL:MemoryMonitor:WarningThreshold";
-    settingsManager.UpdateConfigValue(settingName, std::to_wstring(m_warningThresholdGB));
-    settingsManager.SaveConfig(Utils::GetDefaultINIPath(), nullptr); // Specify nullptr for error parameter
+    m_hasWarned = false;
+    ConfigStore::Get().SaveAll();
 }
 
 void MemoryMonitor::SetEnabled(bool enabled) {
     m_enabled = enabled;
-    
-    // Register setting with SettingsManager
-    auto& settingsManager = SettingsManager::Get();
-    std::wstring settingName = L"QoL:MemoryMonitor:Enabled";
-    settingsManager.UpdateConfigValue(settingName, enabled ? L"true" : L"false");
-    settingsManager.SaveConfig(Utils::GetDefaultINIPath(), nullptr); // Specify nullptr for error parameter
+    ConfigStore::Get().SaveAll();
 }
 
 void MemoryMonitor::SetWarningStyle(WarningStyle style) {
     m_warningStyle = style;
-    
-    // Register setting with SettingsManager
-    auto& settingsManager = SettingsManager::Get();
-    std::wstring settingName = L"QoL:MemoryMonitor:WarningStyle";
-    settingsManager.UpdateConfigValue(settingName, style == WarningStyle::Modal ? L"modal" : L"overlay");
-    settingsManager.SaveConfig(Utils::GetDefaultINIPath(), nullptr); // Specify nullptr for error parameter
+    ConfigStore::Get().SaveAll();
 }
 
-void MemoryMonitor::LoadSettings(const std::string& filename) {
-    auto& settingsManager = SettingsManager::Get();
-    
-    // First, register our config values if they don't exist yet
-    std::wstring enabledName = L"QoL:MemoryMonitor:Enabled";
-    std::wstring thresholdName = L"QoL:MemoryMonitor:WarningThreshold";
-    std::wstring styleName = L"QoL:MemoryMonitor:WarningStyle";
+void MemoryMonitor::SaveToToml(toml::table& qolTable) const {
+    toml::table memTable;
+    memTable.insert("enabled", m_enabled);
+    memTable.insert("warning_threshold", static_cast<double>(m_warningThresholdGB));
+    memTable.insert("warning_style", std::string(m_warningStyle == WarningStyle::Modal ? "modal" : "overlay"));
+    qolTable.insert("memory_monitor", std::move(memTable));
+}
 
-    const auto& configValues = settingsManager.GetConfigValues();
+void MemoryMonitor::LoadFromToml(const toml::table& qolTable) {
+    auto memNode = qolTable["memory_monitor"].as_table();
+    if (!memNode) return;
 
-    if (configValues.find(enabledName) == configValues.end()) {
-        ConfigValueInfo info;
-        info.category = L"QoL";
-        info.currentValue = m_enabled ? L"true" : L"false";
-        info.bufferSize = 10;
-        info.valueType = ConfigValueType::Boolean;
-        settingsManager.AddConfigValue(enabledName, info);
-    }
-    
-    if (configValues.find(thresholdName) == configValues.end()) {
-        ConfigValueInfo info;
-        info.category = L"QoL";
-        info.currentValue = std::to_wstring(m_warningThresholdGB);
-        info.bufferSize = 10;
-        info.valueType = ConfigValueType::Float;
-        settingsManager.AddConfigValue(thresholdName, info);
-    }
-    
-    if (configValues.find(styleName) == configValues.end()) {
-        ConfigValueInfo info;
-        info.category = L"QoL";
-        info.currentValue = m_warningStyle == WarningStyle::Modal ? L"modal" : L"overlay";
-        info.bufferSize = 10;
-        info.valueType = ConfigValueType::String;
-        settingsManager.AddConfigValue(styleName, info);
-    }
-    
-    // Load the settings
-    settingsManager.LoadConfig(filename, nullptr); // Specify nullptr for error parameter
-    
-    // Now read the values
-    const auto& values = settingsManager.GetConfigValues();
-    
-    auto it = values.find(enabledName);
-    if (it != values.end()) {
-        m_enabled = (it->second.currentValue == L"true");
-    }
-    
-    it = values.find(thresholdName);
-    if (it != values.end()) {
-        try {
-            m_warningThresholdGB = std::stof(it->second.currentValue);
-        } catch (...) {
-            m_warningThresholdGB = 3.5f;
-        }
-    }
-    
-    it = values.find(styleName);
-    if (it != values.end()) {
-        m_warningStyle = (it->second.currentValue == L"modal") ? WarningStyle::Modal : WarningStyle::Overlay;
-    }
+    m_enabled = (*memNode)["enabled"].value_or(false);
+    m_warningThresholdGB = static_cast<float>((*memNode)["warning_threshold"].value_or(3.5));
+    std::string style = (*memNode)["warning_style"].value_or(std::string("overlay"));
+    m_warningStyle = (style == "modal") ? WarningStyle::Modal : WarningStyle::Overlay;
 }
 
 void MemoryMonitor::ResetWarning() {
@@ -146,92 +88,46 @@ void MemoryMonitor::ResetWarning() {
 
 // UISettings implementation
 void UISettings::SetUIToggleKey(UINT key) {
-    std::lock_guard<std::mutex> lock(m_mutex);
-    m_uiToggleKey = key;
-
-    // Update SettingsManager
-    auto& settingsManager = SettingsManager::Get();
-    std::wstring settingName = L"QoL:UIToggleKey";
-    settingsManager.UpdateConfigValue(settingName, std::to_wstring(key));
-    settingsManager.SaveConfig(Utils::GetDefaultINIPath(), nullptr);
+    {
+        std::lock_guard<std::mutex> lock(m_mutex);
+        m_uiToggleKey = key;
+    }
+    ConfigStore::Get().SaveAll();
 }
 
 void UISettings::SetDisableHooks(bool disable) {
-    std::lock_guard<std::mutex> lock(m_mutex);
-    m_disableHooks = disable;
-
-    // Update SettingsManager
-    auto& settingsManager = SettingsManager::Get();
-    std::wstring settingName = L"QoL:DisableHooks";
-    settingsManager.UpdateConfigValue(settingName, disable ? L"true" : L"false");
-    settingsManager.SaveConfig(Utils::GetDefaultINIPath(), nullptr);
-}
-
-bool UISettings::SaveToINI(const std::string& filename) const {
-    // No-op: UISettings are saved immediately when changed via SetUIToggleKey/SetDisableHooks
-    // This prevents overwriting other sections (like patch settings) that were saved before this call
-    return true;
-}
-
-bool UISettings::LoadFromINI(const std::string& filename) {
-    try {
+    {
         std::lock_guard<std::mutex> lock(m_mutex);
-
-        auto& settingsManager = SettingsManager::Get();
-
-        // Register our config values if they don't exist yet
-        std::wstring toggleKeyName = L"QoL:UIToggleKey";
-        std::wstring disableHooksName = L"QoL:DisableHooks";
-
-        const auto& configValues = settingsManager.GetConfigValues();
-
-        if (configValues.find(toggleKeyName) == configValues.end()) {
-            ConfigValueInfo info;
-            info.category = L"QoL";
-            info.currentValue = std::to_wstring(m_uiToggleKey);
-            info.bufferSize = 10;
-            info.valueType = ConfigValueType::Integer;
-            settingsManager.AddConfigValue(toggleKeyName, info);
-        }
-
-        if (configValues.find(disableHooksName) == configValues.end()) {
-            ConfigValueInfo info;
-            info.category = L"QoL";
-            info.currentValue = m_disableHooks ? L"true" : L"false";
-            info.bufferSize = 10;
-            info.valueType = ConfigValueType::Boolean;
-            settingsManager.AddConfigValue(disableHooksName, info);
-        }
-
-        // Load the settings
-        settingsManager.LoadConfig(filename, nullptr);
-
-        // Now read the values
-        const auto& values = settingsManager.GetConfigValues();
-
-        auto it = values.find(toggleKeyName);
-        if (it != values.end()) {
-            try {
-                m_uiToggleKey = static_cast<UINT>(std::stoul(it->second.currentValue));
-            } catch (...) {
-                m_uiToggleKey = VK_INSERT;
-            }
-        }
-
-        it = values.find(disableHooksName);
-        if (it != values.end()) {
-            m_disableHooks = (it->second.currentValue == L"true");
-        }
-
-        m_hasUnsavedChanges = false;
-        LOG_INFO("Loaded QoL settings from " + filename);
-
-        return true;
+        m_disableHooks = disable;
     }
-    catch (const std::exception& e) {
-        LOG_ERROR("Error loading QoL settings: " + std::string(e.what()));
-        return false;
+    ConfigStore::Get().SaveAll();
+}
+
+void UISettings::SetFontScale(float scale) {
+    {
+        std::lock_guard<std::mutex> lock(m_mutex);
+        m_fontScale = scale;
     }
+    ConfigStore::Get().SaveAll();
+}
+
+void UISettings::SaveToToml(toml::table& qolTable) const {
+    std::lock_guard<std::mutex> lock(m_mutex);
+    toml::table uiTable;
+    uiTable.insert("toggle_key", static_cast<int64_t>(m_uiToggleKey));
+    uiTable.insert("disable_hooks", m_disableHooks);
+    uiTable.insert("font_scale", static_cast<double>(m_fontScale));
+    qolTable.insert("ui", std::move(uiTable));
+}
+
+void UISettings::LoadFromToml(const toml::table& qolTable) {
+    std::lock_guard<std::mutex> lock(m_mutex);
+    auto uiNode = qolTable["ui"].as_table();
+    if (!uiNode) return;
+
+    m_uiToggleKey = static_cast<UINT>((*uiNode)["toggle_key"].value_or(int64_t(VK_INSERT)));
+    m_disableHooks = (*uiNode)["disable_hooks"].value_or(false);
+    m_fontScale = static_cast<float>((*uiNode)["font_scale"].value_or(1.0));
 }
 
 // BorderlessWindow stuff, I could probably streamline this significantly
@@ -270,21 +166,8 @@ void BorderlessWindow::SetMode(BorderlessMode mode) {
         m_mode = mode;
     }
 
-    // Apply the change
     Apply();
-
-    // Save to config
-    auto& settingsManager = SettingsManager::Get();
-    std::wstring settingName = L"QoL:BorderlessWindow:Mode";
-    std::wstring modeValue;
-    switch (mode) {
-        case BorderlessMode::Disabled: modeValue = L"disabled"; break;
-        case BorderlessMode::DecorationsOnly: modeValue = L"decorations_only"; break;
-        case BorderlessMode::Maximized: modeValue = L"maximized"; break;
-        case BorderlessMode::Fullscreen: modeValue = L"fullscreen"; break;
-    }
-    settingsManager.UpdateConfigValue(settingName, modeValue);
-    settingsManager.SaveConfig(Utils::GetDefaultINIPath(), nullptr);
+    ConfigStore::Get().SaveAll();
 }
 
 void BorderlessWindow::Apply() {
@@ -417,41 +300,34 @@ void BorderlessWindow::RestoreWindowed() {
     LOG_INFO("Restored windowed mode");
 }
 
-void BorderlessWindow::LoadSettings(const std::string& filename) {
-    auto& settingsManager = SettingsManager::Get();
-
-    std::wstring modeName = L"QoL:BorderlessWindow:Mode";
-
-    const auto& configValues = settingsManager.GetConfigValues();
-
-    if (configValues.find(modeName) == configValues.end()) {
-        ConfigValueInfo info;
-        info.category = L"QoL";
-        info.currentValue = L"disabled";
-        info.bufferSize = 20;
-        info.valueType = ConfigValueType::String;
-        settingsManager.AddConfigValue(modeName, info);
+void BorderlessWindow::SaveToToml(toml::table& qolTable) const {
+    std::lock_guard<std::mutex> lock(m_mutex);
+    toml::table bwTable;
+    std::string modeStr;
+    switch (m_mode) {
+        case BorderlessMode::Disabled: modeStr = "disabled"; break;
+        case BorderlessMode::DecorationsOnly: modeStr = "decorations_only"; break;
+        case BorderlessMode::Maximized: modeStr = "maximized"; break;
+        case BorderlessMode::Fullscreen: modeStr = "fullscreen"; break;
     }
+    bwTable.insert("mode", modeStr);
+    qolTable.insert("borderless_window", std::move(bwTable));
+}
 
-    // Load the settings
-    settingsManager.LoadConfig(filename, nullptr);
+void BorderlessWindow::LoadFromToml(const toml::table& qolTable) {
+    auto bwNode = qolTable["borderless_window"].as_table();
+    if (!bwNode) return;
 
-    // Read the value
-    const auto& values = settingsManager.GetConfigValues();
-
-    auto it = values.find(modeName);
-    if (it != values.end()) {
-        std::lock_guard<std::mutex> lock(m_mutex);
-        const auto& val = it->second.currentValue;
-        if (val == L"decorations_only") {
-            m_mode = BorderlessMode::DecorationsOnly;
-        } else if (val == L"maximized") {
-            m_mode = BorderlessMode::Maximized;
-        } else if (val == L"fullscreen") {
-            m_mode = BorderlessMode::Fullscreen;
-        } else {
-            m_mode = BorderlessMode::Disabled;
-        }
+    std::string mode = (*bwNode)["mode"].value_or(std::string("disabled"));
+    std::lock_guard<std::mutex> lock(m_mutex);
+    if (mode == "decorations_only") {
+        m_mode = BorderlessMode::DecorationsOnly;
+    } else if (mode == "maximized") {
+        m_mode = BorderlessMode::Maximized;
+    } else if (mode == "fullscreen") {
+        m_mode = BorderlessMode::Fullscreen;
+    } else {
+        m_mode = BorderlessMode::Disabled;
     }
 }
 

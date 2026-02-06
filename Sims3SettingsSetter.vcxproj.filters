@@ -9,7 +9,18 @@
     <ClCompile Include="intersection_patch.cpp" />
     <ClCompile Include="optimization.cpp" />
     <ClCompile Include="pattern_scan.cpp" />
-    <ClCompile Include="preset_manager.cpp" />
+    <ClCompile Include="config\config_store.cpp">
+      <Filter>config</Filter>
+    </ClCompile>
+    <ClCompile Include="config\config_paths.cpp">
+      <Filter>config</Filter>
+    </ClCompile>
+    <ClCompile Include="config\config_value_manager.cpp">
+      <Filter>config</Filter>
+    </ClCompile>
+    <ClCompile Include="config\migration.cpp">
+      <Filter>config</Filter>
+    </ClCompile>
     <ClCompile Include="qol.cpp" />
     <ClCompile Include="settings.cpp" />
     <ClCompile Include="vtable_manager.cpp" />
@@ -20,8 +31,7 @@
     <ClCompile Include="patches\intersection_patch_register.cpp">
       <Filter>patches</Filter>
     </ClCompile>
-    <ClCompile Include="patches\createfileW_patch.cpp" />
-    <ClCompile Include="patches\smooth_patch_dupe.cpp">
+    <ClCompile Include="patches\createfileW_patch.cpp">
       <Filter>patches</Filter>
     </ClCompile>
     <ClCompile Include="patches\smooth_patch_classic.cpp">
@@ -59,11 +69,14 @@
     <ClCompile Include="patches\resolution_spoofer_patch.cpp">
       <Filter>patches</Filter>
     </ClCompile>
-    <ClCompile Include="patches\smooth_patch_precise.cpp" />
-    <ClCompile Include="patches\uncompressed_sim_textures_patch.cpp" />
+    <ClCompile Include="patches\smooth_patch_precise.cpp">
+      <Filter>patches</Filter>
+    </ClCompile>
+    <ClCompile Include="patches\uncompressed_sim_textures_patch.cpp">
+      <Filter>patches</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="config_value_cache.h" />
     <ClInclude Include="cpu_optimization.h" />
     <ClInclude Include="d3d9_hook.h" />
     <ClInclude Include="framework.h" />
@@ -71,7 +84,18 @@
     <ClInclude Include="intersection_patch.h" />
     <ClInclude Include="optimization.h" />
     <ClInclude Include="pattern_scan.h" />
-    <ClInclude Include="preset_manager.h" />
+    <ClInclude Include="config\config_store.h">
+      <Filter>config</Filter>
+    </ClInclude>
+    <ClInclude Include="config\config_paths.h">
+      <Filter>config</Filter>
+    </ClInclude>
+    <ClInclude Include="config\config_value_manager.h">
+      <Filter>config</Filter>
+    </ClInclude>
+    <ClInclude Include="config\migration.h">
+      <Filter>config</Filter>
+    </ClInclude>
     <ClInclude Include="qol.h" />
     <ClInclude Include="settings.h" />
     <ClInclude Include="settings_gui.h" />
@@ -86,6 +110,9 @@
   <ItemGroup>
     <Filter Include="patches">
       <UniqueIdentifier>{a1b2c3d4-5678-9abc-def0-123456789abc}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="config">
+      <UniqueIdentifier>{b2c3d4e5-6789-abcd-ef01-23456789abcd}</UniqueIdentifier>
     </Filter>
   </ItemGroup>
   <ItemGroup>

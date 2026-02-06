@@ -31,7 +31,7 @@ There's also a lot of helper functions and easy to use things if you'd like to m
 - **Mimalloc Allocator ⭐** - Replaces the Sims 3's old crusty memory allocator with [mimalloc](https://github.com/microsoft/mimalloc) for better memory management and performance. Requires a restart to apply.
 - **Optimized Lot Streaming Settings ⭐** - Enables lot throttling and tweaks camera speed threshold settings so lots load more smoothly when you stop moving. Major improvement.
 - **Timer & Thread Optimizations ⭐** - Increases (reduces?) timer resolution to 1ms, optimizes critical sections with tiered spin counts.
-- **Smooth Patch (Precise Flavour) ⭐** - ["Just Harry"](https://github.com/just-harry)'s more precise alternative to the original Smooth Patch. Only affects the simulator thread (not global Sleep), uses NtDelayExecution for sub-millisecond precision, allowing actual distinction between tick rates like 750 vs 1000 TPS that the original does not.
+- **Smooth Patch (Precise Flavour) ⭐** - ["Just Harry"](https://github.com/just-harry)'s more precise alternative to the original Smooth Patch. Only affects the simulator thread (not global Sleep), uses NtDelayExecution for sub-millisecond precision, allowing actual distinction between tick rates like 750 vs 1000 TPS that the original does not. **With both this and the Original Flavor patch, it is recommended you still use the original [Smooth Patch's](https://modthesims.info/d/658759/smooth-patch-2-1.html) .package file**
 - **Smooth Patch (Original Flavour)** - LazyDuchess's original Smooth Patch implementation in S3SS.
 - **Lot Visibility Camera Override** - Stops lot loading based on camera view, should make it so they only load around you. Might not do anything.
 - **CPU Thread Optimization** - Optimizes thread placement for modern CPUs with P/E-cores or multiple CCXs.
@@ -54,11 +54,11 @@ There's also a lot of helper functions and easy to use things if you'd like to m
 - **Map View Lot Streaming Blocker** - Prevents lot streaming while in map view, makes going in and out of map a lot less stuttery.
   - Experimental as it has a known issue where the toggle gets stuck on the "don't load" path. If your lots aren't loading in, try disabling this first
 
-### Quality of Life Features
+### Quality of Life / Settings
 - **Memory Monitor**: Get warned when approaching the 4GB limit (Error 12) so you can save before you crash and lose it all
 - **Borderless Window**: Run the game in Borderless Fullscreen. (also known as Windowed Fullscreen, Borderless Windowed etc.) This can also fix some issues with screen recording software, game brightness etc, compared to regular Fullscreen.
 - **Custom UI keybind**: Change the toggle key (default: Insert)
-- **Preset system**: Save/load/share your configurations to .ini files.
+- **Change UI Font Size**: Make the ImGui font bigger/smaller
 
 ## Installation
 
@@ -73,16 +73,18 @@ There's also a lot of helper functions and easy to use things if you'd like to m
 ## Usage
 
 **Press Insert** to open the UI (change this in Other/QoL tab)
-**File → Save** to make changes persistent. Some patches require a restart to apply. (CPU Thread, CreateFileW)
+**File → Save Settings** to make changes persistent. Some settings (QoL, patches) auto-save when changed. Some patches require a restart to apply. (CPU Thread, CreateFileW)
 Green settings - Modified from the default and saved.
 Yellow text - Modified but not saved for future restarts.
+
+Settings are stored in `Documents\Electronic Arts\The Sims 3\S3SS\S3SS.toml`. If you're upgrading from an older version that used an INI file, your settings *should* be automatically migrated on first launch.
 
 ### Settings Tab
 - Only becomes available after loading into a world
 - Right-click any setting to:
   - Edit beyond min/max bounds
   - Reset to default
-  - Clear override (remove from ini)
+  - Clear override (remove from config)
   - Copy address for if you're REing
 
 ### Patches Tab
@@ -94,16 +96,11 @@ Yellow text - Modified but not saved for future restarts.
 - Edit any Config heading value
 - Right-click to clear override
 
-### Presets
-File → Presets to save or load configurations
-- **Merge**: Apply preset on top of current settings
-- **Overwrite**: Clear everything, apply only preset values
-
 ## Troubleshooting
 
 **UI doesn't open?**
 - Check for `S3SS_LOG.txt` in the game's execution directory (`The Sims 3\Game\Bin`) - send it to me if it exists
-- You can also try changing the keybind in the ini by modifying `UIToggleKey=45` (See for IDs: https://docs.microsoft.com/en-us/windows/win32/inputdev/virtual-key-codes)
+- You can also try changing the keybind in `Documents\Electronic Arts\The Sims 3\S3SS\S3SS.toml` by modifying the `UIToggleKey` value (See for IDs: https://docs.microsoft.com/en-us/windows/win32/inputdev/virtual-key-codes)
 - If there is no log file, your ASI loader isn't working.
 
 **Settings tab stuck on 'Initializing'?**
@@ -114,14 +111,8 @@ File → Presets to save or load configurations
 **I get crashes when I use specific patches?**
 - Send me your `S3SS_LOG.txt` and the latest `xcpt...txt` crash log from `Documents\Electronic Arts\The Sims 3`.
 
-**My S3SS.ini file doesn't exist/my settings keep resetting every time I restart the game?**
-- Some installation folders (usually from EA App/Origin) are set-up without the correct permissions so S3SS can't modify them. To fix this, you'll need to...
-1. Right-click your `The Sims 3` game directory in File Explorer and select 'Properties'.
-2. Go to the 'Security' tab then select 'Advanced'.
-3. Select 'Change' next to Owner then select 'Advanced'.
-4. Select 'Find Now' then double-click `Users` near the bottom of the list. Press OK.
-5. Tick 'Replace owner on subcontainers and objects'.
-6. Press Apply, OK, OK, and OK again.
+**My settings keep resetting every time I restart the game?**
+- Settings are now saved to `Documents\Electronic Arts\The Sims 3\S3SS\S3SS.toml` which should hopefuly resolve this. Check that this file exists and that S3SS has write permissions to your Documents folder. If it's not appearing, you may need to run the sims 3 executable as admin.
 
 ## Building from Source
 

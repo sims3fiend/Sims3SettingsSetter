@@ -3,10 +3,10 @@
 #include <string>
 #include <vector>
 #include <memory>
-#include <fstream>
 #include <functional>
 #include <Windows.h>
 #include "imgui.h"
+#include <toml++/toml.hpp>
 
 // UI type for settings
 enum class SettingUIType {
@@ -24,10 +24,12 @@ public:
     virtual ~PatchSetting() = default;
 
     virtual void RenderUI() = 0;
-    virtual void SaveToStream(std::ofstream& file) const = 0;
-    virtual bool LoadFromString(const std::string& value) = 0;
     virtual std::string GetName() const = 0;
     virtual void ResetToDefault() = 0;
+
+    // TOML serialization
+    virtual void SaveToToml(toml::table& settingsTable) const = 0;
+    virtual bool LoadFromToml(const toml::table& settingsTable) = 0;
 
     // Set callback for when setting value changes in UI
     void SetChangedCallback(SettingChangedCallback callback) {
@@ -143,26 +145,23 @@ public:
         #endif
     }
 
-    void SaveToStream(std::ofstream& file) const override {
-        file << "Settings." << name << "=" << *valuePtr << "\n";
+    void SaveToToml(toml::table& settingsTable) const override {
+        settingsTable.insert(name, static_cast<double>(*valuePtr));
     }
 
-    bool LoadFromString(const std::string& value) override {
-        try {
-            float newValue = std::stof(value);
-            // Clamp to bounds
+    bool LoadFromToml(const toml::table& settingsTable) override {
+        auto val = settingsTable[name].value<double>();
+        if (val.has_value()) {
+            float newValue = static_cast<float>(val.value());
             if (newValue < minValue) newValue = minValue;
             if (newValue > maxValue) newValue = maxValue;
             *valuePtr = newValue;
-
-            // Apply to memory if bound
             if (boundAddress) {
                 WriteToMemory(boundAddress, valuePtr, sizeof(float));
             }
             return true;
-        } catch (...) {
-            return false;
         }
+        return false;
     }
 
     std::string GetName() const override { return name; }
@@ -253,26 +252,23 @@ public:
         #endif
     }
 
-    void SaveToStream(std::ofstream& file) const override {
-        file << "Settings." << name << "=" << *valuePtr << "\n";
+    void SaveToToml(toml::table& settingsTable) const override {
+        settingsTable.insert(name, static_cast<int64_t>(*valuePtr));
     }
 
-    bool LoadFromString(const std::string& value) override {
-        try {
-            int newValue = std::stoi(value);
-            // Clamp to bounds
+    bool LoadFromToml(const toml::table& settingsTable) override {
+        auto val = settingsTable[name].value<int64_t>();
+        if (val.has_value()) {
+            int newValue = static_cast<int>(val.value());
             if (newValue < minValue) newValue = minValue;
             if (newValue > maxValue) newValue = maxValue;
             *valuePtr = newValue;
-
-            // Apply to memory if bound
             if (boundAddress) {
                 WriteToMemory(boundAddress, valuePtr, sizeof(int));
             }
             return true;
-        } catch (...) {
-            return false;
         }
+        return false;
     }
 
     std::string GetName() const override { return name; }
@@ -324,24 +320,20 @@ public:
         #endif
     }
 
-    void SaveToStream(std::ofstream& file) const override {
-        file << "Settings." << name << "=" << (*valuePtr ? "true" : "false") << "\n";
+    void SaveToToml(toml::table& settingsTable) const override {
+        settingsTable.insert(name, *valuePtr);
     }
 
-    bool LoadFromString(const std::string& value) override {
-        if (value == "true" || value == "1") {
-            *valuePtr = true;
-        } else if (value == "false" || value == "0") {
-            *valuePtr = false;
-        } else {
-            return false;
+    bool LoadFromToml(const toml::table& settingsTable) override {
+        auto val = settingsTable[name].value<bool>();
+        if (val.has_value()) {
+            *valuePtr = val.value();
+            if (boundAddress) {
+                WriteToMemory(boundAddress, valuePtr, sizeof(bool));
+            }
+            return true;
         }
-
-        // Apply to memory if bound
-        if (boundAddress) {
-            WriteToMemory(boundAddress, valuePtr, sizeof(bool));
-        }
-        return true;
+        return false;
     }
 
     std::string GetName() const override { return name; }
@@ -406,23 +398,22 @@ public:
         #endif
     }
 
-    void SaveToStream(std::ofstream& file) const override {
-        file << "Settings." << name << "=" << *valuePtr << "\n";
+    void SaveToToml(toml::table& settingsTable) const override {
+        settingsTable.insert(name, static_cast<int64_t>(*valuePtr));
     }
 
-    bool LoadFromString(const std::string& value) override {
-        try {
-            int newValue = std::stoi(value);
+    bool LoadFromToml(const toml::table& settingsTable) override {
+        auto val = settingsTable[name].value<int64_t>();
+        if (val.has_value()) {
+            int newValue = static_cast<int>(val.value());
             if (newValue >= 0 && newValue < static_cast<int>(choices.size())) {
                 *valuePtr = newValue;
-
-                // Apply to memory if bound
                 if (boundAddress) {
                     WriteToMemory(boundAddress, valuePtr, sizeof(int));
                 }
                 return true;
             }
-        } catch (...) {}
+        }
         return false;
     }
 

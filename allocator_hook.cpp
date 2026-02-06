@@ -1,6 +1,8 @@
 #include "allocator_hook.h"
 #include "utils.h"
+#include "config/config_paths.h"
 #include <windows.h>
+#include <Shlobj.h> //shlob on me obj ladidadida
 #include <mimalloc.h>
 #pragma comment(lib, "mimalloc.lib")
 #pragma comment(lib, "psapi.lib")
@@ -15,6 +17,8 @@
 #pragma comment(lib, "dbghelp.lib")
 #pragma comment(lib, "dbghelp.lib")
 #include "logger.h"
+#include <toml++/toml.hpp>
+#include <filesystem>
 //https://www.youtube.com/watch?v=M7g8YY0FZfU
 bool g_mimallocActive = false;
 
@@ -132,12 +136,26 @@ void* __cdecl SafeRecalloc(void* p, size_t count, size_t size) {
     }
 }
 
-// Helper to check if hooks should be enabled from config
+// Helper to check if hooks should be enabled from config.
+// Runs at DLL_PROCESS_ATTACH, before HookThread, so we parse the TOML/INI directly without going through ConfigStore or other singletons.
 bool ShouldEnableAllocatorHooks() {
-    std::string iniPath = Utils::GetDefaultINIPath();
+    // Try new TOML path first
+    std::string tomlPath = ConfigPaths::GetConfigPath();
+    if (!tomlPath.empty() && std::filesystem::exists(tomlPath)) {
+        try {
+            toml::table root = toml::parse_file(tomlPath);
+            auto enabled = root["patches"]["Mimalloc"]["enabled"].value<bool>();
+            if (enabled.has_value()) {
+                return enabled.value();
+            }
+        }
+        catch (...) {
+            // Parse error - fall through to INI fallback
+        }
+    }
 
-    // Use manual file parsing :) idiot, same logic as OptimizationManager::LoadState
-    // All these tweaks and the issue was completely unreleate LOVE IT!!! SLAY!!!
+    // Fall back to old INI path (first-run-after-update, before migration runs)
+    std::string iniPath = Utils::GetDefaultINIPath();
     std::ifstream file(iniPath);
     if (!file.is_open()) {
         return false;
@@ -147,36 +165,27 @@ bool ShouldEnableAllocatorHooks() {
     bool inMimallocSection = false;
 
     while (std::getline(file, line)) {
-        // Strip trailing \r and whitespace (Windows line endings, editor quirks)
         while (!line.empty() && (line.back() == '\r' || line.back() == ' ' || line.back() == '\t')) {
             line.pop_back();
         }
-        // Strip leading whitespace
         size_t start = line.find_first_not_of(" \t");
         if (start != std::string::npos && start > 0) {
             line = line.substr(start);
         }
 
-        // Skip empty lines and comments
-        if (line.empty() || line[0] == ';') {
-            continue;
-        }
+        if (line.empty() || line[0] == ';') continue;
 
-        // Check for section header
         if (!line.empty() && line[0] == '[' && line.back() == ']') {
-            // Check if this is the Mimalloc section (case-insensitive)
             inMimallocSection = (_stricmp(line.c_str(), "[Optimization_Mimalloc]") == 0);
             continue;
         }
 
-        // Parse key=value pairs within Mimalloc section
         if (inMimallocSection) {
             size_t equalPos = line.find('=');
             if (equalPos != std::string::npos) {
                 std::string key = line.substr(0, equalPos);
                 std::string value = line.substr(equalPos + 1);
 
-                // Trim key and value (handles "Enabled = true" with spaces)
                 while (!key.empty() && (key.back() == ' ' || key.back() == '\t')) key.pop_back();
                 while (!value.empty() && (value.front() == ' ' || value.front() == '\t')) value.erase(0, 1);
                 while (!value.empty() && (value.back() == ' ' || value.back() == '\t')) value.pop_back();

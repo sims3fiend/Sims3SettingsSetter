@@ -26,6 +26,7 @@
 LPDIRECT3DDEVICE9 g_pd3dDevice = nullptr;
 
 // ImGui scaling state (for resolution spoofing), see comment aove
+static constexpr float FONT_OVERSAMPLE = 3.0f;
 float g_lastImGuiScale = 0.0f;
 bool g_baseStyleSaved = false;
 ImGuiStyle g_baseStyle;
@@ -100,6 +101,11 @@ HRESULT __stdcall HookedEndScene(LPDIRECT3DDEVICE9 pDevice) {
         ImGui::GetIO().ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad;
         ImGui::GetIO().ConfigFlags |= ImGuiConfigFlags_NoMouseCursorChange;
 
+        // Load default font at high resolution... Of course of course.. right, right, right......
+        ImFontConfig fontConfig;
+        fontConfig.SizePixels = 13.0f * FONT_OVERSAMPLE;
+        ImGui::GetIO().Fonts->AddFontDefault(&fontConfig);
+
         // Hook window procedure
         SetLastError(0);
         original_WndProc = (WNDPROC)SetWindowLongPtr(gameWindow, GWLP_WNDPROC, (LONG_PTR)HookedWndProc);
@@ -160,7 +166,7 @@ HRESULT __stdcall HookedEndScene(LPDIRECT3DDEVICE9 pDevice) {
                                 g_baseStyleSaved = true;
                             }
 
-                            // Only update if scale changed significantly
+                            // Only update style sizes if resolution scale changed significantly
                             if (std::abs(newScale - g_lastImGuiScale) > 0.01f) {
                                 g_lastImGuiScale = newScale;
 
@@ -168,18 +174,23 @@ HRESULT __stdcall HookedEndScene(LPDIRECT3DDEVICE9 pDevice) {
                                 ImGuiStyle& style = ImGui::GetStyle();
                                 style = g_baseStyle;
                                 style.ScaleAllSizes(newScale);
-
-                                // Scale font globally
-                                io.FontGlobalScale = newScale;
                             }
+
+                            // Always apply font scale (resolution scale * user font scale / oversample)
+                            io.FontGlobalScale = (g_lastImGuiScale * UISettings::Get().GetFontScale()) / FONT_OVERSAMPLE;
                         }
                     }
                     pBackBuffer->Release();
                 }
             }
 
+            // Apply user font scale when not in borderless mode (borderless path handles its own scaling above)
+            if (!BorderlessWindow::Get().IsEnabled()) {
+                ImGui::GetIO().FontGlobalScale = UISettings::Get().GetFontScale() / FONT_OVERSAMPLE;
+            }
+
             ImGui::NewFrame();
-            
+
             SettingsGui::Render();
             
             ImGui::EndFrame();

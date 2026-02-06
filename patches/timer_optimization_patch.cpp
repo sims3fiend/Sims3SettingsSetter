@@ -304,7 +304,7 @@ public:
 TimerOptimizationPatch* TimerOptimizationPatch::instance = nullptr;
 
 REGISTER_PATCH(TimerOptimizationPatch, {
-    .displayName = "Timer & Threading Optimizations (Updated!)",
+    .displayName = "Timer & Threading Optimizations",
     .description = "Fixes several timing and threading inefficiencies to reduce CPU usage, stutter, etc. for smoother gameplay.",
     .category = "Performance",
     .experimental = false,
