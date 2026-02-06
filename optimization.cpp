@@ -36,8 +36,7 @@ void OptimizationPatch::MaybeSampleMinimal(LONG currentCalls) {
     if (now - currentWindow.start >= SAMPLE_INTERVAL) {
         std::lock_guard<std::mutex> lock(statsMutex);
         if (now - currentWindow.start >= SAMPLE_INTERVAL) {
-            lastSampleRate = currentCalls / 
-                std::chrono::duration<double>(SAMPLE_INTERVAL).count();
+            lastSampleRate = currentCalls / std::chrono::duration<double>(SAMPLE_INTERVAL).count();
 
             char buffer[256];
             sprintf_s(buffer, "[%s] Calls/sec: %.0f\n", patchName.c_str(), lastSampleRate);
@@ -50,7 +49,7 @@ void OptimizationPatch::MaybeSampleMinimal(LONG currentCalls) {
 }
 
 CPUFeatures::CPUFeatures() {
-    int leaves[4] = { 0 };
+    int leaves[4] = {0};
     __cpuid(leaves, 1);
     hasSSE41 = (leaves[2] & (1 << 19)) != 0;
     hasFMA = (leaves[2] & (1 << 12)) != 0;
@@ -67,14 +66,14 @@ const CPUFeatures& CPUFeatures::Get() {
 
 OptimizationManager& OptimizationManager::Get() {
     static OptimizationManager instance;
-    
+
     // Register all patches when the manager is first created
     static bool initialized = false;
     static bool initializing = false;
-    
+
     if (!initialized && !initializing) {
-        initializing = true;  // Prevent re-entry
-        
+        initializing = true; // Prevent re-entry
+
         LOG_INFO("[PatchSystem] Initializing patches...");
 
         try {
@@ -83,25 +82,18 @@ OptimizationManager& OptimizationManager::Get() {
 
             // Log all registered patches
             LOG_INFO("[PatchSystem] Registered " + std::to_string(instance.patches.size()) + " patches:");
-            for (const auto& patch : instance.patches) {
-                LOG_INFO("  - " + patch->GetName());
-            }
+            for (const auto& patch : instance.patches) { LOG_INFO("  - " + patch->GetName()); }
             LOG_INFO("[PatchSystem] Patch registration complete");
-        }
-        catch (const std::exception& e) {
-            LOG_ERROR("[PatchSystem] Exception during patch initialization: " + std::string(e.what()));
-        }
-        catch (...) {
+        } catch (const std::exception& e) { LOG_ERROR("[PatchSystem] Exception during patch initialization: " + std::string(e.what())); } catch (...) {
             LOG_ERROR("[PatchSystem] Unknown exception during patch initialization");
         }
 
         initialized = true;
         initializing = false;
-    }
-    else if (initializing) {
+    } else if (initializing) {
         LOG_ERROR("[PatchSystem] Recursive call detected during initialization!");
     }
-    
+
     return instance;
 }
 
@@ -113,9 +105,7 @@ bool OptimizationManager::EnablePatch(const std::string& name) {
     for (auto& patch : patches) {
         if (patch->GetName() == name) {
             bool result = patch->Install();
-            if (result) {
-                m_hasUnsavedChanges = true;
-            }
+            if (result) { m_hasUnsavedChanges = true; }
             return result;
         }
     }
@@ -126,9 +116,7 @@ bool OptimizationManager::DisablePatch(const std::string& name) {
     for (auto& patch : patches) {
         if (patch->GetName() == name) {
             bool result = patch->Uninstall();
-            if (result) {
-                m_hasUnsavedChanges = true;
-            }
+            if (result) { m_hasUnsavedChanges = true; }
             return result;
         }
     }
@@ -144,9 +132,7 @@ void OptimizationManager::SaveToToml(toml::table& root) {
         patchesTable.insert(patch->GetName(), std::move(patchTable));
     }
 
-    if (!patchesTable.empty()) {
-        root.insert("patches", std::move(patchesTable));
-    }
+    if (!patchesTable.empty()) { root.insert("patches", std::move(patchesTable)); }
 
     m_hasUnsavedChanges = false;
 }
@@ -196,4 +182,4 @@ void OptimizationManager::RegisterPatch(std::unique_ptr<OptimizationPatch> patch
     // If we get here, this is a new patch
     patches.push_back(std::move(patch));
     LOG_DEBUG("[PatchSystem] Registered patch: " + patchName);
-} 
+}

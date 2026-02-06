@@ -7,25 +7,25 @@
 
 // Rename the class to something descriptive
 class TemplatePatch : public OptimizationPatch {
-private:
+  private:
     // Track patched locations for restoration
     std::vector<PatchHelper::PatchLocation> patchedLocations;
-    
+
     // Add any settings/state you need here, eg:
     // int mySetting = 50;
-    
-public:
+
+  public:
     // Change the name to match your class
     TemplatePatch() : OptimizationPatch("TemplatePatch", nullptr) {}
-    
+
     bool Install() override {
         if (isEnabled) return true;
 
-        lastError.clear();  // Clear any previous error
+        lastError.clear(); // Clear any previous error
 
         // Replace with your patch name
         LOG_INFO("[TemplatePatch] Installing...");
-        
+
         // OPTION 1: Simple hardcoded address patch
         // ----------------------------------------
         /*
@@ -38,7 +38,7 @@ public:
         LOG_INFO("[TemplatePatch] Successfully installed");
         return true;
         */
-        
+
         // OPTION 2: Pattern scanning
         // ---------------------------
         /*
@@ -73,7 +73,7 @@ public:
                 std::to_string(patchCount) + " locations patched)");
         return true;
         */
-        
+
         // OPTION 3: Multiple bytes or complex logic
         // ------------------------------------------
         /*
@@ -99,28 +99,26 @@ public:
         LOG_INFO("[TemplatePatch] Successfully installed");
         return true;
         */
-        
+
         // Remove comments and implement your patch logic
         return Fail("Not implemented - please edit this template!");
     }
-    
+
     bool Uninstall() override {
         if (!isEnabled) return true;
 
-        lastError.clear();  // Clear any previous error
+        lastError.clear(); // Clear any previous error
 
         LOG_INFO("[TemplatePatch] Uninstalling...");
 
         // Restore all patched locations
-        if (!PatchHelper::RestoreAll(patchedLocations)) {
-            return Fail("Failed to restore original bytes");
-        }
+        if (!PatchHelper::RestoreAll(patchedLocations)) { return Fail("Failed to restore original bytes"); }
 
         isEnabled = false;
         LOG_INFO("[TemplatePatch] Successfully uninstalled");
         return true;
     }
-    
+
     // OPTIONAL: Add settings with automatic UI, save/load
     // -----------------------------------------------------
     // Register settings in the constructor - they'll automatically appear in ImGui,
@@ -162,14 +160,10 @@ public:
 };
 
 // Update all of these fields
-REGISTER_PATCH(TemplatePatch, {
-    .displayName = "Template Patch",  // Display name in GUI
-    .description = "This is a template for creating new patches",  // Short description
-    .category = "Experimental",  // Can be anything
-    .experimental = true,  // Mark as experimental if risky/untested
-    .targetVersion = GameVersion::Steam,  // Steam, EA, or All
-    .technicalDetails = {  // Technical info shown in tooltip
-        "Add technical details about what this patch does",
-        "Mention any risks or compatibility issues, etc."
-    }
-})
+REGISTER_PATCH(TemplatePatch, {.displayName = "Template Patch",                                 // Display name in GUI
+                                  .description = "This is a template for creating new patches", // Short description
+                                  .category = "Experimental",                                   // Can be anything
+                                  .experimental = true,                                         // Mark as experimental if risky/untested
+                                  .targetVersion = GameVersion::Steam,                          // Steam, EA, or All
+                                  .technicalDetails = {                                         // Technical info shown in tooltip
+                                      "Add technical details about what this patch does", "Mention any risks or compatibility issues, etc."}})

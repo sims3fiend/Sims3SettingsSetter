@@ -18,9 +18,7 @@ const std::unordered_map<std::wstring, ConfigValueInfo>& ConfigValueManager::Get
 
 bool ConfigValueManager::UpdateConfigValue(const std::wstring& name, const std::wstring& newValue) {
     auto it = m_configValues.find(name);
-    if (it == m_configValues.end()) {
-        return false;
-    }
+    if (it == m_configValues.end()) { return false; }
 
     // Create a unique key for the buffer cache
     std::string fullKey = "Config." + Utils::WideToUtf8(name);
@@ -41,15 +39,11 @@ wchar_t* ConfigValueManager::GetOrCreateBuffer(const std::string& key, const std
 
     size_t required = (std::max)(minCapacity, value.size() + 1);
 
-    if (required > MAX_BUFFER_SIZE) {
-        required = MAX_BUFFER_SIZE;
-    }
+    if (required > MAX_BUFFER_SIZE) { required = MAX_BUFFER_SIZE; }
 
     if (entry.capacity < required) {
         size_t newCapacity = (std::max)(required * 2, size_t(256));
-        if (newCapacity > MAX_BUFFER_SIZE) {
-            newCapacity = MAX_BUFFER_SIZE;
-        }
+        if (newCapacity > MAX_BUFFER_SIZE) { newCapacity = MAX_BUFFER_SIZE; }
         entry.buffer = std::make_unique<wchar_t[]>(newCapacity);
         entry.capacity = newCapacity;
     }
@@ -72,16 +66,12 @@ void ConfigValueManager::SaveToToml(toml::table& root) const {
         }
     }
 
-    if (!configTable.empty()) {
-        root.insert("config", std::move(configTable));
-    }
+    if (!configTable.empty()) { root.insert("config", std::move(configTable)); }
 }
 
 void ConfigValueManager::LoadFromToml(const toml::table& root) {
     auto configNode = root["config"].as_table();
-    if (!configNode) {
-        return;
-    }
+    if (!configNode) { return; }
 
     int count = 0;
     for (const auto& [key, value] : *configNode) {
@@ -105,7 +95,5 @@ void ConfigValueManager::LoadFromToml(const toml::table& root) {
         count++;
     }
 
-    if (count > 0) {
-        LOG_INFO("[ConfigValueManager] Loaded " + std::to_string(count) + " config values from TOML");
-    }
+    if (count > 0) { LOG_INFO("[ConfigValueManager] Loaded " + std::to_string(count) + " config values from TOML"); }
 }

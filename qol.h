@@ -4,15 +4,19 @@
 #include <mutex>
 
 // Forward declare toml table
-namespace toml { inline namespace v3 { class table; } }
+namespace toml {
+inline namespace v3 {
+class table;
+}
+} // namespace toml
 
 enum class WarningStyle {
     Overlay,
-    Modal       // Modal dialog that requires user confirmation
+    Modal // Modal dialog that requires user confirmation
 };
 
 class MemoryMonitor {
-public:
+  public:
     static MemoryMonitor& Get();
 
     void Update();
@@ -23,7 +27,7 @@ public:
     float GetCurrentMemoryUsageGB() const { return m_currentMemoryGB; }
     float GetWarningTimeRemaining() const { return m_warningDisplayTime; }
     bool ShouldShowWarning() const { return m_hasWarned && (m_warningStyle == WarningStyle::Modal || m_warningDisplayTime > 0.0f); }
-    
+
     WarningStyle GetWarningStyle() const { return m_warningStyle; }
     void SetWarningStyle(WarningStyle style);
 
@@ -33,11 +37,11 @@ public:
 
     void ResetWarning();
 
-private:
-    MemoryMonitor() : m_warningThresholdGB(3.5f), m_enabled(false), m_currentMemoryGB(0.0f), 
-                      m_hasWarned(false), m_warningDisplayTime(0.0f), m_WARNING_DISPLAY_DURATION(15.0f),
-                      m_warningStyle(WarningStyle::Overlay), m_warningDismissed(false) {}
-    
+  private:
+    MemoryMonitor()
+        : m_warningThresholdGB(3.5f), m_enabled(false), m_currentMemoryGB(0.0f), m_hasWarned(false), m_warningDisplayTime(0.0f), m_WARNING_DISPLAY_DURATION(15.0f), m_warningStyle(WarningStyle::Overlay),
+          m_warningDismissed(false) {}
+
     float m_warningThresholdGB;
     bool m_enabled;
     float m_currentMemoryGB;
@@ -50,7 +54,7 @@ private:
 
 // UI Settings for S3SS itself (not game settings)
 class UISettings {
-public:
+  public:
     static UISettings& Get() {
         static UISettings instance;
         return instance;
@@ -87,11 +91,8 @@ public:
     // Helper to get key name for display
     static std::string GetKeyName(UINT vkCode);
 
-private:
-    UISettings() :
-        m_uiToggleKey(VK_INSERT),
-        m_disableHooks(false),
-        m_fontScale(1.0f) {}
+  private:
+    UISettings() : m_uiToggleKey(VK_INSERT), m_disableHooks(false), m_fontScale(1.0f) {}
 
     mutable std::mutex m_mutex;
     UINT m_uiToggleKey;
@@ -101,14 +102,14 @@ private:
 
 // Borderless Window Mode
 enum class BorderlessMode {
-    Disabled,       // Normal windowed mode with decorations
+    Disabled,        // Normal windowed mode with decorations
     DecorationsOnly, // Remove decorations but keep current size/position
-    Maximized,      // Remove decorations and maximize to work area (excludes taskbar)
-    Fullscreen      // Remove decorations and cover entire monitor (covers taskbar)
+    Maximized,       // Remove decorations and maximize to work area (excludes taskbar)
+    Fullscreen       // Remove decorations and cover entire monitor (covers taskbar)
 };
 
 class BorderlessWindow {
-public:
+  public:
     static BorderlessWindow& Get() {
         static BorderlessWindow instance;
         return instance;
@@ -125,18 +126,17 @@ public:
     }
 
     void SetMode(BorderlessMode mode);
-    void Apply();  // Apply current state to window
+    void Apply(); // Apply current state to window
     void SetWindowHandle(HWND hwnd);
 
     // TOML serialization (writes/reads qol.borderless_window section)
     void SaveToToml(toml::table& qolTable) const;
     void LoadFromToml(const toml::table& qolTable);
 
-private:
-    BorderlessWindow() : m_mode(BorderlessMode::Disabled), m_hwnd(nullptr),
-                         m_originalStyle(0), m_originalExStyle(0), m_wasApplied(false) {}
+  private:
+    BorderlessWindow() : m_mode(BorderlessMode::Disabled), m_hwnd(nullptr), m_originalStyle(0), m_originalExStyle(0), m_wasApplied(false) {}
 
-    void RemoveDecorations();  // Helper to remove window chrome
+    void RemoveDecorations(); // Helper to remove window chrome
     void ApplyDecorationsOnly();
     void ApplyMaximized();
     void ApplyFullscreen();
@@ -149,4 +149,4 @@ private:
     LONG m_originalExStyle;
     RECT m_originalRect;
     bool m_wasApplied;
-}; 
+};

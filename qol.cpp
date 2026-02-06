@@ -40,9 +40,7 @@ void MemoryMonitor::Update() {
         }
 
         // Update warning display time
-        if (m_warningDisplayTime > 0.0f) {
-            m_warningDisplayTime -= 1.0f / 60.0f;
-        }
+        if (m_warningDisplayTime > 0.0f) { m_warningDisplayTime -= 1.0f / 60.0f; }
     }
 }
 
@@ -83,7 +81,7 @@ void MemoryMonitor::LoadFromToml(const toml::table& qolTable) {
 void MemoryMonitor::ResetWarning() {
     m_hasWarned = false;
     m_warningDisplayTime = 0.0f;
-    m_warningDismissed = true;  // Mark as dismissed until memory drops below threshold
+    m_warningDismissed = true; // Mark as dismissed until memory drops below threshold
 }
 
 // UISettings implementation
@@ -144,17 +142,17 @@ void BorderlessWindow::SetWindowHandle(HWND hwnd) {
     // Apply borderless if it was enabled before we had a window handle
     if (m_mode != BorderlessMode::Disabled && !m_wasApplied) {
         switch (m_mode) {
-            case BorderlessMode::DecorationsOnly:
-                ApplyDecorationsOnly();
-                break;
-            case BorderlessMode::Maximized:
-                ApplyMaximized();
-                break;
-            case BorderlessMode::Fullscreen:
-                ApplyFullscreen();
-                break;
-            default:
-                break;
+        case BorderlessMode::DecorationsOnly:
+            ApplyDecorationsOnly();
+            break;
+        case BorderlessMode::Maximized:
+            ApplyMaximized();
+            break;
+        case BorderlessMode::Fullscreen:
+            ApplyFullscreen();
+            break;
+        default:
+            break;
         }
     }
 }
@@ -173,18 +171,18 @@ void BorderlessWindow::SetMode(BorderlessMode mode) {
 void BorderlessWindow::Apply() {
     std::lock_guard<std::mutex> lock(m_mutex);
     switch (m_mode) {
-        case BorderlessMode::Disabled:
-            RestoreWindowed();
-            break;
-        case BorderlessMode::DecorationsOnly:
-            ApplyDecorationsOnly();
-            break;
-        case BorderlessMode::Maximized:
-            ApplyMaximized();
-            break;
-        case BorderlessMode::Fullscreen:
-            ApplyFullscreen();
-            break;
+    case BorderlessMode::Disabled:
+        RestoreWindowed();
+        break;
+    case BorderlessMode::DecorationsOnly:
+        ApplyDecorationsOnly();
+        break;
+    case BorderlessMode::Maximized:
+        ApplyMaximized();
+        break;
+    case BorderlessMode::Fullscreen:
+        ApplyFullscreen();
+        break;
     }
 }
 
@@ -214,8 +212,7 @@ void BorderlessWindow::ApplyDecorationsOnly() {
     RemoveDecorations();
 
     // Just update the frame, keep current size/position
-    SetWindowPos(m_hwnd, nullptr, 0, 0, 0, 0,
-        SWP_FRAMECHANGED | SWP_NOACTIVATE | SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER);
+    SetWindowPos(m_hwnd, nullptr, 0, 0, 0, 0, SWP_FRAMECHANGED | SWP_NOACTIVATE | SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER);
 
     m_wasApplied = true;
     LOG_INFO("Borderless (decorations only) mode applied");
@@ -237,11 +234,9 @@ void BorderlessWindow::ApplyMaximized() {
         int width = monitorInfo.rcWork.right - monitorInfo.rcWork.left;
         int height = monitorInfo.rcWork.bottom - monitorInfo.rcWork.top;
 
-        SetWindowPos(m_hwnd, nullptr, x, y, width, height,
-            SWP_FRAMECHANGED | SWP_NOACTIVATE | SWP_NOZORDER);
+        SetWindowPos(m_hwnd, nullptr, x, y, width, height, SWP_FRAMECHANGED | SWP_NOACTIVATE | SWP_NOZORDER);
     } else {
-        SetWindowPos(m_hwnd, nullptr, 0, 0, 0, 0,
-            SWP_FRAMECHANGED | SWP_NOACTIVATE | SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER);
+        SetWindowPos(m_hwnd, nullptr, 0, 0, 0, 0, SWP_FRAMECHANGED | SWP_NOACTIVATE | SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER);
     }
 
     m_wasApplied = true;
@@ -267,15 +262,12 @@ void BorderlessWindow::ApplyFullscreen() {
 
         // Move window to top-left of monitor and resize to cover full screen. This changes the window size, which may cause issues if the game
         // is using a spoofed resolution via ResolutionSpoofer. In that case, D3D backbuffer won't match the window size.
-        SetWindowPos(m_hwnd, HWND_TOPMOST, x, y, width, height,
-            SWP_FRAMECHANGED | SWP_NOACTIVATE);
+        SetWindowPos(m_hwnd, HWND_TOPMOST, x, y, width, height, SWP_FRAMECHANGED | SWP_NOACTIVATE);
         // Remove TOPMOST immediately after to avoid staying always-on-top
-        SetWindowPos(m_hwnd, HWND_NOTOPMOST, 0, 0, 0, 0,
-            SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
+        SetWindowPos(m_hwnd, HWND_NOTOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
     } else {
         // Fallback: just update the frame without resizing
-        SetWindowPos(m_hwnd, nullptr, 0, 0, 0, 0,
-            SWP_FRAMECHANGED | SWP_NOACTIVATE | SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER);
+        SetWindowPos(m_hwnd, nullptr, 0, 0, 0, 0, SWP_FRAMECHANGED | SWP_NOACTIVATE | SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER);
     }
 
     m_wasApplied = true;
@@ -292,8 +284,7 @@ void BorderlessWindow::RestoreWindowed() {
         SetWindowLong(m_hwnd, GWL_EXSTYLE, m_originalExStyle);
 
         // Just update the frame, don't change size/position
-        SetWindowPos(m_hwnd, nullptr, 0, 0, 0, 0,
-            SWP_FRAMECHANGED | SWP_NOACTIVATE | SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER);
+        SetWindowPos(m_hwnd, nullptr, 0, 0, 0, 0, SWP_FRAMECHANGED | SWP_NOACTIVATE | SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER);
     }
 
     m_wasApplied = false;
@@ -305,10 +296,18 @@ void BorderlessWindow::SaveToToml(toml::table& qolTable) const {
     toml::table bwTable;
     std::string modeStr;
     switch (m_mode) {
-        case BorderlessMode::Disabled: modeStr = "disabled"; break;
-        case BorderlessMode::DecorationsOnly: modeStr = "decorations_only"; break;
-        case BorderlessMode::Maximized: modeStr = "maximized"; break;
-        case BorderlessMode::Fullscreen: modeStr = "fullscreen"; break;
+    case BorderlessMode::Disabled:
+        modeStr = "disabled";
+        break;
+    case BorderlessMode::DecorationsOnly:
+        modeStr = "decorations_only";
+        break;
+    case BorderlessMode::Maximized:
+        modeStr = "maximized";
+        break;
+    case BorderlessMode::Fullscreen:
+        modeStr = "fullscreen";
+        break;
     }
     bwTable.insert("mode", modeStr);
     qolTable.insert("borderless_window", std::move(bwTable));
@@ -332,44 +331,21 @@ void BorderlessWindow::LoadFromToml(const toml::table& qolTable) {
 }
 
 std::string UISettings::GetKeyName(UINT vkCode) {
-    static const std::unordered_map<UINT, std::string> keyNames = {
-        {VK_INSERT, "Insert"},
-        {VK_DELETE, "Delete"},
-        {VK_HOME, "Home"},
-        {VK_END, "End"},
-        {VK_PRIOR, "Page Up"},
-        {VK_NEXT, "Page Down"},
-        {VK_F1, "F1"}, {VK_F2, "F2"}, {VK_F3, "F3"}, {VK_F4, "F4"},
-        {VK_F5, "F5"}, {VK_F6, "F6"}, {VK_F7, "F7"}, {VK_F8, "F8"},
-        {VK_F9, "F9"}, {VK_F10, "F10"}, {VK_F11, "F11"}, {VK_F12, "F12"},
-        {VK_NUMPAD0, "Numpad 0"}, {VK_NUMPAD1, "Numpad 1"}, {VK_NUMPAD2, "Numpad 2"},
-        {VK_NUMPAD3, "Numpad 3"}, {VK_NUMPAD4, "Numpad 4"}, {VK_NUMPAD5, "Numpad 5"},
-        {VK_NUMPAD6, "Numpad 6"}, {VK_NUMPAD7, "Numpad 7"}, {VK_NUMPAD8, "Numpad 8"},
-        {VK_NUMPAD9, "Numpad 9"},
-        {VK_MULTIPLY, "Numpad *"}, {VK_ADD, "Numpad +"}, 
-        {VK_SUBTRACT, "Numpad -"}, {VK_DIVIDE, "Numpad /"},
-        {VK_PAUSE, "Pause"}, {VK_SCROLL, "Scroll Lock"},
-        {VK_OEM_3, "~"}, {VK_OEM_MINUS, "-"}, {VK_OEM_PLUS, "="},
-        {VK_OEM_4, "["}, {VK_OEM_6, "]"}, {VK_OEM_5, "\\"},
-        {VK_OEM_1, ";"}, {VK_OEM_7, "'"}, {VK_OEM_COMMA, ","},
-        {VK_OEM_PERIOD, "."}, {VK_OEM_2, "/"}
-    };
-    
+    static const std::unordered_map<UINT, std::string> keyNames = {{VK_INSERT, "Insert"}, {VK_DELETE, "Delete"}, {VK_HOME, "Home"}, {VK_END, "End"}, {VK_PRIOR, "Page Up"}, {VK_NEXT, "Page Down"}, {VK_F1, "F1"},
+        {VK_F2, "F2"}, {VK_F3, "F3"}, {VK_F4, "F4"}, {VK_F5, "F5"}, {VK_F6, "F6"}, {VK_F7, "F7"}, {VK_F8, "F8"}, {VK_F9, "F9"}, {VK_F10, "F10"}, {VK_F11, "F11"}, {VK_F12, "F12"}, {VK_NUMPAD0, "Numpad 0"},
+        {VK_NUMPAD1, "Numpad 1"}, {VK_NUMPAD2, "Numpad 2"}, {VK_NUMPAD3, "Numpad 3"}, {VK_NUMPAD4, "Numpad 4"}, {VK_NUMPAD5, "Numpad 5"}, {VK_NUMPAD6, "Numpad 6"}, {VK_NUMPAD7, "Numpad 7"}, {VK_NUMPAD8, "Numpad 8"},
+        {VK_NUMPAD9, "Numpad 9"}, {VK_MULTIPLY, "Numpad *"}, {VK_ADD, "Numpad +"}, {VK_SUBTRACT, "Numpad -"}, {VK_DIVIDE, "Numpad /"}, {VK_PAUSE, "Pause"}, {VK_SCROLL, "Scroll Lock"}, {VK_OEM_3, "~"}, {VK_OEM_MINUS, "-"},
+        {VK_OEM_PLUS, "="}, {VK_OEM_4, "["}, {VK_OEM_6, "]"}, {VK_OEM_5, "\\"}, {VK_OEM_1, ";"}, {VK_OEM_7, "'"}, {VK_OEM_COMMA, ","}, {VK_OEM_PERIOD, "."}, {VK_OEM_2, "/"}};
+
     auto it = keyNames.find(vkCode);
-    if (it != keyNames.end()) {
-        return it->second;
-    }
-    
+    if (it != keyNames.end()) { return it->second; }
+
     // For letter keys
-    if (vkCode >= 'A' && vkCode <= 'Z') {
-        return std::string(1, static_cast<char>(vkCode));
-    }
-    
+    if (vkCode >= 'A' && vkCode <= 'Z') { return std::string(1, static_cast<char>(vkCode)); }
+
     // For number keys
-    if (vkCode >= '0' && vkCode <= '9') {
-        return std::string(1, static_cast<char>(vkCode));
-    }
-    
+    if (vkCode >= '0' && vkCode <= '9') { return std::string(1, static_cast<char>(vkCode)); }
+
     // Default
     return "Key " + std::to_string(vkCode);
 }

@@ -7,9 +7,7 @@ IntersectionPatch* IntersectionPatch::instance = nullptr;
 // Calculate offsets at compile time
 static const size_t CALLS_OFFSET = OptimizationPatch::GetCurrentWindowOffset() + OptimizationPatch::GetCallsOffset();
 
-IntersectionPatch::IntersectionPatch()
-    : OptimizationPatch("Intersection", nullptr)
-{
+IntersectionPatch::IntersectionPatch() : OptimizationPatch("Intersection", nullptr) {
     instance = this;
 }
 
@@ -51,34 +49,33 @@ bool IntersectionPatch::Uninstall() {
 }
 // this is like, idk I feel vulnerable about this code so please don't make fun of it ldsahfhsajdas
 __declspec(naked) bool __cdecl IntersectionPatch::OptimizedHook() {
-    __asm {
-        // Prologue
+    __asm {// Prologue
         push ebp
         mov ebp, esp
-        and esp, 0xfffffff0    // 16-byte alignment for SSE
-        sub esp, 0x40          // Space for XMM operations
+        and esp, 0xfffffff0 // 16-byte alignment for SSE
+        sub esp, 0x40 // Space for XMM operations
 
         // Load data immediately
-        mov eax, [ebp + 8]     // param1
-        mov ecx, [eax]         // array start
-        mov edx, [eax + 4]     // array end
-        sub edx, ecx           // length in bytes
+        mov eax, [ebp + 8] // param1
+        mov ecx, [eax] // array start
+        mov edx, [eax + 4] // array end
+        sub edx, ecx // length in bytes
 
-        // Strategic prefetch
+            // Strategic prefetch
         prefetchnta[ecx]
         prefetchnta[ecx + 64]
 
         // Quick size check (common early-out)
-        sar edx, 3              // Convert to element count
+        sar edx, 3 // Convert to element count
         cmp edx, 3
         jbe return_true
 
-        // Check alignment for optimal path
+            // Check alignment for optimal path
         test ecx, 0xF
         jz aligned_path
 
-        // Unaligned path with LDDQU for better performance (?)
-        lddqu xmm0, [ecx]      // Better unaligned load on modern CPUs apparently idfk
+            // Unaligned path with LDDQU for better performance (?)
+        lddqu xmm0, [ecx] // Better unaligned load on modern CPUs apparently idfk
         lddqu xmm1, [ecx + 16]
         jmp process_data
 
@@ -91,17 +88,17 @@ __declspec(naked) bool __cdecl IntersectionPatch::OptimizedHook() {
         movaps xmm2, xmm0
         movaps xmm3, xmm1
 
-        // Optimized shuffling
+            // Optimized shuffling
         shufps xmm2, xmm2, 0x88
         shufps xmm3, xmm3, 0x88
 
         // calc differences
         subps xmm2, xmm3
 
-        // Square results (using SSE multiply)
+            // Square results (using SSE multiply)
         mulps xmm2, xmm2
 
-        // Fast comparison
+            // Fast comparison
         movaps xmm4, [esp + 16]
         cmpps xmm2, xmm4, 1
 
@@ -110,7 +107,7 @@ __declspec(naked) bool __cdecl IntersectionPatch::OptimizedHook() {
         test eax, eax
         setnz al
 
-        // Fast return
+            // Fast return
         mov esp, ebp
         pop ebp
         ret 4

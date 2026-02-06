@@ -3,7 +3,7 @@
 #include "gui.h"
 #include <detours/detours.h>
 #include "imgui.h"
-#include "imgui_internal.h"  // For ImGuiContext, ImGuiWindow
+#include "imgui_internal.h" // For ImGuiContext, ImGuiWindow
 #include "imgui_impl_win32.h"
 #include "imgui_impl_dx9.h"
 #include <atomic>
@@ -39,12 +39,8 @@ static std::atomic<bool> g_imguiInitialized(false);
 HWND g_hookedWindow = nullptr;
 
 HRESULT __stdcall HookedEndScene(LPDIRECT3DDEVICE9 pDevice) {
-    if (!pDevice) {
-        return original_EndScene(pDevice);
-    }
-    if (g_inEndScene.exchange(true)) {
-        return original_EndScene(pDevice);
-    }
+    if (!pDevice) { return original_EndScene(pDevice); }
+    if (g_inEndScene.exchange(true)) { return original_EndScene(pDevice); }
     HRESULT coop = pDevice->TestCooperativeLevel();
     if (FAILED(coop) && coop != D3DERR_DEVICENOTRESET) {
         char buf[96];
@@ -77,9 +73,7 @@ HRESULT __stdcall HookedEndScene(LPDIRECT3DDEVICE9 pDevice) {
             IDirect3DSwapChain9* pSwapChain = nullptr;
             if (SUCCEEDED(pDevice->GetSwapChain(0, &pSwapChain)) && pSwapChain) {
                 D3DPRESENT_PARAMETERS pp = {};
-                if (SUCCEEDED(pSwapChain->GetPresentParameters(&pp)) && pp.hDeviceWindow) {
-                    gameWindow = pp.hDeviceWindow;
-                }
+                if (SUCCEEDED(pSwapChain->GetPresentParameters(&pp)) && pp.hDeviceWindow) { gameWindow = pp.hDeviceWindow; }
                 pSwapChain->Release();
             }
         }
@@ -116,9 +110,7 @@ HRESULT __stdcall HookedEndScene(LPDIRECT3DDEVICE9 pDevice) {
             LOG_ERROR(errBuf);
         }
         WNDPROC current = (WNDPROC)GetWindowLongPtr(gameWindow, GWLP_WNDPROC);
-        if (current != HookedWndProc) {
-            LOG_WARNING("[EndScene] WndProc hook verification failed");
-        }
+        if (current != HookedWndProc) { LOG_WARNING("[EndScene] WndProc hook verification failed"); }
         LOG_INFO("[EndScene] Window procedure hooked successfully");
 
         ImGui_ImplWin32_Init(gameWindow);
@@ -145,8 +137,7 @@ HRESULT __stdcall HookedEndScene(LPDIRECT3DDEVICE9 pDevice) {
                     if (SUCCEEDED(pBackBuffer->GetDesc(&desc))) {
                         ImGuiIO& io = ImGui::GetIO();
                         // Only override if backbuffer differs from what ImGui thinks the display is
-                        if (desc.Width != static_cast<UINT>(io.DisplaySize.x) ||
-                            desc.Height != static_cast<UINT>(io.DisplaySize.y)) {
+                        if (desc.Width != static_cast<UINT>(io.DisplaySize.x) || desc.Height != static_cast<UINT>(io.DisplaySize.y)) {
                             io.DisplaySize = ImVec2(static_cast<float>(desc.Width), static_cast<float>(desc.Height));
                         }
 
@@ -185,22 +176,16 @@ HRESULT __stdcall HookedEndScene(LPDIRECT3DDEVICE9 pDevice) {
             }
 
             // Apply user font scale when not in borderless mode (borderless path handles its own scaling above)
-            if (!BorderlessWindow::Get().IsEnabled()) {
-                ImGui::GetIO().FontGlobalScale = UISettings::Get().GetFontScale() / FONT_OVERSAMPLE;
-            }
+            if (!BorderlessWindow::Get().IsEnabled()) { ImGui::GetIO().FontGlobalScale = UISettings::Get().GetFontScale() / FONT_OVERSAMPLE; }
 
             ImGui::NewFrame();
 
             SettingsGui::Render();
-            
+
             ImGui::EndFrame();
             ImGui::Render();
             ImGui_ImplDX9_RenderDrawData((ImDrawData*)ImGui::GetDrawData());
-        }
-        catch (const std::exception& e) {
-            LOG_ERROR(std::string("[EndScene] Exception: ") + e.what());
-        }
-        catch (...) {
+        } catch (const std::exception& e) { LOG_ERROR(std::string("[EndScene] Exception: ") + e.what()); } catch (...) {
             LOG_ERROR("[EndScene] Unknown exception");
         }
     }
@@ -211,27 +196,25 @@ HRESULT __stdcall HookedEndScene(LPDIRECT3DDEVICE9 pDevice) {
 }
 
 HRESULT __stdcall HookedReset(LPDIRECT3DDEVICE9 pDevice, D3DPRESENT_PARAMETERS* pPresentationParameters) {
-    if (g_imguiInitialized.load()) {
-        ImGui_ImplDX9_InvalidateDeviceObjects();
-    }
-    
+    if (g_imguiInitialized.load()) { ImGui_ImplDX9_InvalidateDeviceObjects(); }
+
     // Enforce windowed mode if Borderless Window is active
     // This is critical when using the Resolution Spoofer patch with resolutions larger than the monitor, Exclusive Fullscreen fail/hangs the driver ):
     if (pPresentationParameters && BorderlessWindow::Get().IsEnabled()) {
         if (!pPresentationParameters->Windowed) {
-             LOG_INFO("[Reset] Enforcing Windowed Mode for Borderless Window");
-             pPresentationParameters->Windowed = TRUE;
-             pPresentationParameters->FullScreen_RefreshRateInHz = 0; // need for windowed apparently
-             
-             // Enforce DISCARD swap effect to allow backbuffer scaling (resolution spoofing)
-             // D3DSWAPEFFECT_COPY requires backbuffer size to match client area, which would fail here
-             pPresentationParameters->SwapEffect = D3DSWAPEFFECT_DISCARD;
-             
-             // LOCKABLE_BACKBUFFER is incompatible with D3DSWAPEFFECT_DISCARD
-             if (pPresentationParameters->Flags & D3DPRESENTFLAG_LOCKABLE_BACKBUFFER) {
-                 pPresentationParameters->Flags &= ~D3DPRESENTFLAG_LOCKABLE_BACKBUFFER;
-                 LOG_INFO("[Reset] Stripped LOCKABLE_BACKBUFFER flag");
-             }
+            LOG_INFO("[Reset] Enforcing Windowed Mode for Borderless Window");
+            pPresentationParameters->Windowed = TRUE;
+            pPresentationParameters->FullScreen_RefreshRateInHz = 0; // need for windowed apparently
+
+            // Enforce DISCARD swap effect to allow backbuffer scaling (resolution spoofing)
+            // D3DSWAPEFFECT_COPY requires backbuffer size to match client area, which would fail here
+            pPresentationParameters->SwapEffect = D3DSWAPEFFECT_DISCARD;
+
+            // LOCKABLE_BACKBUFFER is incompatible with D3DSWAPEFFECT_DISCARD
+            if (pPresentationParameters->Flags & D3DPRESENTFLAG_LOCKABLE_BACKBUFFER) {
+                pPresentationParameters->Flags &= ~D3DPRESENTFLAG_LOCKABLE_BACKBUFFER;
+                LOG_INFO("[Reset] Stripped LOCKABLE_BACKBUFFER flag");
+            }
         }
     }
 
@@ -241,21 +224,16 @@ HRESULT __stdcall HookedReset(LPDIRECT3DDEVICE9 pDevice, D3DPRESENT_PARAMETERS* 
         sprintf_s(buf, "[Reset] IDirect3DDevice9::Reset failed. hr=0x%08lX", (unsigned long)hr);
         LOG_DEBUG(buf);
     }
-    
+
     // Reapply borderless settings after Reset, reset usually resizes the window to the backbuffer size
     if (SUCCEEDED(hr) && BorderlessWindow::Get().IsEnabled()) {
         // We don't have direct access to HWND here except via BorderlessWindow's stored handle or getting it from CreationParameters again, but BorderlessWindow should already have it
         // If pPresentationParameters has it, use it to make sure
-        if (pPresentationParameters && pPresentationParameters->hDeviceWindow) {
-             BorderlessWindow::Get().SetWindowHandle(pPresentationParameters->hDeviceWindow);
-        }
+        if (pPresentationParameters && pPresentationParameters->hDeviceWindow) { BorderlessWindow::Get().SetWindowHandle(pPresentationParameters->hDeviceWindow); }
         BorderlessWindow::Get().Apply();
     }
 
-    if (SUCCEEDED(hr) && g_imguiInitialized.load()) {
-        ImGui_ImplDX9_CreateDeviceObjects();
-
-    }
+    if (SUCCEEDED(hr) && g_imguiInitialized.load()) { ImGui_ImplDX9_CreateDeviceObjects(); }
     return hr;
 }
 
@@ -263,38 +241,27 @@ extern IMGUI_IMPL_API LRESULT ImGui_ImplWin32_WndProcHandler(HWND hWnd, UINT msg
 
 // you guessed it, resolution scaling!
 static LPARAM ScaleMouseCoords(HWND hWnd, LPARAM lParam) {
-    if (!g_pd3dDevice || !BorderlessWindow::Get().IsEnabled()) {
-        return lParam;
-    }
+    if (!g_pd3dDevice || !BorderlessWindow::Get().IsEnabled()) { return lParam; }
 
     // Get backbuffer dimensions
     IDirect3DSurface9* pBackBuffer = nullptr;
-    if (FAILED(g_pd3dDevice->GetBackBuffer(0, 0, D3DBACKBUFFER_TYPE_MONO, &pBackBuffer))) {
-        return lParam;
-    }
+    if (FAILED(g_pd3dDevice->GetBackBuffer(0, 0, D3DBACKBUFFER_TYPE_MONO, &pBackBuffer))) { return lParam; }
 
     D3DSURFACE_DESC desc;
     HRESULT hr = pBackBuffer->GetDesc(&desc);
     pBackBuffer->Release();
 
-    if (FAILED(hr)) {
-        return lParam;
-    }
+    if (FAILED(hr)) { return lParam; }
 
     // Get window client size
     RECT clientRect;
-    if (!GetClientRect(hWnd, &clientRect)) {
-        return lParam;
-    }
+    if (!GetClientRect(hWnd, &clientRect)) { return lParam; }
 
     int windowWidth = clientRect.right - clientRect.left;
     int windowHeight = clientRect.bottom - clientRect.top;
 
     // If sizes match, no scaling needed
-    if (windowWidth == 0 || windowHeight == 0 ||
-        (desc.Width == static_cast<UINT>(windowWidth) && desc.Height == static_cast<UINT>(windowHeight))) {
-        return lParam;
-    }
+    if (windowWidth == 0 || windowHeight == 0 || (desc.Width == static_cast<UINT>(windowWidth) && desc.Height == static_cast<UINT>(windowHeight))) { return lParam; }
 
     // Scale mouse coordinates from window space to backbuffer space
     int mouseX = GET_X_LPARAM(lParam);
@@ -328,8 +295,7 @@ LRESULT CALLBACK HookedWndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lPara
     }
 
     // Pass events to ImGui with scaled coordinates
-    if (ImGui_ImplWin32_WndProcHandler(hWnd, uMsg, wParam, scaledLParam))
-        return true;
+    if (ImGui_ImplWin32_WndProcHandler(hWnd, uMsg, wParam, scaledLParam)) return true;
 
     // Handle configurable key to toggle UI
     if (uMsg == WM_KEYDOWN && wParam == UISettings::Get().GetUIToggleKey()) {
@@ -360,7 +326,7 @@ LRESULT CALLBACK HookedWndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lPara
 
 bool InitializeD3D9Hook() {
     LOG_INFO("[Init] Starting D3D9 hook initialization");
-    
+
     try {
         IDirect3D9* pD3D = Direct3DCreate9(D3D_SDK_VERSION);
         if (!pD3D) {
@@ -388,15 +354,11 @@ bool InitializeD3D9Hook() {
                 return false;
             }
         }
-        HWND dummyWnd = CreateWindowEx(0, wc.lpszClassName, L"S3SS Dummy", WS_OVERLAPPEDWINDOW,
-            CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, nullptr, nullptr, wc.hInstance, nullptr);
+        HWND dummyWnd = CreateWindowEx(0, wc.lpszClassName, L"S3SS Dummy", WS_OVERLAPPEDWINDOW, CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, nullptr, nullptr, wc.hInstance, nullptr);
         d3dpp.hDeviceWindow = dummyWnd;
 
         IDirect3DDevice9* pDevice = nullptr;
-        HRESULT hr = pD3D->CreateDevice(
-            D3DADAPTER_DEFAULT, D3DDEVTYPE_HAL,
-            d3dpp.hDeviceWindow, D3DCREATE_SOFTWARE_VERTEXPROCESSING,
-            &d3dpp, &pDevice);
+        HRESULT hr = pD3D->CreateDevice(D3DADAPTER_DEFAULT, D3DDEVTYPE_HAL, d3dpp.hDeviceWindow, D3DCREATE_SOFTWARE_VERTEXPROCESSING, &d3dpp, &pDevice);
 
         if (FAILED(hr) || !pDevice) {
             char errBuf[128];
@@ -419,24 +381,19 @@ bool InitializeD3D9Hook() {
 
         LOG_DEBUG("[Init] Starting Detours transaction");
 
-        if (DetourTransactionBegin() != NO_ERROR ||
-            DetourUpdateThread(GetCurrentThread()) != NO_ERROR ||
-            DetourAttach(&(PVOID&)original_EndScene, HookedEndScene) != NO_ERROR ||
-            DetourAttach(&(PVOID&)original_Reset, HookedReset) != NO_ERROR ||
-            DetourTransactionCommit() != NO_ERROR) {
-            
+        if (DetourTransactionBegin() != NO_ERROR || DetourUpdateThread(GetCurrentThread()) != NO_ERROR || DetourAttach(&(PVOID&)original_EndScene, HookedEndScene) != NO_ERROR ||
+            DetourAttach(&(PVOID&)original_Reset, HookedReset) != NO_ERROR || DetourTransactionCommit() != NO_ERROR) {
+
             LOG_ERROR("[Init] Failed to attach D3D hooks");
             return false;
         }
 
         LOG_INFO("[Init] D3D9 hook initialization completed successfully");
         return true;
-    }
-    catch (const std::exception& e) {
+    } catch (const std::exception& e) {
         LOG_ERROR(std::string("[Init] Exception during D3D9 hook: ") + e.what());
         return false;
-    }
-    catch (...) {
+    } catch (...) {
         LOG_ERROR("[Init] Unknown exception during D3D9 hook initialization");
         return false;
     }
@@ -460,4 +417,4 @@ void CleanupD3D9Hook() {
         if (original_Reset) DetourDetach(&(PVOID&)original_Reset, HookedReset);
         DetourTransactionCommit();
     }
-} 
+}

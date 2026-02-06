@@ -5,7 +5,7 @@
 // Central coordinator for all config I/O.
 // Builds a single TOML table from all subsystems, writes/reads atomically.
 class ConfigStore {
-public:
+  public:
     static ConfigStore& Get();
 
     // Primary save/load (coordinates all subsystems)
@@ -16,7 +16,7 @@ public:
     bool SaveDefaults(std::string* error = nullptr);
     bool LoadDefaults(std::string* error = nullptr);
 
-private:
+  private:
     ConfigStore() = default;
     std::mutex m_mutex;
 };

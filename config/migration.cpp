@@ -43,8 +43,8 @@ struct INIConfigValue {
 // Simple INI section for QoL: config overrides
 struct INIQoLValues {
     // UI
-    std::string toggleKey;     // "45" (VK_INSERT)
-    std::string disableHooks;  // "true"/"false"
+    std::string toggleKey;    // "45" (VK_INSERT)
+    std::string disableHooks; // "true"/"false"
     // Memory Monitor
     std::string memEnabled;
     std::string memThreshold;
@@ -62,11 +62,7 @@ struct INIPatch {
 
 // Parser:
 
-static bool ParseOldINI(const std::string& iniPath,
-                        std::vector<INISetting>& outSettings,
-                        std::vector<INIConfigValue>& outConfigValues,
-                        INIQoLValues& outQoL,
-                        std::vector<INIPatch>& outPatches) {
+static bool ParseOldINI(const std::string& iniPath, std::vector<INISetting>& outSettings, std::vector<INIConfigValue>& outConfigValues, INIQoLValues& outQoL, std::vector<INIPatch>& outPatches) {
     std::ifstream file(iniPath);
     if (!file.is_open()) return false;
 
@@ -82,19 +78,13 @@ static bool ParseOldINI(const std::string& iniPath,
     auto flushSection = [&]() {
         switch (currentSection) {
         case Section::Setting:
-            if (!currentSetting.name.empty() && !currentSetting.value.empty()) {
-                outSettings.push_back(currentSetting);
-            }
+            if (!currentSetting.name.empty() && !currentSetting.value.empty()) { outSettings.push_back(currentSetting); }
             break;
         case Section::Config:
-            if (!currentConfig.name.empty() && !currentConfig.value.empty()) {
-                outConfigValues.push_back(currentConfig);
-            }
+            if (!currentConfig.name.empty() && !currentConfig.value.empty()) { outConfigValues.push_back(currentConfig); }
             break;
         case Section::Patch:
-            if (!currentPatch.name.empty()) {
-                outPatches.push_back(currentPatch);
-            }
+            if (!currentPatch.name.empty()) { outPatches.push_back(currentPatch); }
             break;
         default:
             break;
@@ -154,11 +144,16 @@ static bool ParseOldINI(const std::string& iniPath,
 
         switch (currentSection) {
         case Section::Setting:
-            if (key == "Category") currentSetting.category = value;
-            else if (key == "Value") currentSetting.value = value;
-            else if (key == "Min") currentSetting.min = value;
-            else if (key == "Max") currentSetting.max = value;
-            else if (key == "Step") currentSetting.step = value;
+            if (key == "Category")
+                currentSetting.category = value;
+            else if (key == "Value")
+                currentSetting.value = value;
+            else if (key == "Min")
+                currentSetting.min = value;
+            else if (key == "Max")
+                currentSetting.max = value;
+            else if (key == "Step")
+                currentSetting.step = value;
             break;
 
         case Section::Config:
@@ -206,8 +201,14 @@ static bool ParseOldINI(const std::string& iniPath,
 // Try to detect if a string value is a number or bool to write native TOML types
 static void InsertSmartValue(toml::table& table, const std::string& key, const std::string& value) {
     // Bool check
-    if (value == "true") { table.insert(key, true); return; }
-    if (value == "false") { table.insert(key, false); return; }
+    if (value == "true") {
+        table.insert(key, true);
+        return;
+    }
+    if (value == "false") {
+        table.insert(key, false);
+        return;
+    }
 
     // Comma separated = vector/array of floats
     if (value.find(',') != std::string::npos) {
@@ -251,10 +252,7 @@ static void InsertSmartValue(toml::table& table, const std::string& key, const s
     table.insert(key, value);
 }
 
-static toml::table BuildToml(const std::vector<INISetting>& settings,
-                              const std::vector<INIConfigValue>& configValues,
-                              const INIQoLValues& qol,
-                              const std::vector<INIPatch>& patches) {
+static toml::table BuildToml(const std::vector<INISetting>& settings, const std::vector<INIConfigValue>& configValues, const INIQoLValues& qol, const std::vector<INIPatch>& patches) {
     toml::table root;
 
     // [meta]
@@ -270,13 +268,19 @@ static toml::table BuildToml(const std::vector<INISetting>& settings,
             if (!s.category.empty()) entry.insert("category", s.category);
             InsertSmartValue(entry, "value", s.value);
             if (!s.min.empty()) {
-                try { entry.insert("min", std::stod(s.min)); } catch (...) {}
+                try {
+                    entry.insert("min", std::stod(s.min));
+                } catch (...) {}
             }
             if (!s.max.empty()) {
-                try { entry.insert("max", std::stod(s.max)); } catch (...) {}
+                try {
+                    entry.insert("max", std::stod(s.max));
+                } catch (...) {}
             }
             if (!s.step.empty()) {
-                try { entry.insert("step", std::stod(s.step)); } catch (...) {}
+                try {
+                    entry.insert("step", std::stod(s.step));
+                } catch (...) {}
             }
             settingsTable.insert(s.name, std::move(entry));
         }
@@ -286,9 +290,7 @@ static toml::table BuildToml(const std::vector<INISetting>& settings,
     // [config]
     if (!configValues.empty()) {
         toml::table configTable;
-        for (const auto& cv : configValues) {
-            configTable.insert(cv.name, cv.value);
-        }
+        for (const auto& cv : configValues) { configTable.insert(cv.name, cv.value); }
         root.insert("config", std::move(configTable));
     }
 
@@ -302,11 +304,11 @@ static toml::table BuildToml(const std::vector<INISetting>& settings,
             hasQoL = true;
             toml::table uiTable;
             if (!qol.toggleKey.empty()) {
-                try { uiTable.insert("toggle_key", std::stoll(qol.toggleKey)); } catch (...) {}
+                try {
+                    uiTable.insert("toggle_key", std::stoll(qol.toggleKey));
+                } catch (...) {}
             }
-            if (!qol.disableHooks.empty()) {
-                uiTable.insert("disable_hooks", qol.disableHooks == "true");
-            }
+            if (!qol.disableHooks.empty()) { uiTable.insert("disable_hooks", qol.disableHooks == "true"); }
             qolTable.insert("ui", std::move(uiTable));
         }
 
@@ -314,15 +316,13 @@ static toml::table BuildToml(const std::vector<INISetting>& settings,
         if (!qol.memEnabled.empty() || !qol.memThreshold.empty() || !qol.memWarningStyle.empty()) {
             hasQoL = true;
             toml::table memTable;
-            if (!qol.memEnabled.empty()) {
-                memTable.insert("enabled", qol.memEnabled == "true");
-            }
+            if (!qol.memEnabled.empty()) { memTable.insert("enabled", qol.memEnabled == "true"); }
             if (!qol.memThreshold.empty()) {
-                try { memTable.insert("warning_threshold", std::stod(qol.memThreshold)); } catch (...) {}
+                try {
+                    memTable.insert("warning_threshold", std::stod(qol.memThreshold));
+                } catch (...) {}
             }
-            if (!qol.memWarningStyle.empty()) {
-                memTable.insert("warning_style", qol.memWarningStyle);
-            }
+            if (!qol.memWarningStyle.empty()) { memTable.insert("warning_style", qol.memWarningStyle); }
             qolTable.insert("memory_monitor", std::move(memTable));
         }
 
@@ -334,9 +334,7 @@ static toml::table BuildToml(const std::vector<INISetting>& settings,
             qolTable.insert("borderless_window", std::move(bwTable));
         }
 
-        if (hasQoL) {
-            root.insert("qol", std::move(qolTable));
-        }
+        if (hasQoL) { root.insert("qol", std::move(qolTable)); }
     }
 
     // [patches.*]
@@ -344,12 +342,8 @@ static toml::table BuildToml(const std::vector<INISetting>& settings,
         toml::table patchesTable;
         for (const auto& p : patches) {
             toml::table patchTable;
-            if (!p.enabled.empty()) {
-                patchTable.insert("enabled", p.enabled == "true");
-            }
-            for (const auto& [key, val] : p.settings) {
-                InsertSmartValue(patchTable, key, val);
-            }
+            if (!p.enabled.empty()) { patchTable.insert("enabled", p.enabled == "true"); }
+            for (const auto& [key, val] : p.settings) { InsertSmartValue(patchTable, key, val); }
             patchesTable.insert(p.name, std::move(patchTable));
         }
         root.insert("patches", std::move(patchesTable));
@@ -363,9 +357,7 @@ static toml::table BuildToml(const std::vector<INISetting>& settings,
 namespace Migration {
 
 void CheckAndMigrate() {
-    if (!ConfigPaths::NeedsMigration()) {
-        return;
-    }
+    if (!ConfigPaths::NeedsMigration()) { return; }
 
     std::string iniPath = ConfigPaths::GetLegacyINIPath();
     std::string tomlPath = ConfigPaths::GetConfigPath();
@@ -399,8 +391,7 @@ void CheckAndMigrate() {
     }
 
     // Record results for popup
-    bool hasQoL = !qolValues.toggleKey.empty() || !qolValues.disableHooks.empty() ||
-                  !qolValues.memEnabled.empty() || !qolValues.borderlessMode.empty();
+    bool hasQoL = !qolValues.toggleKey.empty() || !qolValues.disableHooks.empty() || !qolValues.memEnabled.empty() || !qolValues.borderlessMode.empty();
 
     g_result.migrated = true;
     g_result.oldPath = iniPath;
@@ -411,10 +402,7 @@ void CheckAndMigrate() {
     g_result.qolMigrated = hasQoL;
     g_showPopup = true;
 
-    LOG_INFO("[Migration] Migration complete: " +
-             std::to_string(settings.size()) + " settings, " +
-             std::to_string(configValues.size()) + " config values, " +
-             std::to_string(patches.size()) + " patches" +
+    LOG_INFO("[Migration] Migration complete: " + std::to_string(settings.size()) + " settings, " + std::to_string(configValues.size()) + " config values, " + std::to_string(patches.size()) + " patches" +
              (hasQoL ? ", QoL settings migrated" : ""));
 }
 
@@ -425,15 +413,12 @@ bool ShouldShowMigrationPopup() {
 void RenderMigrationPopup() {
     if (!g_showPopup) return;
 
-    if (!ImGui::IsPopupOpen("Settings Migrated")) {
-        ImGui::OpenPopup("Settings Migrated");
-    }
+    if (!ImGui::IsPopupOpen("Settings Migrated")) { ImGui::OpenPopup("Settings Migrated"); }
 
     ImVec2 center = ImGui::GetMainViewport()->GetCenter();
     ImGui::SetNextWindowPos(center, ImGuiCond_Always, ImVec2(0.5f, 0.5f));
 
-    if (ImGui::BeginPopupModal("Settings Migrated", nullptr,
-                               ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoMove)) {
+    if (ImGui::BeginPopupModal("Settings Migrated", nullptr, ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoMove)) {
 
         ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.4f, 1.0f, 0.4f, 1.0f)); //neat
         ImGui::Text("Yipee! Settings have been migrated to TOML!");
@@ -450,23 +435,14 @@ void RenderMigrationPopup() {
 
         // Migration stats
         ImGui::Text("Migrated:");
-        if (g_result.settingsCount > 0) {
-            ImGui::BulletText("%d game variable settings", g_result.settingsCount);
-        }
-        if (g_result.configValuesCount > 0) {
-            ImGui::BulletText("%d config value overrides", g_result.configValuesCount);
-        }
-        if (g_result.patchesCount > 0) {
-            ImGui::BulletText("%d patch configurations", g_result.patchesCount);
-        }
-        if (g_result.qolMigrated) {
-            ImGui::BulletText("QoL settings (UI toggle, memory monitor, etc.)");
-        }
+        if (g_result.settingsCount > 0) { ImGui::BulletText("%d game variable settings", g_result.settingsCount); }
+        if (g_result.configValuesCount > 0) { ImGui::BulletText("%d config value overrides", g_result.configValuesCount); }
+        if (g_result.patchesCount > 0) { ImGui::BulletText("%d patch configurations", g_result.patchesCount); }
+        if (g_result.qolMigrated) { ImGui::BulletText("QoL settings (UI toggle, memory monitor, etc.)"); }
 
         ImGui::Separator();
 
-        ImGui::TextColored(ImVec4(1.0f, 1.0f, 0.6f, 1.0f),
-            "You can safely delete the old files from your game's Bin folder:");
+        ImGui::TextColored(ImVec4(1.0f, 1.0f, 0.6f, 1.0f), "You can safely delete the old files from your game's Bin folder:");
         ImGui::BulletText("S3SS.ini");
         ImGui::BulletText("S3SS_defaults.ini");
         ImGui::BulletText("S3SS_LOG.txt");
@@ -491,4 +467,4 @@ void DismissMigrationPopup() {
     g_showPopup = false;
 }
 
-}
+} // namespace Migration

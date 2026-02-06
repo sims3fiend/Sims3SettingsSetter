@@ -7,27 +7,27 @@
 extern "C" __declspec(dllimport) NTSTATUS __stdcall NtDelayExecution(BOOLEAN Alertable, LARGE_INTEGER* Interval);
 
 class SmoothPatchPrecise : public OptimizationPatch {
-private:
+  private:
     // This is Sims3::Scripting::ScriptHostBase::IdleSimulationCycle called from Sims3::MonoEngine::MonoScriptHost::Simulate, I think
-    static inline const AddressInfo simulationFrameRateLimiterFunctionAddressInfo = {
-        .name = "SmoothPatchPrecise::simulationFrameTimingSetup",
-        .addresses = {
-            {GameVersion::Retail, 0x00769600},
-            {GameVersion::Steam,  0x007694b0},
-            {GameVersion::EA,     0x0076a430},
-        },
+    static inline const AddressInfo simulationFrameRateLimiterFunctionAddressInfo = {.name = "SmoothPatchPrecise::simulationFrameTimingSetup",
+        .addresses =
+            {
+                {GameVersion::Retail, 0x00769600},
+                {GameVersion::Steam, 0x007694b0},
+                {GameVersion::EA, 0x0076a430},
+            },
         .pattern = "C7 86 58 0A 00 00 40 8A F7 01 89 8E 5C 0A 00 00 8B 86 58 0A 00 00 8B B6 5C 0A 00 00 3B F1 7C 28 7F 04 3B C1 76 22 51 68 40 42 0F 00 56 50",
-        .patternOffset = -218
-    };
+        .patternOffset = -218};
 
     // This is the global (gSimulationThreadId) set by Sims3::Utility::SetSimulationThreadId (called from Sims3::Scripting::ScriptService::Init)
     static inline const AddressInfo simulatorThreadIDAddressInfo = {
         .name = "SmoothPatchPrecise::simulatorThreadID",
-        .addresses = {
-            {GameVersion::Retail, 0x011d9a8c},
-            {GameVersion::Steam,  0x011d8a8c},
-            {GameVersion::EA,     0x01232b3c},
-        },
+        .addresses =
+            {
+                {GameVersion::Retail, 0x011d9a8c},
+                {GameVersion::Steam, 0x011d8a8c},
+                {GameVersion::EA, 0x01232b3c},
+            },
         // Pattern: 8B 06 8B 50 10 83 C4 04 8B CE FF D2 84 C0 74 DC 6A 00 6A 00 6A 00 6A 00
         // Immediately preceding this code is a call to a function,
         // the address written to in the body of that function is the address of the simulator's thread-ID.
@@ -35,11 +35,12 @@ private:
 
     static inline const AddressInfo _alldivAddressInfo = {
         .name = "SmoothPatchPrecise::_alldiv",
-        .addresses = {
-            {GameVersion::Retail, 0x00f7f8e0},
-            {GameVersion::Steam,  0x00f7ef00},
-            {GameVersion::EA,     0x00fc47d0},
-        },
+        .addresses =
+            {
+                {GameVersion::Retail, 0x00f7f8e0},
+                {GameVersion::Steam, 0x00f7ef00},
+                {GameVersion::EA, 0x00fc47d0},
+            },
         // Immediately after the pattern of `simulationFrameTimingSetup` is a call to _alldiv.
         // (Ghidra will have recognised it anyway: you can simply search the symbols for "_alldiv").
     };
@@ -68,52 +69,46 @@ private:
 
         auto simulatorThreadIDAddress = simulatorThreadIDAddressInfo.Resolve();
 
-        if (!simulatorThreadIDAddress) {
-            return Fail("Could not resolve simulatorThreadID address");
-        }
+        if (!simulatorThreadIDAddress) { return Fail("Could not resolve simulatorThreadID address"); }
 
         uint32_t simulatorThreadID = *reinterpret_cast<const uint32_t*>(*simulatorThreadIDAddress);
 
-        if (simulatorThreadID == 0) {
-            return true;
-        }
+        if (simulatorThreadID == 0) { return true; }
 
         HANDLE simulatorThread = OpenThread(THREAD_QUERY_INFORMATION, false, simulatorThreadID);
 
-        if (simulatorThread == nullptr) {
-            return true;
-        }
+        if (simulatorThread == nullptr) { return true; }
 
         CloseHandle(simulatorThread);
 
         return Fail("The game must be restarted for this patch to be installed/uninstalled.");
     }
-public:
+
+  public:
     SmoothPatchPrecise() : OptimizationPatch("SmoothPatchPrecise", nullptr) {
         // The game's code/debug-printing refers to this as the simulation frame-rate,
         // but users are used to it being called the tick-rate, so we'll call it that in the UI.
         RegisterFloatSetting(&frameRateLimitSettingStorage, "tickRateLimit", SettingUIType::InputBox,
-            60.0f, // Most people will be using a 60 Hz display, so 60 is a reasonable default.
-            0.25f, // (oneSecondAsNanoseconds / 0.25) is close to overflowing a 32-bit value.
+            60.0f,         // Most people will be using a 60 Hz display, so 60 is a reasonable default.
+            0.25f,         // (oneSecondAsNanoseconds / 0.25) is close to overflowing a 32-bit value.
             1000000001.0f, // (oneSecondAsNanoseconds / (oneSecondAsNanoseconds + 1)) will truncate to 0.
             "Tick-rate limit",
             {
                 {"Unlimited", 1000000001.0f},
-                {   "30 TPS",   30.0f},
-                {   "60 TPS",   60.0f},
-                {   "75 TPS",   75.0f},
-                {  "120 TPS",  120.0f},
-                {  "144 TPS",  144.0f},
-                {  "160 TPS",  160.0f},
-                {  "165 TPS",  165.0f},
-                {  "200 TPS",  200.0f},
-                {  "240 TPS",  240.0f},
-                {  "360 TPS",  360.0f},
-                {  "480 TPS",  480.0f},
-                {  "500 TPS",  500.0f},
+                {"30 TPS", 30.0f},
+                {"60 TPS", 60.0f},
+                {"75 TPS", 75.0f},
+                {"120 TPS", 120.0f},
+                {"144 TPS", 144.0f},
+                {"160 TPS", 160.0f},
+                {"165 TPS", 165.0f},
+                {"200 TPS", 200.0f},
+                {"240 TPS", 240.0f},
+                {"360 TPS", 360.0f},
+                {"480 TPS", 480.0f},
+                {"500 TPS", 500.0f},
                 {"1,000 TPS", 1000.0f},
-            }
-        );
+            });
     }
 
     bool Install() override {
@@ -124,14 +119,12 @@ public:
         frameTimeAsNanoseconds = static_cast<float>(oneSecondAsNanoseconds) / frameRateLimit;
 
         uint32_t frameDelay = static_cast<uint32_t>(frameTimeAsNanoseconds);
-        #pragma warning(disable: 4146, justification: "Two's complement is not an error. Good grief.")
+#pragma warning(disable : 4146, justification : "Two's complement is not an error. Good grief.")
         uint32_t frameDelayNegated = -frameDelay;
 
         auto simulationFrameRateLimiterFunctionAddress = simulationFrameRateLimiterFunctionAddressInfo.Resolve();
 
-        if (!simulationFrameRateLimiterFunctionAddress) {
-            return Fail("Could not resolve simulationFrameRateLimiterFunction address");
-        }
+        if (!simulationFrameRateLimiterFunctionAddress) { return Fail("Could not resolve simulationFrameRateLimiterFunction address"); }
 
         uintptr_t base = *simulationFrameRateLimiterFunctionAddress;
 
@@ -170,9 +163,7 @@ public:
 
         auto _alldivAddress = _alldivAddressInfo.Resolve();
 
-        if (!_alldivAddress) {
-            return Fail("Could not resolve _alldiv address");
-        }
+        if (!_alldivAddress) { return Fail("Could not resolve _alldiv address"); }
 
         uintptr_t _alldiv = *_alldivAddress;
 
@@ -188,28 +179,50 @@ public:
         uint8_t preciseSleepCall[34] = {
             /* We could use the more compact `0x6A imm8` encoding of push here,
                but we don't so that we can pad this block with one nop instead of two. */
-            0x68, 0xFF, 0xFF, 0xFF, 0xFF, // push 0xFFFFFFFF
-            0x68, 0x9C, 0xFF, 0xFF, 0xFF, // push -100
-            0x56,                         // push esi
-            0x50,                         // push eax
+            0x68,
+            0xFF,
+            0xFF,
+            0xFF,
+            0xFF, // push 0xFFFFFFFF
+            0x68,
+            0x9C,
+            0xFF,
+            0xFF,
+            0xFF, // push -100
+            0x56, // push esi
+            0x50, // push eax
             /* We divide by -100 to convert the nanosecond-based value in eax:esi
                to a hectonanosecond-based value. */
             /* We divide by -100 instead of 100 so that the result is negative,
                which we want because NtDelayExecution uses a negative interval
                for sleeping by a relative duration. */
-        //12:
-            0xE8, 0x77, 0x77, 0x77, 0x77, // call _alldiv
+            //12:
+            0xE8,
+            0x77,
+            0x77,
+            0x77,
+            0x77, // call _alldiv
             /* The duration to sleep for is currently held across eax:edx,
                so we store those on the stack for the `Interval` argument of NtDelayExecution. */
-            0x52,                         // push edx
-            0x50,                         // push eax
-            0x54,                         // push esp
+            0x52, // push edx
+            0x50, // push eax
+            0x54, // push esp
             /* A non-alertable sleep, in hopes of consistent frame-pacing. */
-            0x6A, 0x00,                   // push 0
-        //22:
-            0xE8, 0x77, 0x77, 0x77, 0x77, // call NtDelayExecution
-            0x83, 0304, 0x08,             // add esp, 8
-            0x0F, 0x1F, 0x40, 0x00,       // nop
+            0x6A,
+            0x00, // push 0
+                  //22:
+            0xE8,
+            0x77,
+            0x77,
+            0x77,
+            0x77, // call NtDelayExecution
+            0x83,
+            0304,
+            0x08, // add esp, 8
+            0x0F,
+            0x1F,
+            0x40,
+            0x00, // nop
         };
 
         uintptr_t sleepCallBase = base + offsetOfSleepCall;
@@ -221,8 +234,7 @@ public:
         std::memcpy(preciseSleepCall + 13, &_alldivDisplacement, 4);
         std::memcpy(preciseSleepCall + 23, &delayDisplacement, 4);
 
-        successful &= PatchHelper::WriteProtectedMemory(reinterpret_cast<uint8_t*>(sleepCallBase),
-                                                        preciseSleepCall, 34, &tx.locations);
+        successful &= PatchHelper::WriteProtectedMemory(reinterpret_cast<uint8_t*>(sleepCallBase), preciseSleepCall, 34, &tx.locations);
 
         if (!successful || !PatchHelper::CommitTransaction(tx)) {
             PatchHelper::RollbackTransaction(tx);
@@ -254,17 +266,14 @@ public:
     }
 };
 
-REGISTER_PATCH(SmoothPatchPrecise, {
-    .displayName = "Smooth Patch (Precise Flavour)",
-    .description = "Adjusts the game's simulation tick-rate limiter directly. For smoother gameplay.\nMuch like LazyDuchess's original Smooth Patch.",
-    .category = "Performance",
-    .experimental = false,
-    .supportedVersions = VERSION_ALL,
-    .technicalDetails = {
-        "Credit goes to LazyDuchess for the original Smooth Patch.",
-        "This patch was authored by \"Just Harry\".",
-        "Unlike the original Smooth Patch, this patch does not alter sleep-durations unrelated to the game's simulator.",
-        "Additionally, this patch can sleep for sub-millisecond durations, so there is a difference, for example, between 750 TPS and 1,000 TPS.",
-    }
-})
-
+REGISTER_PATCH(SmoothPatchPrecise, {.displayName = "Smooth Patch (Precise Flavour)",
+                                       .description = "Adjusts the game's simulation tick-rate limiter directly. For smoother gameplay.\nMuch like LazyDuchess's original Smooth Patch.",
+                                       .category = "Performance",
+                                       .experimental = false,
+                                       .supportedVersions = VERSION_ALL,
+                                       .technicalDetails = {
+                                           "Credit goes to LazyDuchess for the original Smooth Patch.",
+                                           "This patch was authored by \"Just Harry\".",
+                                           "Unlike the original Smooth Patch, this patch does not alter sleep-durations unrelated to the game's simulator.",
+                                           "Additionally, this patch can sleep for sub-millisecond durations, so there is a difference, for example, between 750 TPS and 1,000 TPS.",
+                                       }})

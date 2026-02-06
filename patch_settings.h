@@ -10,9 +10,9 @@
 
 // UI type for settings
 enum class SettingUIType {
-    InputBox,   // Text input box for exact values
-    Slider,     // Slider for dragging values
-    Drag        // DragFloat widget (compact inline control)
+    InputBox, // Text input box for exact values
+    Slider,   // Slider for dragging values
+    Drag      // DragFloat widget (compact inline control)
 };
 
 // Callback type for notifying parent patch of setting changes
@@ -20,7 +20,7 @@ using SettingChangedCallback = std::function<void()>;
 
 // Base class for all patch settings
 class PatchSetting {
-public:
+  public:
     virtual ~PatchSetting() = default;
 
     virtual void RenderUI() = 0;
@@ -32,18 +32,14 @@ public:
     virtual bool LoadFromToml(const toml::table& settingsTable) = 0;
 
     // Set callback for when setting value changes in UI
-    void SetChangedCallback(SettingChangedCallback callback) {
-        onChangedCallback = callback;
-    }
+    void SetChangedCallback(SettingChangedCallback callback) { onChangedCallback = callback; }
 
-protected:
+  protected:
     SettingChangedCallback onChangedCallback;
 
     // Call this when value changes in UI
     void NotifyChanged() {
-        if (onChangedCallback) {
-            onChangedCallback();
-        }
+        if (onChangedCallback) { onChangedCallback(); }
     }
 
     // Helper to write to protected memory
@@ -60,7 +56,7 @@ protected:
 
 // Float setting with configurable UI type and optional presets
 class FloatSetting : public PatchSetting {
-private:
+  private:
     float* valuePtr;
     std::string name;
     float defaultValue;
@@ -71,23 +67,18 @@ private:
     SettingUIType uiType;
     void* boundAddress = nullptr;
 
-public:
-    FloatSetting(float* ptr, const std::string& name, float defaultVal,
-                 float minVal, float maxVal, const std::string& desc = "",
-                 const std::vector<std::pair<std::string, float>>& presets = {},
-                 SettingUIType uiType = SettingUIType::InputBox)
-        : valuePtr(ptr), name(name), defaultValue(defaultVal),
-          minValue(minVal), maxValue(maxVal), description(desc), presets(presets), uiType(uiType) {
+  public:
+    FloatSetting(float* ptr, const std::string& name, float defaultVal, float minVal, float maxVal, const std::string& desc = "", const std::vector<std::pair<std::string, float>>& presets = {},
+        SettingUIType uiType = SettingUIType::InputBox)
+        : valuePtr(ptr), name(name), defaultValue(defaultVal), minValue(minVal), maxValue(maxVal), description(desc), presets(presets), uiType(uiType) {
         *valuePtr = defaultValue;
     }
 
     void BindToAddress(void* address) { boundAddress = address; }
 
     void RenderUI() override {
-        #ifdef IMGUI_VERSION
-        if (!description.empty()) {
-            ImGui::Text("%s", description.c_str());
-        }
+#ifdef IMGUI_VERSION
+        if (!description.empty()) { ImGui::Text("%s", description.c_str()); }
 
         bool changed = false;
 
@@ -109,45 +100,37 @@ public:
         // Render input widget based on UI type
         ImGui::Text("Custom Value:");
         switch (uiType) {
-            case SettingUIType::Slider:
-                if (ImGui::SliderFloat(name.c_str(), valuePtr, minValue, maxValue, "%.5f")) {
-                    changed = true;
-                }
-                break;
+        case SettingUIType::Slider:
+            if (ImGui::SliderFloat(name.c_str(), valuePtr, minValue, maxValue, "%.5f")) { changed = true; }
+            break;
 
-            case SettingUIType::Drag:
-                if (ImGui::DragFloat(name.c_str(), valuePtr, (maxValue - minValue) / 100.0f, minValue, maxValue, "%.5f")) {
-                    changed = true;
-                }
-                break;
+        case SettingUIType::Drag:
+            if (ImGui::DragFloat(name.c_str(), valuePtr, (maxValue - minValue) / 100.0f, minValue, maxValue, "%.5f")) { changed = true; }
+            break;
 
-            case SettingUIType::InputBox:
-            default:
-                if (ImGui::InputFloat(name.c_str(), valuePtr, 0.0f, 0.0f, "%.5f")) {
-                    // Clamp to bounds
-                    if (*valuePtr < minValue) *valuePtr = minValue;
-                    if (*valuePtr > maxValue) *valuePtr = maxValue;
-                    changed = true;
-                }
-                ImGui::SameLine();
-                ImGui::TextDisabled("(%.5f - %.5f)", minValue, maxValue);
-                break;
+        case SettingUIType::InputBox:
+        default:
+            if (ImGui::InputFloat(name.c_str(), valuePtr, 0.0f, 0.0f, "%.5f")) {
+                // Clamp to bounds
+                if (*valuePtr < minValue) *valuePtr = minValue;
+                if (*valuePtr > maxValue) *valuePtr = maxValue;
+                changed = true;
+            }
+            ImGui::SameLine();
+            ImGui::TextDisabled("(%.5f - %.5f)", minValue, maxValue);
+            break;
         }
 
         if (changed) {
             // Auto-reapply to memory if bound
-            if (boundAddress) {
-                WriteToMemory(boundAddress, valuePtr, sizeof(float));
-            }
+            if (boundAddress) { WriteToMemory(boundAddress, valuePtr, sizeof(float)); }
             // Notify parent patch of change for debounced reinstall
             NotifyChanged();
         }
-        #endif
+#endif
     }
 
-    void SaveToToml(toml::table& settingsTable) const override {
-        settingsTable.insert(name, static_cast<double>(*valuePtr));
-    }
+    void SaveToToml(toml::table& settingsTable) const override { settingsTable.insert(name, static_cast<double>(*valuePtr)); }
 
     bool LoadFromToml(const toml::table& settingsTable) override {
         auto val = settingsTable[name].value<double>();
@@ -156,9 +139,7 @@ public:
             if (newValue < minValue) newValue = minValue;
             if (newValue > maxValue) newValue = maxValue;
             *valuePtr = newValue;
-            if (boundAddress) {
-                WriteToMemory(boundAddress, valuePtr, sizeof(float));
-            }
+            if (boundAddress) { WriteToMemory(boundAddress, valuePtr, sizeof(float)); }
             return true;
         }
         return false;
@@ -170,7 +151,7 @@ public:
 
 // Int setting with slider and optional presets
 class IntSetting : public PatchSetting {
-private:
+  private:
     int* valuePtr;
     std::string name;
     int defaultValue;
@@ -181,23 +162,18 @@ private:
     SettingUIType uiType;
     void* boundAddress = nullptr;
 
-public:
-    IntSetting(int* ptr, const std::string& name, int defaultVal,
-               int minVal, int maxVal, const std::string& desc = "",
-               const std::vector<std::pair<std::string, int>>& presets = {},
-               SettingUIType uiType = SettingUIType::Slider)
-        : valuePtr(ptr), name(name), defaultValue(defaultVal),
-          minValue(minVal), maxValue(maxVal), description(desc), presets(presets), uiType(uiType) {
+  public:
+    IntSetting(
+        int* ptr, const std::string& name, int defaultVal, int minVal, int maxVal, const std::string& desc = "", const std::vector<std::pair<std::string, int>>& presets = {}, SettingUIType uiType = SettingUIType::Slider)
+        : valuePtr(ptr), name(name), defaultValue(defaultVal), minValue(minVal), maxValue(maxVal), description(desc), presets(presets), uiType(uiType) {
         *valuePtr = defaultValue;
     }
 
     void BindToAddress(void* address) { boundAddress = address; }
 
     void RenderUI() override {
-        #ifdef IMGUI_VERSION
-        if (!description.empty()) {
-            ImGui::Text("%s", description.c_str());
-        }
+#ifdef IMGUI_VERSION
+        if (!description.empty()) { ImGui::Text("%s", description.c_str()); }
 
         bool changed = false;
 
@@ -218,43 +194,35 @@ public:
         // Render input based on UI type - TODO others xoxo
         ImGui::Text("Custom Value:");
         switch (uiType) {
-            case SettingUIType::Slider:
-                if (ImGui::SliderInt(name.c_str(), valuePtr, minValue, maxValue)) {
-                    changed = true;
-                }
-                break;
+        case SettingUIType::Slider:
+            if (ImGui::SliderInt(name.c_str(), valuePtr, minValue, maxValue)) { changed = true; }
+            break;
 
-            case SettingUIType::Drag:
-                if (ImGui::DragInt(name.c_str(), valuePtr, (maxValue - minValue) / 100.0f, minValue, maxValue)) {
-                    changed = true;
-                }
-                break;
+        case SettingUIType::Drag:
+            if (ImGui::DragInt(name.c_str(), valuePtr, (maxValue - minValue) / 100.0f, minValue, maxValue)) { changed = true; }
+            break;
 
-            case SettingUIType::InputBox:
-            default:
-                if (ImGui::InputInt(name.c_str(), valuePtr)) {
-                    // Clamp to bounds
-                    if (*valuePtr < minValue) *valuePtr = minValue;
-                    if (*valuePtr > maxValue) *valuePtr = maxValue;
-                    changed = true;
-                }
-                break;
+        case SettingUIType::InputBox:
+        default:
+            if (ImGui::InputInt(name.c_str(), valuePtr)) {
+                // Clamp to bounds
+                if (*valuePtr < minValue) *valuePtr = minValue;
+                if (*valuePtr > maxValue) *valuePtr = maxValue;
+                changed = true;
+            }
+            break;
         }
 
         if (changed) {
             // Auto-reapply to memory if bound
-            if (boundAddress) {
-                WriteToMemory(boundAddress, valuePtr, sizeof(int));
-            }
+            if (boundAddress) { WriteToMemory(boundAddress, valuePtr, sizeof(int)); }
             // Notify parent patch of change for debounced reinstall
             NotifyChanged();
         }
-        #endif
+#endif
     }
 
-    void SaveToToml(toml::table& settingsTable) const override {
-        settingsTable.insert(name, static_cast<int64_t>(*valuePtr));
-    }
+    void SaveToToml(toml::table& settingsTable) const override { settingsTable.insert(name, static_cast<int64_t>(*valuePtr)); }
 
     bool LoadFromToml(const toml::table& settingsTable) override {
         auto val = settingsTable[name].value<int64_t>();
@@ -263,9 +231,7 @@ public:
             if (newValue < minValue) newValue = minValue;
             if (newValue > maxValue) newValue = maxValue;
             *valuePtr = newValue;
-            if (boundAddress) {
-                WriteToMemory(boundAddress, valuePtr, sizeof(int));
-            }
+            if (boundAddress) { WriteToMemory(boundAddress, valuePtr, sizeof(int)); }
             return true;
         }
         return false;
@@ -277,60 +243,46 @@ public:
 
 // Bool setting with checkbox
 class BoolSetting : public PatchSetting {
-private:
+  private:
     bool* valuePtr;
     std::string name;
     bool defaultValue;
     std::string description;
     void* boundAddress = nullptr;
 
-public:
-    BoolSetting(bool* ptr, const std::string& name, bool defaultVal,
-                const std::string& desc = "")
-        : valuePtr(ptr), name(name), defaultValue(defaultVal), description(desc) {
-        *valuePtr = defaultValue;
-    }
+  public:
+    BoolSetting(bool* ptr, const std::string& name, bool defaultVal, const std::string& desc = "") : valuePtr(ptr), name(name), defaultValue(defaultVal), description(desc) { *valuePtr = defaultValue; }
 
     void BindToAddress(void* address) { boundAddress = address; }
 
     void RenderUI() override {
-        #ifdef IMGUI_VERSION
+#ifdef IMGUI_VERSION
         bool changed = false;
 
-        if (ImGui::Checkbox(name.c_str(), valuePtr)) {
-            changed = true;
-        }
+        if (ImGui::Checkbox(name.c_str(), valuePtr)) { changed = true; }
 
         if (!description.empty()) {
             ImGui::SameLine();
             ImGui::TextDisabled("(?)");
-            if (ImGui::IsItemHovered()) {
-                ImGui::SetTooltip("%s", description.c_str());
-            }
+            if (ImGui::IsItemHovered()) { ImGui::SetTooltip("%s", description.c_str()); }
         }
 
         if (changed) {
             // Auto-reapply to memory if bound
-            if (boundAddress) {
-                WriteToMemory(boundAddress, valuePtr, sizeof(bool));
-            }
+            if (boundAddress) { WriteToMemory(boundAddress, valuePtr, sizeof(bool)); }
             // Notify parent patch of change for debounced reinstall
             NotifyChanged();
         }
-        #endif
+#endif
     }
 
-    void SaveToToml(toml::table& settingsTable) const override {
-        settingsTable.insert(name, *valuePtr);
-    }
+    void SaveToToml(toml::table& settingsTable) const override { settingsTable.insert(name, *valuePtr); }
 
     bool LoadFromToml(const toml::table& settingsTable) override {
         auto val = settingsTable[name].value<bool>();
         if (val.has_value()) {
             *valuePtr = val.value();
-            if (boundAddress) {
-                WriteToMemory(boundAddress, valuePtr, sizeof(bool));
-            }
+            if (boundAddress) { WriteToMemory(boundAddress, valuePtr, sizeof(bool)); }
             return true;
         }
         return false;
@@ -342,7 +294,7 @@ public:
 
 // Enum/Choice setting with dropdown
 class EnumSetting : public PatchSetting {
-private:
+  private:
     int* valuePtr;
     std::string name;
     int defaultValue;
@@ -350,28 +302,22 @@ private:
     std::vector<std::string> choices;
     void* boundAddress = nullptr;
 
-public:
-    EnumSetting(int* ptr, const std::string& name, int defaultVal,
-                const std::string& desc, const std::vector<std::string>& choices)
-        : valuePtr(ptr), name(name), defaultValue(defaultVal),
-          description(desc), choices(choices) {
+  public:
+    EnumSetting(int* ptr, const std::string& name, int defaultVal, const std::string& desc, const std::vector<std::string>& choices)
+        : valuePtr(ptr), name(name), defaultValue(defaultVal), description(desc), choices(choices) {
         *valuePtr = defaultValue;
     }
 
     void BindToAddress(void* address) { boundAddress = address; }
 
     void RenderUI() override {
-        #ifdef IMGUI_VERSION
-        if (!description.empty()) {
-            ImGui::Text("%s", description.c_str());
-        }
+#ifdef IMGUI_VERSION
+        if (!description.empty()) { ImGui::Text("%s", description.c_str()); }
 
         bool changed = false;
 
         // Create combo box
-        const char* currentChoice = (*valuePtr >= 0 && *valuePtr < static_cast<int>(choices.size()))
-                                    ? choices[*valuePtr].c_str()
-                                    : "Invalid";
+        const char* currentChoice = (*valuePtr >= 0 && *valuePtr < static_cast<int>(choices.size())) ? choices[*valuePtr].c_str() : "Invalid";
 
         if (ImGui::BeginCombo(name.c_str(), currentChoice)) {
             for (size_t i = 0; i < choices.size(); i++) {
@@ -380,27 +326,21 @@ public:
                     *valuePtr = static_cast<int>(i);
                     changed = true;
                 }
-                if (isSelected) {
-                    ImGui::SetItemDefaultFocus();
-                }
+                if (isSelected) { ImGui::SetItemDefaultFocus(); }
             }
             ImGui::EndCombo();
         }
 
         if (changed) {
             // Auto-reapply to memory if bound
-            if (boundAddress) {
-                WriteToMemory(boundAddress, valuePtr, sizeof(int));
-            }
+            if (boundAddress) { WriteToMemory(boundAddress, valuePtr, sizeof(int)); }
             // Notify parent patch of change for debounced reinstall
             NotifyChanged();
         }
-        #endif
+#endif
     }
 
-    void SaveToToml(toml::table& settingsTable) const override {
-        settingsTable.insert(name, static_cast<int64_t>(*valuePtr));
-    }
+    void SaveToToml(toml::table& settingsTable) const override { settingsTable.insert(name, static_cast<int64_t>(*valuePtr)); }
 
     bool LoadFromToml(const toml::table& settingsTable) override {
         auto val = settingsTable[name].value<int64_t>();
@@ -408,9 +348,7 @@ public:
             int newValue = static_cast<int>(val.value());
             if (newValue >= 0 && newValue < static_cast<int>(choices.size())) {
                 *valuePtr = newValue;
-                if (boundAddress) {
-                    WriteToMemory(boundAddress, valuePtr, sizeof(int));
-                }
+                if (boundAddress) { WriteToMemory(boundAddress, valuePtr, sizeof(int)); }
                 return true;
             }
         }

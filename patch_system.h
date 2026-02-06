@@ -9,11 +9,11 @@
 
 // Specific game versions we support
 enum class GameVersion : uint8_t {
-    Retail     = 0,   // 1.67.2.024002 - Disc
-    Steam      = 1,   // 1.67.2.024037 - Steam
-    EA         = 2,   // 1.69.47.024017 - EA App
-    EA_1_69_43 = 3,   // 1.69.43.024017 - EA App/Origin
-    Unknown    = 255
+    Retail = 0,     // 1.67.2.024002 - Disc
+    Steam = 1,      // 1.67.2.024037 - Steam
+    EA = 2,         // 1.69.47.024017 - EA App
+    EA_1_69_43 = 3, // 1.69.43.024017 - EA App/Origin
+    Unknown = 255
 };
 
 constexpr size_t GAME_VERSION_COUNT = 4;
@@ -21,16 +21,16 @@ constexpr size_t GAME_VERSION_COUNT = 4;
 // Bitmask for declaring which versions a patch supports
 using GameVersionMask = uint8_t;
 constexpr GameVersionMask VERSION_RETAIL = (1 << static_cast<uint8_t>(GameVersion::Retail));
-constexpr GameVersionMask VERSION_STEAM  = (1 << static_cast<uint8_t>(GameVersion::Steam));
-constexpr GameVersionMask VERSION_EA     = (1 << static_cast<uint8_t>(GameVersion::EA));
-constexpr GameVersionMask VERSION_ALL    = VERSION_RETAIL | VERSION_STEAM | VERSION_EA;
+constexpr GameVersionMask VERSION_STEAM = (1 << static_cast<uint8_t>(GameVersion::Steam));
+constexpr GameVersionMask VERSION_EA = (1 << static_cast<uint8_t>(GameVersion::EA));
+constexpr GameVersionMask VERSION_ALL = VERSION_RETAIL | VERSION_STEAM | VERSION_EA;
 
 // TimeDateStamp field from PE header
 constexpr std::array<uint32_t, GAME_VERSION_COUNT> VERSION_TIMESTAMPS = {
-    0x52D872DA,  // Retail 1.67.2.024002
-    0x52DEC247,  // Steam 1.67.2.024037
-    0x6707155C,  // EA 1.69.47.024017
-    0x568D4BAC,  // EA 1.69.43.024017
+    0x52D872DA, // Retail 1.67.2.024002
+    0x52DEC247, // Steam 1.67.2.024037
+    0x6707155C, // EA 1.69.47.024017
+    0x568D4BAC, // EA 1.69.43.024017
 };
 
 constexpr std::array<const char*, GAME_VERSION_COUNT> VERSION_NAMES = {
@@ -67,9 +67,7 @@ inline bool DetectGameVersion() {
 
 // Helper to get version name string
 inline const char* GetGameVersionName() {
-    if (g_gameVersion == GameVersion::Unknown) {
-        return "Unknown";
-    }
+    if (g_gameVersion == GameVersion::Unknown) { return "Unknown"; }
     return VERSION_NAMES[static_cast<size_t>(g_gameVersion)];
 }
 
@@ -80,9 +78,7 @@ inline bool IsVersionOutdated(GameVersion version, uint32_t timeDateStamp) {
 
 // Check if current version matches a version mask
 inline bool IsVersionSupported(GameVersionMask mask) {
-    if (g_gameVersion == GameVersion::Unknown) {
-        return false;
-    }
+    if (g_gameVersion == GameVersion::Unknown) { return false; }
     return (mask & (1 << static_cast<uint8_t>(g_gameVersion))) != 0;
 }
 
@@ -98,25 +94,23 @@ struct PatchMetadata {
 
 // Global patch registry
 class PatchRegistry {
-public:
+  public:
     using PatchFactory = std::function<std::unique_ptr<OptimizationPatch>()>;
-    
+
     struct PatchEntry {
         PatchFactory factory;
         PatchMetadata metadata;
     };
 
-private:
+  private:
     static std::vector<PatchEntry>& GetEntries() {
         static std::vector<PatchEntry> entries;
         return entries;
     }
 
-public:
+  public:
     // Register a patch factory with metadata
-    static void Register(PatchFactory factory, PatchMetadata metadata) {
-        GetEntries().push_back({factory, metadata});
-    }
+    static void Register(PatchFactory factory, PatchMetadata metadata) { GetEntries().push_back({factory, metadata}); }
 
     // Create all registered patches and add them to OptimizationManager
     static void InstantiateAll(OptimizationManager& manager) {
@@ -131,27 +125,16 @@ public:
     }
 
     // Get all registered entries (useful for inspection)
-    static const std::vector<PatchEntry>& GetAll() {
-        return GetEntries();
-    }
+    static const std::vector<PatchEntry>& GetAll() { return GetEntries(); }
 };
 
 // Auto-registration helper
 struct PatchRegistrar {
-    PatchRegistrar(PatchRegistry::PatchFactory factory, PatchMetadata metadata) {
-        PatchRegistry::Register(factory, metadata);
-    }
+    PatchRegistrar(PatchRegistry::PatchFactory factory, PatchMetadata metadata) { PatchRegistry::Register(factory, metadata); }
 };
 
 // Macro for registering a custom patch class
-#define REGISTER_PATCH(ClassName, ...) \
-    static PatchRegistrar _patch_registrar_##ClassName([]() -> std::unique_ptr<OptimizationPatch> { \
-        return std::make_unique<ClassName>(); \
-    }, __VA_ARGS__);
+#define REGISTER_PATCH(ClassName, ...) static PatchRegistrar _patch_registrar_##ClassName([]() -> std::unique_ptr<OptimizationPatch> { return std::make_unique<ClassName>(); }, __VA_ARGS__);
 
 // Macro for registering a custom patch with a different factory name
-#define REGISTER_CUSTOM_PATCH(Name, ClassName, ...) \
-    static PatchRegistrar _patch_registrar_##Name([]() -> std::unique_ptr<OptimizationPatch> { \
-        return std::make_unique<ClassName>(); \
-    }, __VA_ARGS__);
-
+#define REGISTER_CUSTOM_PATCH(Name, ClassName, ...) static PatchRegistrar _patch_registrar_##Name([]() -> std::unique_ptr<OptimizationPatch> { return std::make_unique<ClassName>(); }, __VA_ARGS__);

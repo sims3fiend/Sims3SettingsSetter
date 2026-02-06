@@ -6,11 +6,21 @@
 #include <vector>
 
 // Forward declare toml table to avoid header dependency
-namespace toml { inline namespace v3 { class table; } }
+namespace toml {
+inline namespace v3 {
+class table;
+}
+} // namespace toml
 
-struct Vector2 { float x, y; };
-struct Vector3 { float x, y, z; };
-struct Vector4 { float x, y, z, w; };
+struct Vector2 {
+    float x, y;
+};
+struct Vector3 {
+    float x, y, z;
+};
+struct Vector4 {
+    float x, y, z, w;
+};
 
 struct SettingMetadata {
     std::wstring name;
@@ -24,31 +34,25 @@ struct SettingMetadata {
 };
 
 class Setting {
-public:
+  public:
     using ValueType = std::variant<bool, int, unsigned int, float, Vector2, Vector3, Vector4>;
-    
-    Setting(void* address, const SettingMetadata& metadata, ValueType defaultValue)
-        : m_address(address)
-        , m_metadata(metadata)
-        , m_defaultValue(defaultValue)
-        , m_isOverridden(false)
-        , m_hasUnsavedChanges(false)
-    {}
-    
+
+    Setting(void* address, const SettingMetadata& metadata, ValueType defaultValue) : m_address(address), m_metadata(metadata), m_defaultValue(defaultValue), m_isOverridden(false), m_hasUnsavedChanges(false) {}
+
     void* GetAddress() const { return m_address; }
     SettingMetadata& GetMetadata() { return m_metadata; }
     const SettingMetadata& GetMetadata() const { return m_metadata; }
     ValueType GetValue() const;
     void SetValue(const ValueType& value);
     const ValueType& GetDefaultValue() const { return m_defaultValue; }
-    
+
     bool IsOverridden() const { return m_isOverridden; }
     void SetOverridden(bool overridden) { m_isOverridden = overridden; }
-    
+
     bool HasUnsavedChanges() const { return m_hasUnsavedChanges; }
     void SetUnsavedChanges(bool unsaved) { m_hasUnsavedChanges = unsaved; }
 
-private:
+  private:
     void* m_address;
     SettingMetadata m_metadata;
     ValueType m_defaultValue;
@@ -63,14 +67,7 @@ struct PendingSetting {
 };
 
 // Add near the top with other enums
-enum class ConfigValueType {
-    Integer,
-    Float,
-    Boolean,
-    WideString,
-    String,
-    Unknown
-};
+enum class ConfigValueType { Integer, Float, Boolean, WideString, String, Unknown };
 
 // Update the existing ConfigValueInfo struct
 struct ConfigValueInfo {
@@ -82,13 +79,13 @@ struct ConfigValueInfo {
 };
 
 class SettingsManager {
-public:
+  public:
     static SettingsManager& Get();
-    
+
     void RegisterSetting(const std::wstring& name, std::unique_ptr<Setting> setting);
     Setting* GetSetting(const std::wstring& name);
     const std::unordered_map<std::wstring, std::unique_ptr<Setting>>& GetAllSettings() const;
-    
+
     void SetSettingCategory(const std::wstring& name, const std::wstring& category);
     std::vector<std::wstring> GetUniqueCategories() const;
 
@@ -113,7 +110,7 @@ public:
     // Check if any setting has unsaved changes
     bool HasAnyUnsavedChanges() const;
 
-private:
+  private:
     SettingsManager() : m_initialized(false) {}
     std::unordered_map<std::wstring, std::unique_ptr<Setting>> m_settings;
     std::unordered_map<std::wstring, PendingSetting> m_pendingSavedValues;

@@ -14,14 +14,15 @@ struct PatchMetadata;
 
 // Base class for optimization patches
 class OptimizationPatch {
-public:
+  public:
     struct SampleWindow {
-        volatile LONG calls{ 0 };
+        volatile LONG calls{0};
         std::chrono::steady_clock::time_point start;
     };
 
     static constexpr auto SETTING_CHANGE_DEBOUNCE = std::chrono::seconds(2);
-protected:
+
+  protected:
     std::mutex statsMutex;
     std::mutex patchMutex;
     SampleWindow currentWindow;
@@ -29,7 +30,7 @@ protected:
 
     void* originalFunc;
     std::string patchName;
-    std::atomic<bool> isEnabled{ false };
+    std::atomic<bool> isEnabled{false};
     double lastSampleRate = 0.0;
     PatchMetadata* metadata = nullptr;
     std::string lastError;
@@ -51,33 +52,27 @@ protected:
     }
 
     // Settings registration helpers
-    void RegisterFloatSetting(float* ptr, const std::string& name, SettingUIType uiType,
-                             float defaultVal, float minVal, float maxVal,
-                             const std::string& desc = "",
-                             const std::vector<std::pair<std::string, float>>& presets = {}) {
+    void RegisterFloatSetting(
+        float* ptr, const std::string& name, SettingUIType uiType, float defaultVal, float minVal, float maxVal, const std::string& desc = "", const std::vector<std::pair<std::string, float>>& presets = {}) {
         auto setting = std::make_unique<FloatSetting>(ptr, name, defaultVal, minVal, maxVal, desc, presets, uiType);
         setting->SetChangedCallback([this]() { NotifySettingChanged(); });
         settings.push_back(std::move(setting));
     }
 
-    void RegisterIntSetting(int* ptr, const std::string& name, int defaultVal,
-                           int minVal, int maxVal, const std::string& desc = "",
-                           const std::vector<std::pair<std::string, int>>& presets = {},
-                           SettingUIType uiType = SettingUIType::Slider) {
+    void RegisterIntSetting(
+        int* ptr, const std::string& name, int defaultVal, int minVal, int maxVal, const std::string& desc = "", const std::vector<std::pair<std::string, int>>& presets = {}, SettingUIType uiType = SettingUIType::Slider) {
         auto setting = std::make_unique<IntSetting>(ptr, name, defaultVal, minVal, maxVal, desc, presets, uiType);
         setting->SetChangedCallback([this]() { NotifySettingChanged(); });
         settings.push_back(std::move(setting));
     }
 
-    void RegisterBoolSetting(bool* ptr, const std::string& name, bool defaultVal,
-                            const std::string& desc = "") {
+    void RegisterBoolSetting(bool* ptr, const std::string& name, bool defaultVal, const std::string& desc = "") {
         auto setting = std::make_unique<BoolSetting>(ptr, name, defaultVal, desc);
         setting->SetChangedCallback([this]() { NotifySettingChanged(); });
         settings.push_back(std::move(setting));
     }
 
-    void RegisterEnumSetting(int* ptr, const std::string& name, int defaultVal,
-                            const std::string& desc, const std::vector<std::string>& choices) {
+    void RegisterEnumSetting(int* ptr, const std::string& name, int defaultVal, const std::string& desc, const std::vector<std::string>& choices) {
         auto setting = std::make_unique<EnumSetting>(ptr, name, defaultVal, desc, choices);
         setting->SetChangedCallback([this]() { NotifySettingChanged(); });
         settings.push_back(std::move(setting));
@@ -90,14 +85,11 @@ protected:
                 // Use dynamic_cast to get the specific type and bind
                 if (auto* floatSetting = dynamic_cast<FloatSetting*>(setting.get())) {
                     floatSetting->BindToAddress(memoryAddress);
-                }
-                else if (auto* intSetting = dynamic_cast<IntSetting*>(setting.get())) {
+                } else if (auto* intSetting = dynamic_cast<IntSetting*>(setting.get())) {
                     intSetting->BindToAddress(memoryAddress);
-                }
-                else if (auto* boolSetting = dynamic_cast<BoolSetting*>(setting.get())) {
+                } else if (auto* boolSetting = dynamic_cast<BoolSetting*>(setting.get())) {
                     boolSetting->BindToAddress(memoryAddress);
-                }
-                else if (auto* enumSetting = dynamic_cast<EnumSetting*>(setting.get())) {
+                } else if (auto* enumSetting = dynamic_cast<EnumSetting*>(setting.get())) {
                     enumSetting->BindToAddress(memoryAddress);
                 }
                 return;
@@ -105,13 +97,12 @@ protected:
         }
     }
 
-public:
-    OptimizationPatch(const std::string& name, void* original)
-        : patchName(name), originalFunc(original), lastError("") {
+  public:
+    OptimizationPatch(const std::string& name, void* original) : patchName(name), originalFunc(original), lastError("") {
         currentWindow.start = std::chrono::steady_clock::now();
         currentWindow.calls = 0;
     }
-    
+
     virtual ~OptimizationPatch() = default;
 
     virtual bool Install() = 0;
@@ -151,43 +142,33 @@ public:
 
     // Version compatibility check
     bool IsCompatibleWithCurrentVersion() const;
-    
+
     // Override this for custom UI in ImGui (called when patch is enabled)
     // By default, auto-renders all registered settings
     virtual void RenderCustomUI() {
-        #ifdef IMGUI_VERSION
+#ifdef IMGUI_VERSION
         if (!settings.empty()) {
             ImGui::Text("Settings:");
             ImGui::Separator();
-            for (auto& setting : settings) {
-                setting->RenderUI();
-            }
+            for (auto& setting : settings) { setting->RenderUI(); }
         }
-        #endif
+#endif
     }
 
-    static constexpr size_t GetCurrentWindowOffset() { 
-        return offsetof(OptimizationPatch, currentWindow); 
-    }
-    
-    static constexpr size_t GetCallsOffset() { 
-        return offsetof(SampleWindow, calls); 
-    }
+    static constexpr size_t GetCurrentWindowOffset() { return offsetof(OptimizationPatch, currentWindow); }
+
+    static constexpr size_t GetCallsOffset() { return offsetof(SampleWindow, calls); }
 
     // TOML serialization
     virtual void SaveToToml(toml::table& patchTable) const {
         patchTable.insert("enabled", isEnabled.load());
 
-        for (const auto& setting : settings) {
-            setting->SaveToToml(patchTable);
-        }
+        for (const auto& setting : settings) { setting->SaveToToml(patchTable); }
     }
 
     virtual bool LoadFromToml(const toml::table& patchTable) {
         // Load settings first (before Enabled, so patches install with correct values)
-        for (auto& setting : settings) {
-            setting->LoadFromToml(patchTable);
-        }
+        for (auto& setting : settings) { setting->LoadFromToml(patchTable); }
 
         // Then handle Enabled state
         auto enabled = patchTable["enabled"].value<bool>();
@@ -195,21 +176,19 @@ public:
             bool currentlyEnabled = isEnabled.load();
             if (enabled.value() && !currentlyEnabled) {
                 return Install();
-            }
-            else if (!enabled.value() && currentlyEnabled) {
+            } else if (!enabled.value() && currentlyEnabled) {
                 return Uninstall();
             }
         }
         return true;
     }
-
 };
 
 // CPU feature detection
 struct CPUFeatures {
-    bool hasSSE41{ false };
-    bool hasFMA{ false };
-    bool hasAVX2{ false };
+    bool hasSSE41{false};
+    bool hasFMA{false};
+    bool hasAVX2{false};
 
     CPUFeatures();
     static const CPUFeatures& Get();
@@ -220,7 +199,7 @@ class OptimizationManager {
     std::vector<std::unique_ptr<OptimizationPatch>> patches;
     bool m_hasUnsavedChanges = false;
 
-public:
+  public:
     static OptimizationManager& Get();
 
     void RegisterPatch(std::unique_ptr<OptimizationPatch> patch);
@@ -236,4 +215,4 @@ public:
     // Unsaved changes tracking
     bool HasUnsavedChanges() const { return m_hasUnsavedChanges; }
     void SetUnsavedChanges(bool unsaved) { m_hasUnsavedChanges = unsaved; }
-}; 
+};

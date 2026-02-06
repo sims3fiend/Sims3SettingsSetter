@@ -20,4 +20,4 @@ void CleanupD3D9Hook();
 // Hook functions
 HRESULT __stdcall HookedEndScene(LPDIRECT3DDEVICE9 pDevice);
 HRESULT __stdcall HookedReset(LPDIRECT3DDEVICE9 pDevice, D3DPRESENT_PARAMETERS* pPresentationParameters);
-LRESULT CALLBACK HookedWndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam); 
+LRESULT CALLBACK HookedWndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam);

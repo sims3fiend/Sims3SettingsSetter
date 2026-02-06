@@ -41,12 +41,12 @@ enum class SettingType { //TODO check these please :) maybe the dll thing has th
 
 enum class RegistrationType {
     Direct = 0,
-    ViaCommonHandler = -100000  // Magic value used by the game, literally no clue?
+    ViaCommonHandler = -100000 // Magic value used by the game, literally no clue?
 };
 
 // Base class for settings hooks
 class SettingsHook {
-protected:
+  protected:
     void* originalFunc;
     std::string hookName;
 
@@ -58,19 +58,13 @@ protected:
         return result;
     }
 
-    template<typename T>
-    static bool IsSafeToRead(void* ptr, size_t size = sizeof(T)) {
+    template <typename T> static bool IsSafeToRead(void* ptr, size_t size = sizeof(T)) {
         if (!ptr) return false;
         __try {
             volatile char dummy;
-            for (size_t i = 0; i < size; i++) {
-                dummy = reinterpret_cast<char*>(ptr)[i];
-            }
+            for (size_t i = 0; i < size; i++) { dummy = reinterpret_cast<char*>(ptr)[i]; }
             return true;
-        }
-        __except (EXCEPTION_EXECUTE_HANDLER) {
-            return false;
-        }
+        } __except (EXCEPTION_EXECUTE_HANDLER) { return false; }
     }
 
     void LogBasicInfo(std::stringstream& log, void* thisPtr, void* targetAddr, const wchar_t* name) {
@@ -80,14 +74,12 @@ protected:
 
         if (name && IsSafeToRead<wchar_t>(const_cast<wchar_t*>(name))) {
             log << "Setting Name: \"" << WideToNarrow(name) << "\"\n";
-        }
-        else {
+        } else {
             log << "Setting Name: <INVALID PTR>\n";
         }
     }
 
-    void RegisterSetting(void* targetAddr, const wchar_t* name, const Setting::ValueType& defaultValue,
-        float min = 0.0f, float max = 1.0f, float step = 0.1f) {
+    void RegisterSetting(void* targetAddr, const wchar_t* name, const Setting::ValueType& defaultValue, float min = 0.0f, float max = 1.0f, float step = 0.1f) {
         if (!targetAddr || !name) return;
 
         SettingMetadata metadata;
@@ -111,7 +103,7 @@ protected:
         SettingsManager::Get().RegisterSetting(name, std::move(setting));
     }
 
-public:
+  public:
     SettingsHook(void* original, const char* name) : originalFunc(original), hookName(name) {}
     virtual ~SettingsHook() = default;
 
@@ -124,26 +116,20 @@ Utils::Logger* Utils::Logger::s_instance = nullptr;
 
 // VariableRegistryHook
 class VariableRegistryHook : public SettingsHook {
-    typedef void(__thiscall* FuncType)(void* thisPtr, int param2, void* ptr,
-        const wchar_t* name, int type, int param5, int param6, float param7,
-        float param8, float param9);
+    typedef void(__thiscall* FuncType)(void* thisPtr, int param2, void* ptr, const wchar_t* name, int type, int param5, int param6, float param7, float param8, float param9);
     static inline VariableRegistryHook* instance = nullptr;
 
-    static void __fastcall HookFunc(void* thisPtr, void* edx, int param2, void* ptr,
-        const wchar_t* name, int type, int param5, int param6, float param7,
-        float param8, float param9) {
+    static void __fastcall HookFunc(void* thisPtr, void* edx, int param2, void* ptr, const wchar_t* name, int type, int param5, int param6, float param7, float param8, float param9) {
 
         // Determine actual type based on the parameters
         SettingType actualType;
         if (type == static_cast<int>(RegistrationType::ViaCommonHandler)) {
             if (param5 == 100000 && param6 == 1) {
                 actualType = static_cast<SettingType>(param2);
-            }
-            else {
+            } else {
                 actualType = SettingType::Unknown;
             }
-        }
-        else {
+        } else {
             actualType = static_cast<SettingType>(type);
         }
 
@@ -154,8 +140,7 @@ class VariableRegistryHook : public SettingsHook {
                 int value = *static_cast<int*>(ptr);
                 // Clamp step to minimum 1.0 for integer types
                 float step = (param9 < 1.0f) ? 1.0f : param9;
-                instance->RegisterSetting(ptr, name, value,
-                    static_cast<float>(param5), static_cast<float>(param6), step);
+                instance->RegisterSetting(ptr, name, value, static_cast<float>(param5), static_cast<float>(param6), step);
                 break;
             }
             case SettingType::Uint32: {
@@ -166,9 +151,7 @@ class VariableRegistryHook : public SettingsHook {
                 float maxVal = static_cast<float>(param6);
 
                 // If min > max, swap them to prevent std::clamp errors
-                if (minVal > maxVal) {
-                    std::swap(minVal, maxVal);
-                }
+                if (minVal > maxVal) { std::swap(minVal, maxVal); }
 
                 // Clamp step to minimum 1.0 for integer types
                 float step = (param9 < 1.0f) ? 1.0f : param9;
@@ -191,19 +174,17 @@ class VariableRegistryHook : public SettingsHook {
             }
             case SettingType::Vector2: {
                 float* values = static_cast<float*>(ptr);
-                instance->RegisterSetting(ptr, name, Vector2{ values[0], values[1] }, param7, param8, param9);
+                instance->RegisterSetting(ptr, name, Vector2{values[0], values[1]}, param7, param8, param9);
                 break;
             }
             case SettingType::Vector3: {
                 float* values = static_cast<float*>(ptr);
-                instance->RegisterSetting(ptr, name, Vector3{ values[0], values[1], values[2] },
-                    param7, param8, param9);
+                instance->RegisterSetting(ptr, name, Vector3{values[0], values[1], values[2]}, param7, param8, param9);
                 break;
             }
             case SettingType::Vector4: {
                 float* values = static_cast<float*>(ptr);
-                instance->RegisterSetting(ptr, name, Vector4{ values[0], values[1], values[2], values[3] },
-                    param7, param8, param9);
+                instance->RegisterSetting(ptr, name, Vector4{values[0], values[1], values[2], values[3]}, param7, param8, param9);
                 break;
             }
             default: {
@@ -231,18 +212,15 @@ class VariableRegistryHook : public SettingsHook {
                 std::string error;
                 if (!ConfigStore::Get().SaveDefaults(&error)) {
                     LOG_ERROR("Failed to save default settings: " + error);
-                }
-                else {
+                } else {
                     LOG_INFO("Successfully saved default settings");
                 }
             }
         }
     }
 
-public:
-    VariableRegistryHook(void* original) : SettingsHook(original, "VariableRegistry") {
-        instance = this;
-    }
+  public:
+    VariableRegistryHook(void* original) : SettingsHook(original, "VariableRegistry") { instance = this; }
 
     void Install() override { DetourAttach(&originalFunc, HookFunc); }
     void Uninstall() override { DetourDetach(&originalFunc, HookFunc); }
@@ -285,22 +263,16 @@ class ConfigRetrievalHook : public SettingsHook {
                     keyLen++;
                 }
 
-                if (!categoryValid || !keyValid) {
-                    return result;
-                }
+                if (!categoryValid || !keyValid) { return result; }
 
                 std::wstring keyStr(key, keyLen);
                 std::wstring categoryStr(category, categoryLen);
 
                 // Ensure category is never empty
-                if (categoryStr.empty()) {
-                    categoryStr = L"Uncategorized";
-                }
+                if (categoryStr.empty()) { categoryStr = L"Uncategorized"; }
 
                 // Skip Cfg and Assets prefixes
-                if (keyStr.substr(0, 3) == L"Cfg" || keyStr.substr(0, 6) == L"Assets") {
-                    return result;
-                }
+                if (keyStr.substr(0, 3) == L"Cfg" || keyStr.substr(0, 6) == L"Assets") { return result; }
 
                 // Create a unique key for the config value cache
                 std::string fullKey = Utils::WideToUtf8(categoryStr) + "." + Utils::WideToUtf8(keyStr);
@@ -337,11 +309,10 @@ class ConfigRetrievalHook : public SettingsHook {
                         info.currentValue = originalValue;
                         info.bufferSize = requiredCapacity;
                         info.valueType = DetectValueType(*outValue);
-                    }
-                    else {
+                    } else {
                         // For non-existent values, store empty value but reasonable buffer size
                         info.currentValue = L"";
-                        info.bufferSize = 256;  // Default reasonable size
+                        info.bufferSize = 256; // Default reasonable size
                         info.valueType = ConfigValueType::Unknown;
                     }
                     info.isModified = false;
@@ -349,13 +320,8 @@ class ConfigRetrievalHook : public SettingsHook {
                 }
 
                 // Try to find and update the category for this setting
-                if (auto* setting = SettingsManager::Get().GetSetting(keyStr.c_str())) {
-                    setting->GetMetadata().category = categoryStr;
-                }
-            }
-            catch (const std::exception& e) {
-                LOG_ERROR("Exception in ConfigRetrievalHook: " + std::string(e.what()));
-            }
+                if (auto* setting = SettingsManager::Get().GetSetting(keyStr.c_str())) { setting->GetMetadata().category = categoryStr; }
+            } catch (const std::exception& e) { LOG_ERROR("Exception in ConfigRetrievalHook: " + std::string(e.what())); }
         }
 
         return result;
@@ -368,26 +334,19 @@ class ConfigRetrievalHook : public SettingsHook {
         std::wstring str = value;
 
         // Check for boolean
-        if (str == L"true" || str == L"false" || str == L"0" || str == L"1") {
-            return ConfigValueType::Boolean;
-        }
+        if (str == L"true" || str == L"false" || str == L"0" || str == L"1") { return ConfigValueType::Boolean; }
 
         // Check if it's a number
         try {
             size_t pos;
             // Try integer first
             std::stoi(str, &pos);
-            if (pos == str.length()) {
-                return ConfigValueType::Integer;
-            }
+            if (pos == str.length()) { return ConfigValueType::Integer; }
 
             // Try float
             std::stof(str, &pos);
-            if (pos == str.length()) {
-                return ConfigValueType::Float;
-            }
-        }
-        catch (...) {
+            if (pos == str.length()) { return ConfigValueType::Float; }
+        } catch (...) {
             // Not a number
         }
 
@@ -403,28 +362,22 @@ class ConfigRetrievalHook : public SettingsHook {
         return hasWideChar ? ConfigValueType::WideString : ConfigValueType::String;
     }
 
-public:
+  public:
     ConfigRetrievalHook() : SettingsHook(nullptr, "Config Retrieval") {
         // Pattern for the config function
         const char* pattern = "83 EC 2C 8B 44 24 ?? 53 55 56 57 33 DB 8B F1 BF ?? ?? ?? ?? 50 8D 4C 24 ?? 89 5C 24 ?? 89 5C 24 ?? 89 5C 24 ?? 89 7C 24 ??";
 
         // Find the function
         uintptr_t addr = Pattern::Scan(pattern);
-        if (!addr) {
-            throw std::runtime_error("Failed to find config function pattern");
-        }
+        if (!addr) { throw std::runtime_error("Failed to find config function pattern"); }
 
         // Verify the string reference
         uintptr_t stringAddr = *(uintptr_t*)(addr + 16);
-        if (!IsSafeToRead<char>((char*)stringAddr)) {
-            throw std::runtime_error("Invalid string reference");
-        }
+        if (!IsSafeToRead<char>((char*)stringAddr)) { throw std::runtime_error("Invalid string reference"); }
 
         // Verify it's the correct function by checking for the string
         const char* str = (const char*)stringAddr;
-        if (strcmp(str, "Services/ConfigRegistry") != 0) {
-            throw std::runtime_error("Invalid config function pattern match");
-        }
+        if (strcmp(str, "Services/ConfigRegistry") != 0) { throw std::runtime_error("Invalid config function pattern match"); }
 
         originalFunc = (void*)addr;
         instance = this;
@@ -435,21 +388,15 @@ public:
 };
 
 class CustomDebugVarHook : public SettingsHook {
-    typedef void(__thiscall* FuncType)(void* thisPtr, int param2, int param3, wchar_t* name,
-        int param5, int param6, float param7, float param8, float param9);
+    typedef void(__thiscall* FuncType)(void* thisPtr, int param2, int param3, wchar_t* name, int param5, int param6, float param7, float param8, float param9);
     static inline CustomDebugVarHook* instance = nullptr;
 
-    static void __fastcall HookFunc(void* thisPtr, void* edx, int param2, int param3, wchar_t* name,
-        int param5, int param6, float param7, float param8, float param9) {
+    static void __fastcall HookFunc(void* thisPtr, void* edx, int param2, int param3, wchar_t* name, int param5, int param6, float param7, float param8, float param9) {
 
         // Log raw parameters
         std::stringstream rawLog;
-        rawLog << "CustomDebugVar Raw - param2: " << param2
-            << ", param3: 0x" << std::hex << param3
-            << ", param5: " << std::dec << param5
-            << ", param6: " << param6
-            << ", range: [" << param7 << " to " << param8 << "]"
-            << ", step: " << param9 << "\n";
+        rawLog << "CustomDebugVar Raw - param2: " << param2 << ", param3: 0x" << std::hex << param3 << ", param5: " << std::dec << param5 << ", param6: " << param6 << ", range: [" << param7 << " to " << param8 << "]"
+               << ", step: " << param9 << "\n";
         LOG_DEBUG(rawLog.str());
 
         // param3 is the direct address of the value
@@ -466,45 +413,35 @@ class CustomDebugVarHook : public SettingsHook {
             SettingType type = static_cast<SettingType>(param2);
 
             std::stringstream regLog;
-            regLog << "Registering setting type " << static_cast<int>(type)
-                << " at address 0x" << std::hex << valueAddr << "\n";
+            regLog << "Registering setting type " << static_cast<int>(type) << " at address 0x" << std::hex << valueAddr << "\n";
             LOG_DEBUG(regLog.str());
 
             switch (type) {
             case SettingType::Int32:
-                instance->RegisterSetting(valueAddr, name,
-                    *reinterpret_cast<int*>(valueAddr),
-                    static_cast<float>(param5), static_cast<float>(param6), param9);
+                instance->RegisterSetting(valueAddr, name, *reinterpret_cast<int*>(valueAddr), static_cast<float>(param5), static_cast<float>(param6), param9);
                 break;
             case SettingType::Uint32:
-                instance->RegisterSetting(valueAddr, name,
-                    *reinterpret_cast<unsigned int*>(valueAddr),
-                    static_cast<float>(param5), static_cast<float>(param6), param9);
+                instance->RegisterSetting(valueAddr, name, *reinterpret_cast<unsigned int*>(valueAddr), static_cast<float>(param5), static_cast<float>(param6), param9);
                 break;
             case SettingType::Float:
-                instance->RegisterSetting(valueAddr, name,
-                    *reinterpret_cast<float*>(valueAddr), param7, param8, param9);
+                instance->RegisterSetting(valueAddr, name, *reinterpret_cast<float*>(valueAddr), param7, param8, param9);
                 break;
             case SettingType::Bool:
-                instance->RegisterSetting(valueAddr, name,
-                    *reinterpret_cast<bool*>(valueAddr));
+                instance->RegisterSetting(valueAddr, name, *reinterpret_cast<bool*>(valueAddr));
                 break;
             case SettingType::Vector2: {
                 float* values = reinterpret_cast<float*>(valueAddr);
-                instance->RegisterSetting(valueAddr, name,
-                    Vector2{ values[0], values[1] }, param7, param8, param9);
+                instance->RegisterSetting(valueAddr, name, Vector2{values[0], values[1]}, param7, param8, param9);
                 break;
             }
             case SettingType::Vector3: {
                 float* values = reinterpret_cast<float*>(valueAddr);
-                instance->RegisterSetting(valueAddr, name,
-                    Vector3{ values[0], values[1], values[2] }, param7, param8, param9);
+                instance->RegisterSetting(valueAddr, name, Vector3{values[0], values[1], values[2]}, param7, param8, param9);
                 break;
             }
             case SettingType::Vector4: {
                 float* values = reinterpret_cast<float*>(valueAddr);
-                instance->RegisterSetting(valueAddr, name,
-                    Vector4{ values[0], values[1], values[2], values[3] }, param7, param8, param9);
+                instance->RegisterSetting(valueAddr, name, Vector4{values[0], values[1], values[2], values[3]}, param7, param8, param9);
                 break;
             }
             default:
@@ -518,10 +455,8 @@ class CustomDebugVarHook : public SettingsHook {
         original(thisPtr, param2, param3, name, param5, param6, param7, param8, param9);
     }
 
-public:
-    CustomDebugVarHook(void* original) : SettingsHook(original, "CustomDebugVar") {
-        instance = this;
-    }
+  public:
+    CustomDebugVarHook(void* original) : SettingsHook(original, "CustomDebugVar") { instance = this; }
 
     void Install() override { DetourAttach(&originalFunc, HookFunc); }
     void Uninstall() override { DetourDetach(&originalFunc, HookFunc); }
@@ -535,11 +470,11 @@ class HookManager {
     enum VTableOffsets : uintptr_t {
         VTBL_VARIABLE_REGISTRY = 0x3C,
         VTBL_CUSTOM_DEBUG_VAR = 0x44,
-        VTBL_CUSTOM_DEBUG_VAR_ALT = 0x40,  // Points to functions instead of values, need to investigate more, used for debug UI Spy and some render toggle stuff
-        VTBL_VARIABLE_COMMAND = 0x58       // Same as ALT but not, used for some interesting functions like Recompute Lighting, some dumper ones idk, probably worth a look moreso than ALT
+        VTBL_CUSTOM_DEBUG_VAR_ALT = 0x40, // Points to functions instead of values, need to investigate more, used for debug UI Spy and some render toggle stuff
+        VTBL_VARIABLE_COMMAND = 0x58      // Same as ALT but not, used for some interesting functions like Recompute Lighting, some dumper ones idk, probably worth a look moreso than ALT
     };
 
-public:
+  public:
     void Initialize() {
         if (!vtm.Initialize()) {
             LOG_ERROR("HookManager: Failed to initialize VTABLE");
@@ -555,10 +490,7 @@ public:
         // Add config retrieval hook
         try {
             hooks.emplace_back(new ConfigRetrievalHook());
-        }
-        catch (const std::exception& e) {
-            LOG_ERROR("ConfigRetrievalHook Error: " + std::string(e.what()));
-        }
+        } catch (const std::exception& e) { LOG_ERROR("ConfigRetrievalHook Error: " + std::string(e.what())); }
 
         // Commit all hooks
         DetourTransactionBegin();
@@ -577,17 +509,14 @@ public:
         DetourTransactionBegin();
         DetourUpdateThread(GetCurrentThread());
 
-        for (auto& hook : hooks) {
-            hook->Uninstall();
-        }
+        for (auto& hook : hooks) { hook->Uninstall(); }
 
         DetourTransactionCommit();
         hooks.clear();
     }
 
-private:
-    template <typename T>
-    void AddHook(const char* name, uintptr_t offset) {
+  private:
+    template <typename T> void AddHook(const char* name, uintptr_t offset) {
         if (auto addr = vtm.GetFunctionAddress(name, offset)) {
             hooks.emplace_back(new T(addr));
             LOG_INFO("HookManager: Added " + std::string(name) + " hook");
@@ -600,7 +529,7 @@ HookManager g_hookManager;
 
 HANDLE g_ThreadHandle = NULL;
 DWORD g_ThreadId = 0;
-HMODULE g_hModule = NULL;  // Store the DLL module handle
+HMODULE g_hModule = NULL; // Store the DLL module handle
 
 // Function to get the DLL module handle
 HMODULE GetDllModuleHandle() {
@@ -613,9 +542,7 @@ DWORD WINAPI HookThread(LPVOID lpParameter) {
         ConfigPaths::EnsureDirectoryExists();
         if (!Logger::Handler::Initialize(ConfigPaths::GetLogPath())) {
             // Fallback to Bin directory if Documents creation failed
-            if (!Logger::Handler::Initialize(Utils::GetGameFilePath("S3SS_LOG.txt"))) {
-                OutputDebugStringA("Failed to initialize logger\n");
-            }
+            if (!Logger::Handler::Initialize(Utils::GetGameFilePath("S3SS_LOG.txt"))) { OutputDebugStringA("Failed to initialize logger\n"); }
         }
         Logger::Handler::SetFileLogging(true);
 #ifdef _DEBUG
@@ -633,10 +560,7 @@ DWORD WINAPI HookThread(LPVOID lpParameter) {
 
         // 3. grab CPU features
         const auto& cpuFeatures = CPUFeatures::Get();
-        LOG_INFO("[Optimization] CPU Features - SSE4.1: " +
-            std::string(cpuFeatures.hasSSE41 ? "Yes" : "No") +
-            ", AVX2: " + (cpuFeatures.hasAVX2 ? "Yes" : "No") +
-            ", FMA: " + (cpuFeatures.hasFMA ? "Yes" : "No"));
+        LOG_INFO("[Optimization] CPU Features - SSE4.1: " + std::string(cpuFeatures.hasSSE41 ? "Yes" : "No") + ", AVX2: " + (cpuFeatures.hasAVX2 ? "Yes" : "No") + ", FMA: " + (cpuFeatures.hasFMA ? "Yes" : "No"));
 
         // 4. Migration check (old crusty INI ->  TOML)
         Migration::CheckAndMigrate();
@@ -645,10 +569,7 @@ DWORD WINAPI HookThread(LPVOID lpParameter) {
         try {
             auto& patchManager = OptimizationManager::Get();
             LOG_INFO("Patches registered successfully");
-        }
-        catch (const std::exception& e) {
-            LOG_ERROR("Failed to initialize patch system: " + std::string(e.what()));
-        }
+        } catch (const std::exception& e) { LOG_ERROR("Failed to initialize patch system: " + std::string(e.what())); }
 
         // 6. Load all settings from TOML (settings, config values, QoL, patches)
         {
@@ -666,13 +587,11 @@ DWORD WINAPI HookThread(LPVOID lpParameter) {
 
             if (disableHooks) {
                 LOG_INFO("Settings hooks are DISABLED via DisableHooks setting");
-            }
-            else {
+            } else {
                 g_hookManager.Initialize();
                 LOG_INFO("Settings hooks initialized");
             }
-        }
-        catch (const std::exception& e) {
+        } catch (const std::exception& e) {
             LOG_ERROR("Failed to initialize settings hooks: " + std::string(e.what()));
             return FALSE;
         }
@@ -699,8 +618,7 @@ DWORD WINAPI HookThread(LPVOID lpParameter) {
                     TranslateMessage(&msg);
                     DispatchMessage(&msg);
                 }
-            }
-            else {
+            } else {
                 // Update memory monitor
                 MemoryMonitor::Get().Update();
 
@@ -708,12 +626,9 @@ DWORD WINAPI HookThread(LPVOID lpParameter) {
                 try {
                     auto& patchManager = OptimizationManager::Get();
                     for (const auto& patch : patchManager.GetPatches()) {
-                        if (patch) {
-                            patch->Update();
-                        }
+                        if (patch) { patch->Update(); }
                     }
-                }
-                catch (...) {}
+                } catch (...) {}
 
                 // Sleep when no messages
                 Sleep(10);
@@ -721,12 +636,10 @@ DWORD WINAPI HookThread(LPVOID lpParameter) {
         }
 
         return 0;
-    }
-    catch (const std::exception& e) {
+    } catch (const std::exception& e) {
         LOG_ERROR("Exception in HookThread: " + std::string(e.what()));
         return 1;
-    }
-    catch (...) {
+    } catch (...) {
         LOG_ERROR("Unknown exception in HookThread");
         return 1;
     }
@@ -734,16 +647,15 @@ DWORD WINAPI HookThread(LPVOID lpParameter) {
 
 #include "allocator_hook.h"
 
-BOOL APIENTRY DllMain(HMODULE hModule, DWORD reason, LPVOID lpReserved)
-{
+BOOL APIENTRY DllMain(HMODULE hModule, DWORD reason, LPVOID lpReserved) {
     switch (reason) {
     case DLL_PROCESS_ATTACH: {
         DisableThreadLibraryCalls(hModule);
-        
+
         // Initialize allocator hooks as early as possible
         InitializeAllocatorHooks();
 
-        g_hModule = hModule;  // Store the module handle
+        g_hModule = hModule; // Store the module handle
 
         // Check if we're in the correct process
         char processName[MAX_PATH];
@@ -753,8 +665,7 @@ BOOL APIENTRY DllMain(HMODULE hModule, DWORD reason, LPVOID lpReserved)
         char* fileName = strrchr(processName, '\\');
         if (fileName) {
             fileName++; // Skip the backslash
-        }
-        else {
+        } else {
             fileName = processName;
         }
 
@@ -769,8 +680,7 @@ BOOL APIENTRY DllMain(HMODULE hModule, DWORD reason, LPVOID lpReserved)
         g_ThreadHandle = CreateThread(NULL, 0, HookThread, NULL, 0, &g_ThreadId);
         if (g_ThreadHandle == NULL) {
             char errorMsg[256];
-            FormatMessageA(FORMAT_MESSAGE_FROM_SYSTEM, NULL, GetLastError(),
-                MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), errorMsg, 255, NULL);
+            FormatMessageA(FORMAT_MESSAGE_FROM_SYSTEM, NULL, GetLastError(), MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), errorMsg, 255, NULL);
             LOG_CRITICAL("Failed to create hook thread: " + std::string(errorMsg));
             return FALSE;
         }
@@ -782,15 +692,11 @@ BOOL APIENTRY DllMain(HMODULE hModule, DWORD reason, LPVOID lpReserved)
             // Clean up patches
             auto& patchManager = OptimizationManager::Get();
             for (const auto& patch : patchManager.GetPatches()) {
-                if (patch->IsEnabled()) {
-                    patch->Uninstall();
-                }
+                if (patch->IsEnabled()) { patch->Uninstall(); }
             }
 
             if (g_ThreadHandle) {
-                if (g_ThreadId != 0) {
-                    PostThreadMessage(g_ThreadId, WM_QUIT, 0, 0);
-                }
+                if (g_ThreadId != 0) { PostThreadMessage(g_ThreadId, WM_QUIT, 0, 0); }
 
                 // Wait for thread to exit
                 WaitForSingleObject(g_ThreadHandle, 5000);

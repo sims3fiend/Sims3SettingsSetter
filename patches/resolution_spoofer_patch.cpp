@@ -12,7 +12,7 @@
 // other idk
 
 class ResolutionSpooferPatch : public OptimizationPatch {
-private:
+  private:
     // Function typedefs for IDirect3D9 methods
     typedef UINT(STDMETHODCALLTYPE* GetAdapterModeCount_t)(IDirect3D9*, UINT Adapter, D3DFORMAT Format);
     typedef HRESULT(STDMETHODCALLTYPE* EnumAdapterModes_t)(IDirect3D9*, UINT Adapter, D3DFORMAT Format, UINT Mode, D3DDISPLAYMODE* pMode);
@@ -38,11 +38,11 @@ private:
     static void BuildSyntheticResolutions() {
         syntheticResolutions.clear();
 
-        syntheticResolutions.push_back({2560, 1440, 60});   // 1440p
-        syntheticResolutions.push_back({3840, 2160, 60});   // 4K UHD
-        syntheticResolutions.push_back({4096, 2160, 60});   // 4K DCI
-        syntheticResolutions.push_back({5120, 2880, 60});   // 5K
-        syntheticResolutions.push_back({6144, 3456, 60});   // 6K
+        syntheticResolutions.push_back({2560, 1440, 60}); // 1440p
+        syntheticResolutions.push_back({3840, 2160, 60}); // 4K UHD
+        syntheticResolutions.push_back({4096, 2160, 60}); // 4K DCI
+        syntheticResolutions.push_back({5120, 2880, 60}); // 5K
+        syntheticResolutions.push_back({6144, 3456, 60}); // 6K
         //syntheticResolutions.push_back({7680, 4320, 60});   // 8K UHD // crashes for me ;_;, only when moving the camera fast tho idk
     }
 
@@ -53,8 +53,7 @@ private:
         if (Format == D3DFMT_X8R8G8B8) {
             cachedRealModeCount_X8R8G8B8 = realCount;
             return realCount + static_cast<UINT>(syntheticResolutions.size());
-        }
-        else if (Format == D3DFMT_R5G6B5) {
+        } else if (Format == D3DFMT_R5G6B5) {
             cachedRealModeCount_R5G6B5 = realCount;
             return realCount + static_cast<UINT>(syntheticResolutions.size());
         }
@@ -69,11 +68,9 @@ private:
         UINT cachedRealModeCount = 0;
         if (Format == D3DFMT_X8R8G8B8) {
             cachedRealModeCount = cachedRealModeCount_X8R8G8B8;
-        }
-        else if (Format == D3DFMT_R5G6B5) {
+        } else if (Format == D3DFMT_R5G6B5) {
             cachedRealModeCount = cachedRealModeCount_R5G6B5;
-        }
-        else {
+        } else {
             return originalEnumAdapterModes(pThis, Adapter, Format, Mode, pMode);
         }
 
@@ -94,12 +91,11 @@ private:
         return originalEnumAdapterModes(pThis, Adapter, Format, Mode, pMode);
     }
 
-    static HRESULT STDMETHODCALLTYPE HookedCreateDevice(IDirect3D9* pThis, UINT Adapter, D3DDEVTYPE DeviceType, HWND hFocusWindow, DWORD BehaviorFlags, D3DPRESENT_PARAMETERS* pPresentationParameters, IDirect3DDevice9** ppReturnedDeviceInterface) {
+    static HRESULT STDMETHODCALLTYPE HookedCreateDevice(
+        IDirect3D9* pThis, UINT Adapter, D3DDEVTYPE DeviceType, HWND hFocusWindow, DWORD BehaviorFlags, D3DPRESENT_PARAMETERS* pPresentationParameters, IDirect3DDevice9** ppReturnedDeviceInterface) {
         // Capture the window handle (prefer hDeviceWindow if set)
         HWND hTargetWindow = hFocusWindow;
-        if (pPresentationParameters && pPresentationParameters->hDeviceWindow) {
-            hTargetWindow = pPresentationParameters->hDeviceWindow;
-        }
+        if (pPresentationParameters && pPresentationParameters->hDeviceWindow) { hTargetWindow = pPresentationParameters->hDeviceWindow; }
 
         // Enforce windowed mode if Borderless Window is active
         if (pPresentationParameters && BorderlessWindow::Get().IsEnabled()) {
@@ -111,12 +107,10 @@ private:
                 // Enforce DISCARD swap effect to allow backbuffer scaling
                 pPresentationParameters->SwapEffect = D3DSWAPEFFECT_DISCARD;
 
-                if (pPresentationParameters->Flags & D3DPRESENTFLAG_LOCKABLE_BACKBUFFER) {
-                    pPresentationParameters->Flags &= ~D3DPRESENTFLAG_LOCKABLE_BACKBUFFER;
-                }
+                if (pPresentationParameters->Flags & D3DPRESENTFLAG_LOCKABLE_BACKBUFFER) { pPresentationParameters->Flags &= ~D3DPRESENTFLAG_LOCKABLE_BACKBUFFER; }
             }
         }
-        
+
         HRESULT hr = originalCreateDevice(pThis, Adapter, DeviceType, hFocusWindow, BehaviorFlags, pPresentationParameters, ppReturnedDeviceInterface);
 
         // If successful and borderless is enabled, force the window update immediately
@@ -124,13 +118,13 @@ private:
         if (SUCCEEDED(hr) && BorderlessWindow::Get().IsEnabled() && hTargetWindow) {
             LOG_INFO("[ResolutionSpoofer] Force-applying borderless window state after CreateDevice");
             BorderlessWindow::Get().SetWindowHandle(hTargetWindow);
-            BorderlessWindow::Get().Apply(); 
+            BorderlessWindow::Get().Apply();
         }
 
         return hr;
     }
 
-public:
+  public:
     ResolutionSpooferPatch() : OptimizationPatch("ResolutionSpoofer", nullptr) {}
 
     bool Install() override {
@@ -141,9 +135,7 @@ public:
 
         // Create a temporary D3D9 interface to get vtable
         IDirect3D9* pD3D = Direct3DCreate9(D3D_SDK_VERSION);
-        if (!pD3D) {
-            return Fail("Failed to create D3D9 interface");
-        }
+        if (!pD3D) { return Fail("Failed to create D3D9 interface"); }
 
         // Get vtable pointer
         void** vtable = *reinterpret_cast<void***>(pD3D);
@@ -153,12 +145,9 @@ public:
         originalEnumAdapterModes = reinterpret_cast<EnumAdapterModes_t>(vtable[7]);
         originalCreateDevice = reinterpret_cast<CreateDevice_t>(vtable[16]);
 
-        LOG_DEBUG("[ResolutionSpoofer] Original GetAdapterModeCount: 0x" +
-                 std::to_string(reinterpret_cast<uintptr_t>(originalGetAdapterModeCount)));
-        LOG_DEBUG("[ResolutionSpoofer] Original EnumAdapterModes: 0x" +
-                 std::to_string(reinterpret_cast<uintptr_t>(originalEnumAdapterModes)));
-        LOG_DEBUG("[ResolutionSpoofer] Original CreateDevice: 0x" +
-                 std::to_string(reinterpret_cast<uintptr_t>(originalCreateDevice)));
+        LOG_DEBUG("[ResolutionSpoofer] Original GetAdapterModeCount: 0x" + std::to_string(reinterpret_cast<uintptr_t>(originalGetAdapterModeCount)));
+        LOG_DEBUG("[ResolutionSpoofer] Original EnumAdapterModes: 0x" + std::to_string(reinterpret_cast<uintptr_t>(originalEnumAdapterModes)));
+        LOG_DEBUG("[ResolutionSpoofer] Original CreateDevice: 0x" + std::to_string(reinterpret_cast<uintptr_t>(originalCreateDevice)));
 
         pD3D->Release();
 
@@ -166,19 +155,13 @@ public:
         BuildSyntheticResolutions();
 
         // Install hooks using Detours
-        std::vector<DetourHelper::Hook> hooks = {
-            {reinterpret_cast<void**>(&originalGetAdapterModeCount), reinterpret_cast<void*>(HookedGetAdapterModeCount)},
-            {reinterpret_cast<void**>(&originalEnumAdapterModes), reinterpret_cast<void*>(HookedEnumAdapterModes)},
-            {reinterpret_cast<void**>(&originalCreateDevice), reinterpret_cast<void*>(HookedCreateDevice)}
-        };
+        std::vector<DetourHelper::Hook> hooks = {{reinterpret_cast<void**>(&originalGetAdapterModeCount), reinterpret_cast<void*>(HookedGetAdapterModeCount)},
+            {reinterpret_cast<void**>(&originalEnumAdapterModes), reinterpret_cast<void*>(HookedEnumAdapterModes)}, {reinterpret_cast<void**>(&originalCreateDevice), reinterpret_cast<void*>(HookedCreateDevice)}};
 
-        if (!DetourHelper::InstallHooks(hooks)) {
-            return Fail("Failed to install D3D9 hooks");
-        }
+        if (!DetourHelper::InstallHooks(hooks)) { return Fail("Failed to install D3D9 hooks"); }
 
         isEnabled = true;
-        LOG_INFO("[ResolutionSpoofer] Successfully installed - " +
-                std::to_string(syntheticResolutions.size()) + " synthetic resolutions available");
+        LOG_INFO("[ResolutionSpoofer] Successfully installed - " + std::to_string(syntheticResolutions.size()) + " synthetic resolutions available");
         return true;
     }
 
@@ -188,15 +171,10 @@ public:
         lastError.clear();
         LOG_INFO("[ResolutionSpoofer] Uninstalling...");
 
-        std::vector<DetourHelper::Hook> hooks = {
-            {reinterpret_cast<void**>(&originalGetAdapterModeCount), reinterpret_cast<void*>(HookedGetAdapterModeCount)},
-            {reinterpret_cast<void**>(&originalEnumAdapterModes), reinterpret_cast<void*>(HookedEnumAdapterModes)},
-            {reinterpret_cast<void**>(&originalCreateDevice), reinterpret_cast<void*>(HookedCreateDevice)}
-        };
+        std::vector<DetourHelper::Hook> hooks = {{reinterpret_cast<void**>(&originalGetAdapterModeCount), reinterpret_cast<void*>(HookedGetAdapterModeCount)},
+            {reinterpret_cast<void**>(&originalEnumAdapterModes), reinterpret_cast<void*>(HookedEnumAdapterModes)}, {reinterpret_cast<void**>(&originalCreateDevice), reinterpret_cast<void*>(HookedCreateDevice)}};
 
-        if (!DetourHelper::RemoveHooks(hooks)) {
-            return Fail("Failed to remove D3D9 hooks");
-        }
+        if (!DetourHelper::RemoveHooks(hooks)) { return Fail("Failed to remove D3D9 hooks"); }
 
         syntheticResolutions.clear();
         cachedRealModeCount_X8R8G8B8 = 0;
@@ -206,7 +184,6 @@ public:
         LOG_INFO("[ResolutionSpoofer] Successfully uninstalled");
         return true;
     }
-
 };
 
 // Static member initialization, lazy
@@ -217,15 +194,11 @@ std::vector<ResolutionSpooferPatch::SyntheticRes> ResolutionSpooferPatch::synthe
 UINT ResolutionSpooferPatch::cachedRealModeCount_X8R8G8B8 = 0;
 UINT ResolutionSpooferPatch::cachedRealModeCount_R5G6B5 = 0;
 
-REGISTER_PATCH(ResolutionSpooferPatch, {
-    .displayName = "Resolution Spoofer",
-    .description = "Injects spoofed high resolutions for downsampling goodness",
-    .category = "Graphics",
-    .experimental = true,
-    .supportedVersions = VERSION_ALL,  //add something about like, restart the game after setting, etc., you'll need the UI patch, etc.
-    .technicalDetails = { 
-        "Tricks the game into thinking other larger resolutions are available",
-        "Great for AA/carity purposes, you will need a resolution patch for the UI as it gets very tiny (check readme)",
-        "If people ask I will add a custom setting for adding your own resolutions"
-    }
-})
+REGISTER_PATCH(ResolutionSpooferPatch,
+    {.displayName = "Resolution Spoofer",
+        .description = "Injects spoofed high resolutions for downsampling goodness",
+        .category = "Graphics",
+        .experimental = true,
+        .supportedVersions = VERSION_ALL, //add something about like, restart the game after setting, etc., you'll need the UI patch, etc.
+        .technicalDetails = {"Tricks the game into thinking other larger resolutions are available", "Great for AA/carity purposes, you will need a resolution patch for the UI as it gets very tiny (check readme)",
+            "If people ask I will add a custom setting for adding your own resolutions"}})

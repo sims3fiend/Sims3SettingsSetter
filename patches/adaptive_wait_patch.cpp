@@ -10,12 +10,12 @@
 // 50us is roughly 150,000 cycles. 300us is ~1,000,000 cycles
 // A context switch sleep costs ~3-15ms of LATENCY (opportunity cost), but only ~5k cycles of CPU work
 // We trade CPU work to save Latency, essentially
-static const DWORD MIN_SPIN_US = 50;    
+static const DWORD MIN_SPIN_US = 50;
 static const DWORD MAX_SPIN_US = 500;   // Capped to prevents syscall spam worst-cases, 500 ideal I thinkie, may A/B 750~ later idk. Might make this configurable in the future but probably too complex for end users x
 static const DWORD ADAPT_INTERVAL = 64; // Adapt faster
 
 class AdaptiveWaitPatch : public OptimizationPatch {
-private:
+  private:
     std::vector<PatchHelper::PatchLocation> patchedLocations;
     static AdaptiveWaitPatch* instance;
 
@@ -33,8 +33,8 @@ private:
     typedef DWORD(WINAPI* WaitForSingleObjectEx_t)(HANDLE, DWORD, BOOL);
     static WaitForSingleObjectEx_t Original_WaitForSingleObjectEx;
 
-    // Pseudo-handle for GetCurrentThread() - safe cast for all architectures
-    #define CURRENT_THREAD_PSEUDO_HANDLE ((HANDLE)(LONG_PTR)-2)
+// Pseudo-handle for GetCurrentThread() - safe cast for all architectures
+#define CURRENT_THREAD_PSEUDO_HANDLE ((HANDLE)(LONG_PTR) - 2)
 
     // Shared smart wait logic
     static void UpdateBudget() {
@@ -81,11 +81,9 @@ private:
             // Growth (workload got easier OR probe hurt us)
             if (successRate > 0.65f) {
                 newBudget = (currentBudget + 50 < MAX_SPIN_US) ? currentBudget + 50 : MAX_SPIN_US;
-            }
-            else if (successRate > 0.50f) {
+            } else if (successRate > 0.50f) {
                 newBudget = (currentBudget + 25 < MAX_SPIN_US) ? currentBudget + 25 : MAX_SPIN_US;
-            }
-            else if (successRate > 0.35f) {
+            } else if (successRate > 0.35f) {
                 newBudget = (currentBudget + 10 < MAX_SPIN_US) ? currentBudget + 10 : MAX_SPIN_US;
             }
             // 30-35%: dead zone, no change (avoid oscillation)
@@ -179,7 +177,7 @@ private:
             for (DWORD i = 0; i < loops; i++) {
                 _mm_pause(); // x86 PAUSE - hint to CPU for spin-wait loop
             }
-            
+
             if (pauseCycles < 12) pauseCycles++; // Cap at 2^12 = 4096
         }
 
@@ -191,23 +189,19 @@ private:
 
     static DWORD WINAPI Hooked_WaitForSingleObject(HANDLE hHandle, DWORD dwMilliseconds) {
         DWORD result;
-        if (TrySmartWait(hHandle, dwMilliseconds, FALSE, false, result)) {
-            return result;
-        }
+        if (TrySmartWait(hHandle, dwMilliseconds, FALSE, false, result)) { return result; }
         if (Original_WaitForSingleObject) return Original_WaitForSingleObject(hHandle, dwMilliseconds);
         return WaitForSingleObject(hHandle, dwMilliseconds);
     }
 
     static DWORD WINAPI Hooked_WaitForSingleObjectEx(HANDLE hHandle, DWORD dwMilliseconds, BOOL bAlertable) {
         DWORD result;
-        if (TrySmartWait(hHandle, dwMilliseconds, bAlertable, true, result)) {
-            return result;
-        }
+        if (TrySmartWait(hHandle, dwMilliseconds, bAlertable, true, result)) { return result; }
         if (Original_WaitForSingleObjectEx) return Original_WaitForSingleObjectEx(hHandle, dwMilliseconds, bAlertable);
         return WaitForSingleObjectEx(hHandle, dwMilliseconds, bAlertable);
     }
 
-public:
+  public:
     AdaptiveWaitPatch();
     ~AdaptiveWaitPatch() override;
 
@@ -228,16 +222,12 @@ public:
         Original_WaitForSingleObject = (WaitForSingleObject_t)GetProcAddress(hKernel32, "WaitForSingleObject");
         Original_WaitForSingleObjectEx = (WaitForSingleObjectEx_t)GetProcAddress(hKernel32, "WaitForSingleObjectEx");
 
-        if (!Original_WaitForSingleObject || !Original_WaitForSingleObjectEx) {
-            return Fail("Failed to get original WaitForSingleObject addresses");
-        }
+        if (!Original_WaitForSingleObject || !Original_WaitForSingleObjectEx) { return Fail("Failed to get original WaitForSingleObject addresses"); }
 
         bool iat1 = PatchHelper::IATHookHelper::Hook(hTS3, "kernel32.dll", "WaitForSingleObject", (void*)Hooked_WaitForSingleObject, nullptr);
         bool iat2 = PatchHelper::IATHookHelper::Hook(hTS3, "kernel32.dll", "WaitForSingleObjectEx", (void*)Hooked_WaitForSingleObjectEx, nullptr);
 
-        if (!iat1 && !iat2) {
-             return Fail("Failed to install any IAT hooks for WaitForSingleObject");
-        }
+        if (!iat1 && !iat2) { return Fail("Failed to install any IAT hooks for WaitForSingleObject"); }
 
         isEnabled = true;
         return true;
@@ -248,7 +238,6 @@ public:
         isEnabled = false;
         return true;
     }
-    
 };
 
 AdaptiveWaitPatch::AdaptiveWaitPatch() : OptimizationPatch("AdaptiveWait", nullptr) {
@@ -256,9 +245,7 @@ AdaptiveWaitPatch::AdaptiveWaitPatch() : OptimizationPatch("AdaptiveWait", nullp
 }
 
 AdaptiveWaitPatch::~AdaptiveWaitPatch() {
-    if (instance == this) {
-        instance = nullptr;
-    }
+    if (instance == this) { instance = nullptr; }
 }
 
 std::atomic<DWORD> AdaptiveWaitPatch::g_spinBudgetUs{0};
@@ -271,15 +258,9 @@ AdaptiveWaitPatch::WaitForSingleObject_t AdaptiveWaitPatch::Original_WaitForSing
 AdaptiveWaitPatch::WaitForSingleObjectEx_t AdaptiveWaitPatch::Original_WaitForSingleObjectEx = nullptr;
 AdaptiveWaitPatch* AdaptiveWaitPatch::instance = nullptr;
 
-REGISTER_PATCH(AdaptiveWaitPatch, {
-    .displayName = "Adaptive Thread Waiting",
-    .description = "Replaces standard thread sleeping with a hybrid spin-wait to reduce stutter on short locks.",
-    .category = "Performance",
-    .experimental = true,
-    .technicalDetails = {
-        "Hooks WaitForSingleObject/Ex via IAT to intercept thread waits",
-        "Spin budget adapts between 50-500us based on success rate",
-        "Spends extra CPU time spinning to avoid 3-15ms thread sleep latency",
-        "Lower frame time variance at the cost of slightly higher CPU usage"
-    }
-})
+REGISTER_PATCH(AdaptiveWaitPatch, {.displayName = "Adaptive Thread Waiting",
+                                      .description = "Replaces standard thread sleeping with a hybrid spin-wait to reduce stutter on short locks.",
+                                      .category = "Performance",
+                                      .experimental = true,
+                                      .technicalDetails = {"Hooks WaitForSingleObject/Ex via IAT to intercept thread waits", "Spin budget adapts between 50-500us based on success rate",
+                                          "Spends extra CPU time spinning to avoid 3-15ms thread sleep latency", "Lower frame time variance at the cost of slightly higher CPU usage"}})

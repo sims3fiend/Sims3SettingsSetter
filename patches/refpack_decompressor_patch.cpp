@@ -10,14 +10,15 @@
 
 // There are probably other optimisations (PGO??? idk what that is but sure) but for now I am never touching this again ever
 class RefPackDecompressorPatch : public OptimizationPatch {
-private:
+  private:
     static inline const AddressInfo refPackDecompressor = {
         .name = "RefPackDecompressor::hookAddr",
-        .addresses = {
-            {GameVersion::Retail, 0x004eb900},
-            {GameVersion::Steam,  0x004eb3b0},
-            {GameVersion::EA,     0x004eb4f0},
-        },
+        .addresses =
+            {
+                {GameVersion::Retail, 0x004eb900},
+                {GameVersion::Steam, 0x004eb3b0},
+                {GameVersion::EA, 0x004eb4f0},
+            },
         .pattern = "83 EC 10 8B 4C 24 1C 85 C9 53 55 56 8B 74 24 20 57 C7 44 24 1C 00 00 00 00 0F 84",
         .expectedBytes = {0x83, 0xEC, 0x10, 0x8B, 0x4C, 0x24, 0x1C},
     };
@@ -34,7 +35,9 @@ private:
             const uint8_t* s = src;
             while (len >= 16) {
                 _mm_storeu_si128((__m128i*)d, _mm_loadu_si128((const __m128i*)s));
-                d += 16; s += 16; len -= 16;
+                d += 16;
+                s += 16;
+                len -= 16;
             }
             while (len--) *d++ = *s++;
         }
@@ -47,46 +50,45 @@ private:
             // 32-byte chunks (AVX2)
             while (len >= 32) {
                 _mm256_storeu_si256((__m256i*)d, _mm256_loadu_si256((const __m256i*)s));
-                d += 32; s += 32; len -= 32;
+                d += 32;
+                s += 32;
+                len -= 32;
             }
             // 16-byte chunks (SSE2)
             while (len >= 16) {
                 _mm_storeu_si128((__m128i*)d, _mm_loadu_si128((const __m128i*)s));
-                d += 16; s += 16; len -= 16;
+                d += 16;
+                s += 16;
+                len -= 16;
             }
             // Tail
             while (len--) *d++ = *s++;
         }
     };
 
-    template <typename Strategy>
-    static __forceinline void CopyOverlapping(uint8_t* dst, const uint8_t* src, uint32_t len) {
+    template <typename Strategy> static __forceinline void CopyOverlapping(uint8_t* dst, const uint8_t* src, uint32_t len) {
         ptrdiff_t offset = dst - src;
 
         // For RLE (offset < len), src is 'history' relative to dst
         // As long as offset >= 32, the 32-byte load reads data that was written at least 32 bytes ago
         // Since we write 32 bytes at a time, we never overwrite data we are about to read in the SAME iteration... we pray
         if (offset >= 32) {
-             Strategy::Copy(dst, src, len);
-        }
-        else if (offset >= 16) {
+            Strategy::Copy(dst, src, len);
+        } else if (offset >= 16) {
             while (len >= 16) {
                 _mm_storeu_si128((__m128i*)dst, _mm_loadu_si128((const __m128i*)src));
-                dst += 16; src += 16; len -= 16;
+                dst += 16;
+                src += 16;
+                len -= 16;
             }
             while (len--) *dst++ = *src++;
-        }
-        else {
+        } else {
             // Tight byte-copy loop for small overlaps
             while (len--) *dst++ = *src++;
         }
     }
 
-    template <typename Strategy>
-    static int DecompressImpl(
-        uint8_t* __restrict dst, uint32_t dstSize,
-        uint8_t* __restrict src, uint32_t srcSize
-    ) {
+    template <typename Strategy> static int DecompressImpl(uint8_t* __restrict dst, uint32_t dstSize, uint8_t* __restrict src, uint32_t srcSize) {
         // Basic sanity checks
         if (!dst || !src || srcSize < 2) return 0;
 
@@ -159,7 +161,8 @@ private:
                     if (literal_len > 1) dst[1] = src[1];
                     if (literal_len > 2) dst[2] = src[2];
 
-                    dst += literal_len; src += literal_len;
+                    dst += literal_len;
+                    src += literal_len;
                 }
 
                 // Backref Copy
@@ -183,7 +186,8 @@ private:
                     dst[0] = src[0];
                     if (literal_len > 1) dst[1] = src[1];
                     if (literal_len > 2) dst[2] = src[2];
-                    dst += literal_len; src += literal_len;
+                    dst += literal_len;
+                    src += literal_len;
                 }
 
                 if (offset > (uint32_t)(dst - dstStart) || dst + match_len > dstEnd) goto error_overflow;
@@ -206,7 +210,8 @@ private:
                     dst[0] = src[0];
                     if (literal_len > 1) dst[1] = src[1];
                     if (literal_len > 2) dst[2] = src[2];
-                    dst += literal_len; src += literal_len;
+                    dst += literal_len;
+                    src += literal_len;
                 }
 
                 if (offset > (uint32_t)(dst - dstStart) || dst + match_len > dstEnd) goto error_overflow;
@@ -231,7 +236,8 @@ private:
 
                 if (src + len > srcEnd || dst + len > dstEnd) goto error_overflow;
                 Strategy::Copy(dst, src, len);
-                dst += len; src += len;
+                dst += len;
+                src += len;
             }
         }
         return 0; // Source exhausted without stop code = malformed data
@@ -241,10 +247,7 @@ private:
         return 0;
     }
 
-    static int __cdecl Dispatch(
-        uint8_t* dst, uint32_t dstSize,
-        uint8_t* src, uint32_t srcSize
-    ) {
+    static int __cdecl Dispatch(uint8_t* dst, uint32_t dstSize, uint8_t* src, uint32_t srcSize) {
         if (cpuHasAVX2) {
             return DecompressImpl<StrategyAVX2>(dst, dstSize, src, srcSize);
         } else {
@@ -252,10 +255,8 @@ private:
         }
     }
 
-public:
-    RefPackDecompressorPatch() : OptimizationPatch("RefPackDecompressor", nullptr) {
-        instance = this;
-    }
+  public:
+    RefPackDecompressorPatch() : OptimizationPatch("RefPackDecompressor", nullptr) { instance = this; }
 
     bool Install() override {
         if (isEnabled) return true;
@@ -263,9 +264,7 @@ public:
         lastError.clear();
 
         auto addr = refPackDecompressor.Resolve();
-        if (!addr) {
-            return Fail("Could not resolve RefPack decompressor address");
-        }
+        if (!addr) { return Fail("Could not resolve RefPack decompressor address"); }
 
         const auto& cpuFeatures = CPUFeatures::Get();
         cpuHasAVX2 = cpuFeatures.hasAVX2;
@@ -278,9 +277,7 @@ public:
 
         uintptr_t targetAddr = (uintptr_t)&Dispatch;
 
-        if (!PatchHelper::WriteRelativeJump(*addr, targetAddr, &patchedLocations)) {
-            return Fail(std::format("Failed to install decompressor hook at {:#010x}", *addr));
-        }
+        if (!PatchHelper::WriteRelativeJump(*addr, targetAddr, &patchedLocations)) { return Fail(std::format("Failed to install decompressor hook at {:#010x}", *addr)); }
 
         isEnabled = true;
         LOG_INFO("[RefPackDecompressor] Successfully installed");
@@ -293,9 +290,7 @@ public:
         lastError.clear();
         LOG_INFO("[RefPackDecompressor] Uninstalling...");
 
-        if (!PatchHelper::RestoreAll(patchedLocations)) {
-            return Fail("Failed to restore original decompressor");
-        }
+        if (!PatchHelper::RestoreAll(patchedLocations)) { return Fail("Failed to restore original decompressor"); }
 
         isEnabled = false;
         LOG_INFO("[RefPackDecompressor] Successfully uninstalled");
@@ -307,16 +302,10 @@ public:
 RefPackDecompressorPatch* RefPackDecompressorPatch::instance = nullptr;
 bool RefPackDecompressorPatch::cpuHasAVX2 = false;
 
-REGISTER_PATCH(RefPackDecompressorPatch, {
-    .displayName = "RefPack Decompressor Optimization",
-    .description = "Highly optimized RefPack decompression using AVX2/SSE2 intrinsics with safety checks. Auto-detects CPU capabilities.",
-    .category = "Performance",
-    .experimental = false,
-    .supportedVersions = VERSION_ALL,
-    .technicalDetails = {
-        "Replaces original RefPack decompressor entirely",
-        "AVX2 path for modern CPUs, SSE2 fallback for older ones",
-        "Optimizes quite a significant amount, probably one of the most impactful patches",
-        "Essentially decompression/reading .package files big faster now yes :D yipeee"
-    }
-})
+REGISTER_PATCH(RefPackDecompressorPatch, {.displayName = "RefPack Decompressor Optimization",
+                                             .description = "Highly optimized RefPack decompression using AVX2/SSE2 intrinsics with safety checks. Auto-detects CPU capabilities.",
+                                             .category = "Performance",
+                                             .experimental = false,
+                                             .supportedVersions = VERSION_ALL,
+                                             .technicalDetails = {"Replaces original RefPack decompressor entirely", "AVX2 path for modern CPUs, SSE2 fallback for older ones",
+                                                 "Optimizes quite a significant amount, probably one of the most impactful patches", "Essentially decompression/reading .package files big faster now yes :D yipeee"}})

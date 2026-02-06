@@ -3,16 +3,16 @@
 #include "../logger.h"
 
 class GCFinalizeThrottlePatch : public OptimizationPatch {
-private:
-    // In Sims3::MonoEngine::MonoScriptHost::Simulate frame 
+  private:
+    // In Sims3::MonoEngine::MonoScriptHost::Simulate frame
     // threshold check: CMP EAX, 0xC8 (200 frames)
     // After 200 consecutive frames where finalizers exceed limit, triggers blocking loop
     // Pattern: ADD EAX, EBP; CMP EAX, 0xC8; MOV [sFramesSinceFinalizeFinished], EAX; JNZ
     static inline const AddressInfo frameThresholdCheck = {
         .name = "GCFinalize::frameThresholdCheck",
         .pattern = "03 C5 3D C8 00 00 00 A3 ?? ?? ?? ?? 75",
-        .patternOffset = 2,  // Skip "ADD EAX, EBP" to land on CMP
-        .expectedBytes = {0x3D, 0xC8, 0x00, 0x00, 0x00},  // CMP EAX, 0xC8
+        .patternOffset = 2,                              // Skip "ADD EAX, EBP" to land on CMP
+        .expectedBytes = {0x3D, 0xC8, 0x00, 0x00, 0x00}, // CMP EAX, 0xC8
     };
 
     // The blocking finalizer loop: JNZ back to CALL mono_gc_invoke_finalizers
@@ -21,13 +21,13 @@ private:
     static inline const AddressInfo blockingLoopJump = {
         .name = "GCFinalize::blockingLoopJump",
         .pattern = "E8 ?? ?? ?? ?? 85 C0 75 F7 89 1D",
-        .patternOffset = 7,  // Skip CALL and TEST to land on JNZ
-        .expectedBytes = {0x75, 0xF7},  // JNZ rel8 (-9)
+        .patternOffset = 7,            // Skip CALL and TEST to land on JNZ
+        .expectedBytes = {0x75, 0xF7}, // JNZ rel8 (-9)
     };
 
     std::vector<PatchHelper::PatchLocation> patchedLocations;
 
-public:
+  public:
     GCFinalizeThrottlePatch() : OptimizationPatch("GCFinalizeThrottle", nullptr) {}
 
     bool Install() override {
@@ -95,9 +95,7 @@ public:
 
         LOG_INFO("[GCFinalizeThrottle] Uninstalling...");
 
-        if (!PatchHelper::RestoreAll(patchedLocations)) {
-            return Fail("Failed to restore original bytes");
-        }
+        if (!PatchHelper::RestoreAll(patchedLocations)) { return Fail("Failed to restore original bytes"); }
 
         isEnabled = false;
         LOG_INFO("[GCFinalizeThrottle] Successfully uninstalled");
@@ -105,16 +103,14 @@ public:
     }
 };
 
-REGISTER_PATCH(GCFinalizeThrottlePatch, {
-    .displayName = "GC Finalizer Throttle",
-    .description = "Prevents GC finalizer loop from blocking the simulation thread, reducing large stutters",
-    .category = "Performance",
-    .experimental = true,
-    .supportedVersions = VERSION_ALL,
-    .technicalDetails = {
-        "Increases frame threshold before blocking GC from 200 to 32767 frames (~9 min at 60fps)",
-        "Caps the blocking finalizer loop to 1 iteration instead of infinite",
-        "Prevents the 'Forcing all finalizers to finish' stall in MonoScriptHost::Simulate",
-        "May slightly increase memory usage on very long play sessions, should reduce simulation freees",
-    }
-})
+REGISTER_PATCH(GCFinalizeThrottlePatch, {.displayName = "GC Finalizer Throttle",
+                                            .description = "Prevents GC finalizer loop from blocking the simulation thread, reducing large stutters",
+                                            .category = "Performance",
+                                            .experimental = true,
+                                            .supportedVersions = VERSION_ALL,
+                                            .technicalDetails = {
+                                                "Increases frame threshold before blocking GC from 200 to 32767 frames (~9 min at 60fps)",
+                                                "Caps the blocking finalizer loop to 1 iteration instead of infinite",
+                                                "Prevents the 'Forcing all finalizers to finish' stall in MonoScriptHost::Simulate",
+                                                "May slightly increase memory usage on very long play sessions, should reduce simulation freees",
+                                            }})

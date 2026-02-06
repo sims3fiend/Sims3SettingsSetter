@@ -7,16 +7,17 @@
 #include <condition_variable>
 
 class MapViewLotBlockerPatch : public OptimizationPatch {
-private:
+  private:
     // Address definitions
     // Sims3::World::WorldManager::Update
     static inline const AddressInfo worldManagerUpdate = {
         .name = "Sims3::World::WorldManager::Update",
-        .addresses = {
-            {GameVersion::Retail, 0x00c6d3b0},
-            {GameVersion::Steam,  0x00c6d570},
-            {GameVersion::EA,     0x00c6c8f0},
-        },
+        .addresses =
+            {
+                {GameVersion::Retail, 0x00c6d3b0},
+                {GameVersion::Steam, 0x00c6d570},
+                {GameVersion::EA, 0x00c6c8f0},
+            },
         .pattern = "55 8B EC 83 E4 F0 83 EC 64 53 56 8B F1 83 BE B4 01 00 00 00 57 75",
         .expectedBytes = {0x55, 0x8B, 0xEC, 0x83, 0xE4, 0xF0},
     };
@@ -24,11 +25,12 @@ private:
     // ScriptCore.CameraController::Camera_EnableMapViewMode
     static inline const AddressInfo cameraEnableMapView = {
         .name = "ScriptCore.CameraController::Camera_EnableMapViewMode",
-        .addresses = {
-            {GameVersion::Retail, 0x0073e080},
-            {GameVersion::Steam,  0x0073dfb0},
-            {GameVersion::EA,     0x0073ec70},
-        },
+        .addresses =
+            {
+                {GameVersion::Retail, 0x0073e080},
+                {GameVersion::Steam, 0x0073dfb0},
+                {GameVersion::EA, 0x0073ec70},
+            },
         .pattern = "E8 ?? ?? ?? ?? 85 C0 74 ?? 8B C8 E8 ?? ?? ?? ?? 85 C0 74 ?? 8B C8 E8 ?? ?? ?? ?? 85 C0 74 ?? 8B 10 8B C8 8B 42 0C 68 89 DD 0F 11 FF D0 85 C0 74 ?? D9 44 24 04 6A 00 51 8B C8 D9 1C 24",
         .expectedBytes = {0xE8},
     };
@@ -36,12 +38,14 @@ private:
     // ScriptCore.CameraController::Camera_DisableMapViewMode
     static inline const AddressInfo cameraDisableMapView = {
         .name = "ScriptCore.CameraController::Camera_DisableMapViewMode",
-        .addresses = {
-            {GameVersion::Retail, 0x0073e0d0},
-            {GameVersion::Steam,  0x0073e000},
-            {GameVersion::EA,     0x0073ecc0},
-        },
-        .pattern = "E8 ?? ?? ?? ?? 85 C0 74 ?? 8B C8 E8 ?? ?? ?? ?? 85 C0 74 ?? 8B C8 E8 ?? ?? ?? ?? 85 C0 74 ?? 8B 10 8B C8 8B 42 0C 68 89 DD 0F 11 FF D0 85 C0 74 ?? D9 44 24 0C 6A 00 83 EC 0C D9 5C 24 08 8B C8 D9 44 24 18 D9 5C 24 04 D9 44 24 14 D9 1C 24",
+        .addresses =
+            {
+                {GameVersion::Retail, 0x0073e0d0},
+                {GameVersion::Steam, 0x0073e000},
+                {GameVersion::EA, 0x0073ecc0},
+            },
+        .pattern = "E8 ?? ?? ?? ?? 85 C0 74 ?? 8B C8 E8 ?? ?? ?? ?? 85 C0 74 ?? 8B C8 E8 ?? ?? ?? ?? 85 C0 74 ?? 8B 10 8B C8 8B 42 0C 68 89 DD 0F 11 FF D0 85 C0 74 ?? D9 44 24 0C 6A 00 83 EC 0C D9 5C 24 08 8B C8 D9 44 24 "
+                   "18 D9 5C 24 04 D9 44 24 14 D9 1C 24",
         .expectedBytes = {0xE8},
     };
 
@@ -49,16 +53,16 @@ private:
     std::thread delayThread;
     std::condition_variable threadCV;
     std::mutex threadMutex;
-    std::atomic<bool> shouldExit{ false };
-    std::atomic<bool> blockLotStreaming{ false };
+    std::atomic<bool> shouldExit{false};
+    std::atomic<bool> blockLotStreaming{false};
 
     // WorldManager offset for lot streaming skip flag
     static const uintptr_t WORLD_MANAGER_LOT_SKIP_OFFSET = 0x258;
 
     // Function pointers for hooks
-    typedef void (__cdecl* Camera_EnableMapViewMode_t)(float);
-    typedef void (__cdecl* Camera_DisableMapViewMode_t)(float, float, float);
-    typedef int (__thiscall* WorldManager_Update_t)(void* worldMgr, float param2, float param3);
+    typedef void(__cdecl* Camera_EnableMapViewMode_t)(float);
+    typedef void(__cdecl* Camera_DisableMapViewMode_t)(float, float, float);
+    typedef int(__thiscall* WorldManager_Update_t)(void* worldMgr, float param2, float param3);
 
     Camera_EnableMapViewMode_t originalEnableMapView = nullptr;
     Camera_DisableMapViewMode_t originalDisableMapView = nullptr;
@@ -89,9 +93,7 @@ private:
         }
 
         // Timeout expired and shouldExit is still false, proceed with restore
-        if (!shouldExit.load()) {
-            DisableLotBlocking();
-        }
+        if (!shouldExit.load()) { DisableLotBlocking(); }
     }
 
     // Hooked WorldManager_Update - manipulates the skip flag
@@ -100,7 +102,7 @@ private:
             // Temporarily set the skip flag to prevent lot processing
             char* skipFlag = (char*)worldMgr + WORLD_MANAGER_LOT_SKIP_OFFSET;
             char originalValue = *skipFlag;
-            *skipFlag = 1;  // Tell the game to skip lot processing
+            *skipFlag = 1; // Tell the game to skip lot processing
 
             // Call original function
             int result = instance->originalWorldManagerUpdate(worldMgr, param2, param3);
@@ -122,27 +124,21 @@ private:
         }
 
         // Call original function
-        if (instance && instance->originalEnableMapView) {
-            instance->originalEnableMapView(param);
-        }
+        if (instance && instance->originalEnableMapView) { instance->originalEnableMapView(param); }
     }
 
     // Hooked function: called when exiting map view
     static void __cdecl HookedDisableMapView(float p1, float p2, float p3) {
         // Call original function first
-        if (instance && instance->originalDisableMapView) {
-            instance->originalDisableMapView(p1, p2, p3);
-        }
+        if (instance && instance->originalDisableMapView) { instance->originalDisableMapView(p1, p2, p3); }
 
         if (instance) {
             LOG_INFO("[MapViewLotBlocker] Map view DISABLED - starting delay before restore");
 
             // Stop any existing delay thread
             instance->shouldExit.store(true);
-            instance->threadCV.notify_all();  // Wake up waiting thread
-            if (instance->delayThread.joinable()) {
-                instance->delayThread.join();
-            }
+            instance->threadCV.notify_all(); // Wake up waiting thread
+            if (instance->delayThread.joinable()) { instance->delayThread.join(); }
 
             // Start new delay thread
             instance->shouldExit.store(false);
@@ -150,10 +146,8 @@ private:
         }
     }
 
-public:
-    MapViewLotBlockerPatch() : OptimizationPatch("MapViewLotBlockerPatch", nullptr) {
-        instance = this;
-    }
+  public:
+    MapViewLotBlockerPatch() : OptimizationPatch("MapViewLotBlockerPatch", nullptr) { instance = this; }
 
     ~MapViewLotBlockerPatch() {
         instance = nullptr;
@@ -161,9 +155,7 @@ public:
         // Ensure thread is stopped
         shouldExit.store(true);
         threadCV.notify_all();
-        if (delayThread.joinable()) {
-            delayThread.join();
-        }
+        if (delayThread.joinable()) { delayThread.join(); }
     }
 
     bool Install() override {
@@ -177,9 +169,7 @@ public:
         auto addrEnable = cameraEnableMapView.Resolve();
         auto addrDisable = cameraDisableMapView.Resolve();
 
-        if (!addrWorldMgr || !addrEnable || !addrDisable) {
-            return Fail("Could not resolve required addresses");
-        }
+        if (!addrWorldMgr || !addrEnable || !addrDisable) { return Fail("Could not resolve required addresses"); }
 
         // Set up function pointers
         originalWorldManagerUpdate = reinterpret_cast<WorldManager_Update_t>(*addrWorldMgr);
@@ -187,16 +177,10 @@ public:
         originalDisableMapView = reinterpret_cast<Camera_DisableMapViewMode_t>(*addrDisable);
 
         // Set up hooks
-        hooks = {
-            {(void**)&originalWorldManagerUpdate, (void*)HookedWorldManagerUpdate},
-            {(void**)&originalEnableMapView, (void*)HookedEnableMapView},
-            {(void**)&originalDisableMapView, (void*)HookedDisableMapView}
-        };
+        hooks = {{(void**)&originalWorldManagerUpdate, (void*)HookedWorldManagerUpdate}, {(void**)&originalEnableMapView, (void*)HookedEnableMapView}, {(void**)&originalDisableMapView, (void*)HookedDisableMapView}};
 
         // Install hooks
-        if (!DetourHelper::InstallHooks(hooks)) {
-            return Fail("Failed to install hooks");
-        }
+        if (!DetourHelper::InstallHooks(hooks)) { return Fail("Failed to install hooks"); }
 
         isEnabled = true;
         LOG_INFO("[MapViewLotBlocker] Successfully installed with function hooks");
@@ -217,14 +201,10 @@ public:
         threadCV.notify_all();
 
         // Wait for delay thread to finish if running
-        if (delayThread.joinable()) {
-            delayThread.join();
-        }
+        if (delayThread.joinable()) { delayThread.join(); }
 
         // Remove hooks
-        if (!DetourHelper::RemoveHooks(hooks)) {
-            LOG_WARNING("[MapViewLotBlocker] Failed to remove hooks (may be okay if game is closing)");
-        }
+        if (!DetourHelper::RemoveHooks(hooks)) { LOG_WARNING("[MapViewLotBlocker] Failed to remove hooks (may be okay if game is closing)"); }
 
         // Ensure blocking is disabled
         blockLotStreaming.store(false);
@@ -239,19 +219,11 @@ public:
 MapViewLotBlockerPatch* MapViewLotBlockerPatch::instance = nullptr;
 
 // Auto-register the patch
-REGISTER_PATCH(MapViewLotBlockerPatch, {
-    .displayName = "Map View Lot Streaming Blocker",
-    .description = "Prevents lot loading while in map view mode, reduces stutter/slowdown when exiting/entering map view.",
-    .category = "Performance",
-    .experimental = true,
-    .supportedVersions = VERSION_ALL,
-    .technicalDetails = {
-        "Hooks SPEC_WorldManager_Update",
-        "Hooks Camera_EnableMapViewMode",
-        "Hooks Camera_DisableMapViewMode",
-        "Sets WorldManager skip flag at offset +0x258 to block lot processing",
-        "Blocks lot streaming when entering map view",
-        "Restores lot streaming 1 second after exiting map view (for zoom animation)",
-        "Thread-safe implementation with atomic flags and condition variables"
-    }
-})
+REGISTER_PATCH(MapViewLotBlockerPatch,
+    {.displayName = "Map View Lot Streaming Blocker",
+        .description = "Prevents lot loading while in map view mode, reduces stutter/slowdown when exiting/entering map view.",
+        .category = "Performance",
+        .experimental = true,
+        .supportedVersions = VERSION_ALL,
+        .technicalDetails = {"Hooks SPEC_WorldManager_Update", "Hooks Camera_EnableMapViewMode", "Hooks Camera_DisableMapViewMode", "Sets WorldManager skip flag at offset +0x258 to block lot processing",
+            "Blocks lot streaming when entering map view", "Restores lot streaming 1 second after exiting map view (for zoom animation)", "Thread-safe implementation with atomic flags and condition variables"}})

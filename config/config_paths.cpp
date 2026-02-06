@@ -15,9 +15,7 @@ const std::wstring& GetS3SSDirectory() {
     static std::wstring s3ssDir;
     if (s3ssDir.empty()) {
         wchar_t docPath[MAX_PATH];
-        if (SUCCEEDED(SHGetFolderPathW(NULL, CSIDL_PERSONAL, NULL, 0, docPath))) {
-            s3ssDir = std::wstring(docPath) + L"\\Electronic Arts\\The Sims 3\\S3SS\\";
-        }
+        if (SUCCEEDED(SHGetFolderPathW(NULL, CSIDL_PERSONAL, NULL, 0, docPath))) { s3ssDir = std::wstring(docPath) + L"\\Electronic Arts\\The Sims 3\\S3SS\\"; }
     }
     return s3ssDir;
 }
@@ -44,9 +42,7 @@ bool NeedsMigration() {
 
 bool EnsureDirectoryExists() {
     const std::wstring& dir = GetS3SSDirectory();
-    if (dir.empty()) {
-        return false;
-    }
+    if (dir.empty()) { return false; }
 
     std::error_code ec;
     fs::create_directories(dir, ec);
@@ -68,8 +64,7 @@ bool AtomicWriteToml(const std::string& destPath, const toml::table& root, std::
 
     std::wstring wideTempPath = Utils::Utf8ToWide(tempPath);
     std::wstring wideDestPath = Utils::Utf8ToWide(destPath);
-    if (!MoveFileExW(wideTempPath.c_str(), wideDestPath.c_str(),
-                     MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH)) {
+    if (!MoveFileExW(wideTempPath.c_str(), wideDestPath.c_str(), MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH)) {
         std::error_code ec;
         fs::rename(tempPath, destPath, ec);
         if (ec) {
@@ -83,4 +78,4 @@ bool AtomicWriteToml(const std::string& destPath, const toml::table& root, std::
     return true;
 }
 
-}
+} // namespace ConfigPaths

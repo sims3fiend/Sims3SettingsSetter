@@ -3,11 +3,11 @@
 #include "settings.h"
 
 namespace SettingsGui {
-    void Initialize();
-    void Shutdown();
-    void Render();
-    void RenderSetting(Setting* setting);
-    void RenderMemoryWarning();
+void Initialize();
+void Shutdown();
+void Render();
+void RenderSetting(Setting* setting);
+void RenderMemoryWarning();
 
-    extern bool m_visible;
-} 
+extern bool m_visible;
+} // namespace SettingsGui

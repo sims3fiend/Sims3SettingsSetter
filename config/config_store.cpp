@@ -46,18 +46,13 @@ bool ConfigStore::SaveAll(std::string* error) {
         UISettings::Get().SaveToToml(qolTable);
         MemoryMonitor::Get().SaveToToml(qolTable);
         BorderlessWindow::Get().SaveToToml(qolTable);
-        if (!qolTable.empty()) {
-            root.insert("qol", std::move(qolTable));
-        }
+        if (!qolTable.empty()) { root.insert("qol", std::move(qolTable)); }
 
-        if (!ConfigPaths::AtomicWriteToml(configPath, root, error)) {
-            return false;
-        }
+        if (!ConfigPaths::AtomicWriteToml(configPath, root, error)) { return false; }
 
         LOG_DEBUG("[ConfigStore] Saved config to " + configPath);
         return true;
-    }
-    catch (const std::exception& e) {
+    } catch (const std::exception& e) {
         std::string msg = std::string("Exception saving config: ") + e.what();
         LOG_ERROR("[ConfigStore] " + msg);
         if (error) *error = msg;
@@ -95,14 +90,12 @@ bool ConfigStore::LoadAll(std::string* error) {
 
         LOG_INFO("[ConfigStore] Loaded config from " + configPath);
         return true;
-    }
-    catch (const toml::parse_error& e) {
+    } catch (const toml::parse_error& e) {
         std::string msg = std::string("TOML parse error: ") + e.what();
         LOG_ERROR("[ConfigStore] " + msg);
         if (error) *error = msg;
         return false;
-    }
-    catch (const std::exception& e) {
+    } catch (const std::exception& e) {
         std::string msg = std::string("Exception loading config: ") + e.what();
         LOG_ERROR("[ConfigStore] " + msg);
         if (error) *error = msg;
@@ -130,14 +123,11 @@ bool ConfigStore::SaveDefaults(std::string* error) {
 
         SettingsManager::Get().SaveDefaultsToToml(root);
 
-        if (!ConfigPaths::AtomicWriteToml(defaultsPath, root, error)) {
-            return false;
-        }
+        if (!ConfigPaths::AtomicWriteToml(defaultsPath, root, error)) { return false; }
 
         LOG_DEBUG("[ConfigStore] Saved defaults to " + defaultsPath);
         return true;
-    }
-    catch (const std::exception& e) {
+    } catch (const std::exception& e) {
         std::string msg = std::string("Exception saving defaults: ") + e.what();
         LOG_ERROR("[ConfigStore] " + msg);
         if (error) *error = msg;
@@ -160,14 +150,12 @@ bool ConfigStore::LoadDefaults(std::string* error) {
 
         LOG_DEBUG("[ConfigStore] Loaded defaults from " + defaultsPath);
         return true;
-    }
-    catch (const toml::parse_error& e) {
+    } catch (const toml::parse_error& e) {
         std::string msg = std::string("TOML parse error in defaults: ") + e.what();
         LOG_ERROR("[ConfigStore] " + msg);
         if (error) *error = msg;
         return false;
-    }
-    catch (const std::exception& e) {
+    } catch (const std::exception& e) {
         std::string msg = std::string("Exception loading defaults: ") + e.what();
         LOG_ERROR("[ConfigStore] " + msg);
         if (error) *error = msg;
