@@ -84,10 +84,8 @@ bool ConfigStore::LoadAll(std::string* error) {
             BorderlessWindow::Get().LoadFromToml(*qolNode);
         }
 
-        // Note: OptimizationManager patches are loaded separately after D3D9 init because patches need the game process to be further along
-        // Call LoadPatchesFromToml() from dllmain after D3D9 hook is set up
-        OptimizationManager::Get().LoadFromToml(root);
-
+        // Note: patches are loaded separately via LoadPatches() after D3D9 init because patches need the game process to be further along
+        // Don't ask me why...
         LOG_INFO("[ConfigStore] Loaded config from " + configPath);
         return true;
     } catch (const toml::parse_error& e) {
@@ -97,6 +95,34 @@ bool ConfigStore::LoadAll(std::string* error) {
         return false;
     } catch (const std::exception& e) {
         std::string msg = std::string("Exception loading config: ") + e.what();
+        LOG_ERROR("[ConfigStore] " + msg);
+        if (error) *error = msg;
+        return false;
+    }
+}
+
+bool ConfigStore::LoadPatches(std::string* error) {
+    std::lock_guard<std::mutex> lock(m_mutex);
+    try {
+        std::string configPath = ConfigPaths::GetConfigPath();
+
+        if (!fs::exists(configPath)) {
+            LOG_DEBUG("[ConfigStore] No config file found, skipping patch loading");
+            return true;
+        }
+
+        toml::table root = toml::parse_file(configPath);
+        OptimizationManager::Get().LoadFromToml(root);
+
+        LOG_INFO("[ConfigStore] Loaded patches from " + configPath);
+        return true;
+    } catch (const toml::parse_error& e) {
+        std::string msg = std::string("TOML parse error loading patches: ") + e.what();
+        LOG_ERROR("[ConfigStore] " + msg);
+        if (error) *error = msg;
+        return false;
+    } catch (const std::exception& e) {
+        std::string msg = std::string("Exception loading patches: ") + e.what();
         LOG_ERROR("[ConfigStore] " + msg);
         if (error) *error = msg;
         return false;

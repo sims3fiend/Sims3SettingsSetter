@@ -602,6 +602,12 @@ DWORD WINAPI HookThread(LPVOID lpParameter) {
             return FALSE;
         }
 
+        // 9. Load patches now that D3D9 is set up and game is further along ;_;
+        {
+            std::string error;
+            if (!ConfigStore::Get().LoadPatches(&error)) { LOG_WARNING("Failed to load patches: " + error); }
+        }
+
         LOG_INFO("Starting message loop");
 
         // Message loop with timeout to prevent stack overflow

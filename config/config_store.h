@@ -11,6 +11,7 @@ class ConfigStore {
     // Primary save/load (coordinates all subsystems)
     bool SaveAll(std::string* error = nullptr);
     bool LoadAll(std::string* error = nullptr);
+    bool LoadPatches(std::string* error = nullptr);
 
     // Default values
     bool SaveDefaults(std::string* error = nullptr);
