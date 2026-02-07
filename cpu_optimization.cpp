@@ -193,6 +193,17 @@ DWORD WINAPI CPUOptimizationPatch::HookedSetThreadIdealProcessor(HANDLE hThread,
     return previousIdeal;
 }
 
+// Restore original process affinity after init delay
+DWORD WINAPI CPUOptimizationPatch::RestoreAffinityThread(LPVOID param) {
+    Sleep(5000);
+    auto* self = static_cast<CPUOptimizationPatch*>(param);
+    if (self && self->originalProcessAffinity) {
+        SetProcessAffinityMask(GetCurrentProcess(), self->originalProcessAffinity);
+        LOG_INFO("Hybrid CPU: Restored original process affinity");
+    }
+    return 0;
+}
+
 // Build topology info for P-cores and AMD L3 groups
 void CPUOptimizationPatch::BuildTopology() {
     pCoreIndices.clear();
@@ -276,6 +287,20 @@ bool CPUOptimizationPatch::Install() {
 
     // Build CPU topology (P-cores / L3 groups)
     BuildTopology();
+
+    // Alder Lake fix: restrict process to P-cores during init, restore after 5s
+    if (cpuInfo.isHybrid && !pCoreIndices.empty()) {
+        DWORD_PTR processAffinity = 0, systemAffinity = 0;
+        if (GetProcessAffinityMask(GetCurrentProcess(), &processAffinity, &systemAffinity)) {
+            originalProcessAffinity = processAffinity;
+            DWORD_PTR pCoreMask = 0;
+            for (DWORD idx : pCoreIndices) { pCoreMask |= (static_cast<DWORD_PTR>(1) << idx); }
+            SetProcessAffinityMask(GetCurrentProcess(), pCoreMask);
+            LOG_INFO("Hybrid CPU: Restricting to P-cores during init (mask=0x" + std::to_string(pCoreMask) + ")");
+            HANDLE hThread = CreateThread(nullptr, 0, RestoreAffinityThread, this, 0, nullptr);
+            if (hThread) CloseHandle(hThread);
+        }
+    }
 
     // Get the original function address
     originalSetThreadIdealProcessor = (SetThreadIdealProcessorFn)GetProcAddress(GetModuleHandle(L"kernel32.dll"), "SetThreadIdealProcessor");

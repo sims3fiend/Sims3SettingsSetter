@@ -46,11 +46,16 @@ class CPUOptimizationPatch : public OptimizationPatch {
     std::vector<std::vector<DWORD>> l3Groups;
     bool hasEfficiencyInfo = false;
 
+    // Alder Lake affinity fix
+    DWORD_PTR originalProcessAffinity = 0;
+
     // Static instance for hook callbacks
     static CPUOptimizationPatch* instance;
 
     // Hook function for thread ideal processor
     static DWORD WINAPI HookedSetThreadIdealProcessor(HANDLE hThread, DWORD dwIdealProcessor);
+    // Restores process affinity after init delay
+    static DWORD WINAPI RestoreAffinityThread(LPVOID param);
 
     // Helper methods
     void GetCPUInfo();
