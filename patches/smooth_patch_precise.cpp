@@ -176,54 +176,34 @@ class SmoothPatchPrecise : public OptimizationPatch {
         successful &= PatchHelper::WriteDWORD(base + offsetOfDelayLo0, frameDelay, &tx.locations);
         successful &= PatchHelper::WriteDWORD(base + offsetOfDelayLo1, frameDelay, &tx.locations);
 
+        // clang-format off
         uint8_t preciseSleepCall[34] = {
             /* We could use the more compact `0x6A imm8` encoding of push here,
                but we don't so that we can pad this block with one nop instead of two. */
-            0x68,
-            0xFF,
-            0xFF,
-            0xFF,
-            0xFF, // push 0xFFFFFFFF
-            0x68,
-            0x9C,
-            0xFF,
-            0xFF,
-            0xFF, // push -100
-            0x56, // push esi
-            0x50, // push eax
+            0x68, 0xFF, 0xFF, 0xFF, 0xFF, // push 0xFFFFFFFF
+            0x68, 0x9C, 0xFF, 0xFF, 0xFF, // push -100
+            0x56,                         // push esi
+            0x50,                         // push eax
             /* We divide by -100 to convert the nanosecond-based value in eax:esi
                to a hectonanosecond-based value. */
             /* We divide by -100 instead of 100 so that the result is negative,
                which we want because NtDelayExecution uses a negative interval
                for sleeping by a relative duration. */
-            //12:
-            0xE8,
-            0x77,
-            0x77,
-            0x77,
-            0x77, // call _alldiv
+        //12:
+            0xE8, 0x77, 0x77, 0x77, 0x77, // call _alldiv
             /* The duration to sleep for is currently held across eax:edx,
                so we store those on the stack for the `Interval` argument of NtDelayExecution. */
-            0x52, // push edx
-            0x50, // push eax
-            0x54, // push esp
+            0x52,                         // push edx
+            0x50,                         // push eax
+            0x54,                         // push esp
             /* A non-alertable sleep, in hopes of consistent frame-pacing. */
-            0x6A,
-            0x00, // push 0
-                  //22:
-            0xE8,
-            0x77,
-            0x77,
-            0x77,
-            0x77, // call NtDelayExecution
-            0x83,
-            0304,
-            0x08, // add esp, 8
-            0x0F,
-            0x1F,
-            0x40,
-            0x00, // nop
+            0x6A, 0x00,                   // push 0
+        //22:
+            0xE8, 0x77, 0x77, 0x77, 0x77, // call NtDelayExecution
+            0x83, 0304, 0x08,             // add esp, 8
+            0x0F, 0x1F, 0x40, 0x00,       // nop
         };
+        // clang-format on
 
         uintptr_t sleepCallBase = base + offsetOfSleepCall;
         uintptr_t ntDelayExecution = reinterpret_cast<uintptr_t>(&NtDelayExecution);
