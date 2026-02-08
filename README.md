@@ -1,4 +1,4 @@
-# Sims 3 Settings Setter v1.2
+# Sims 3 Settings Setter v1.3
 
 Performance patcher and setting editor for The Sims 3.
 
@@ -99,7 +99,7 @@ Settings are stored in `Documents\Electronic Arts\The Sims 3\S3SS\S3SS.toml`. If
 ## Troubleshooting
 
 **UI doesn't open?**
-- Check for `S3SS_LOG.txt` in the game's execution directory (`The Sims 3\Game\Bin`) - send it to me if it exists
+- Check for `S3SS_LOG.txt` in the game's execution directory (`Documents\Electronic Arts\The Sims 3\S3SS\`) - send it to me if it exists
 - You can also try changing the keybind in `Documents\Electronic Arts\The Sims 3\S3SS\S3SS.toml` by modifying the `UIToggleKey` value (See for IDs: https://docs.microsoft.com/en-us/windows/win32/inputdev/virtual-key-codes)
 - If there is no log file, your ASI loader isn't working.
 
