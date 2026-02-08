@@ -8,8 +8,9 @@ class table;
 } // namespace toml
 
 namespace ConfigPaths {
-// Get the S3SS config directory: Documents\Electronic Arts\The Sims 3\S3SS\
-    // Result is cached after first call.
+// Get the S3SS config directory: Documents\Electronic Arts\<localized game name>\S3SS\
+// The game folder name is resolved from the exe's string resources to support all locales
+// Result is cached after first call
 const std::wstring& GetS3SSDirectory();
 
 // File paths in the new Documents location

@@ -11,11 +11,53 @@ namespace fs = std::filesystem;
 
 namespace ConfigPaths {
 
+// Resolve the localized game folder name (e.g. "Die Sims 3" tehehe)
+// Scan the exe's string resources, we do this the same way the game does internally
+// String table is organized in blocks of 100 per locale: base+0 = locale code (e.g. "fr-fr"),
+// base+1 = display name with TM, base+2 = folder name
+static std::wstring ResolveLocalizedGameFolder() {
+    HMODULE exe = GetModuleHandle(NULL);
+    wchar_t sysLocale[LOCALE_NAME_MAX_LENGTH];
+    GetUserDefaultLocaleName(sysLocale, LOCALE_NAME_MAX_LENGTH);
+    _wcslwr_s(sysLocale);
+
+    // Extract language prefix (e.g. "en" from "en-au") for fallback matching, :)))))
+    std::wstring sysLang(sysLocale);
+    auto hyphen = sysLang.find(L'-');
+    if (hyphen != std::wstring::npos) sysLang.resize(hyphen);
+
+    wchar_t blockLocale[16];
+    wchar_t gameName[MAX_PATH];
+    UINT prefixMatch = 0;
+
+    for (UINT base = 1000; base < 3600; base += 100) {
+        if (LoadStringW(exe, base, blockLocale, 16) > 0) {
+            _wcslwr_s(blockLocale);
+            if (wcscmp(sysLocale, blockLocale) == 0 &&
+                LoadStringW(exe, base + 2, gameName, MAX_PATH) > 0) {
+                return gameName;
+            }
+            // Track first language-prefix match as fallback (e.g. "en-au" → "en-us")
+            if (prefixMatch == 0 && wcsncmp(sysLang.c_str(), blockLocale, sysLang.size()) == 0) {
+                prefixMatch = base;
+            }
+        }
+    }
+    if (prefixMatch != 0 && LoadStringW(exe, prefixMatch + 2, gameName, MAX_PATH) > 0) {
+        return gameName;
+    }
+    //If this every happens I swear to GODDDDDDD
+    return L"The Sims 3";
+}
+
 const std::wstring& GetS3SSDirectory() {
     static std::wstring s3ssDir;
     if (s3ssDir.empty()) {
         wchar_t docPath[MAX_PATH];
-        if (SUCCEEDED(SHGetFolderPathW(NULL, CSIDL_PERSONAL, NULL, 0, docPath))) { s3ssDir = std::wstring(docPath) + L"\\Electronic Arts\\The Sims 3\\S3SS\\"; }
+        if (SUCCEEDED(SHGetFolderPathW(NULL, CSIDL_PERSONAL, NULL, 0, docPath))) {
+            s3ssDir = std::wstring(docPath) + L"\\Electronic Arts\\"
+                    + ResolveLocalizedGameFolder() + L"\\S3SS\\";
+        }
     }
     return s3ssDir;
 }
