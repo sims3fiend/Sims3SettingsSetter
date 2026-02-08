@@ -34,7 +34,7 @@ There's also a lot of helper functions and easy to use things if you'd like to m
 - **Smooth Patch (Precise Flavour) ⭐** - ["Just Harry"](https://github.com/just-harry)'s more precise alternative to the original Smooth Patch. Only affects the simulator thread (not global Sleep), uses NtDelayExecution for sub-millisecond precision, allowing actual distinction between tick rates like 750 vs 1000 TPS that the original does not. **With both this and the Original Flavor patch, it is recommended you still use the original [Smooth Patch's](https://modthesims.info/d/658759/smooth-patch-2-1.html) .package file**
 - **Smooth Patch (Original Flavour)** - LazyDuchess's original Smooth Patch implementation in S3SS.
 - **Lot Visibility Camera Override** - Stops lot loading based on camera view, should make it so they only load around you. Might not do anything.
-- **CPU Thread Optimization** - Optimizes thread placement for modern CPUs with P/E-cores or multiple CCXs.
+- **CPU Thread Optimization** - Optimizes thread placement for modern CPUs with P/E-cores or multiple CCXs. This also doubles as an Alder Lake patch for people using that series of CPU.
 - **CreateFileW Random Access** - Improves file I/O performance by hinting random access pattern.
 - **GC_stop_world() Optimization** - Early exit for a GC function called ~once per frame, very minor improvement, driveby patch.
 
