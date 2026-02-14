@@ -154,7 +154,19 @@ void BorderlessWindow::SetWindowHandle(HWND hwnd) {
         default:
             break;
         }
+        // jank alert
+        // Schedule a deferred reapply — the game may override our window position/size during its own startup sequence after we apply here
+        m_reapplyCountdown = 60;
     }
+}
+
+void BorderlessWindow::TickReapply() {
+    bool shouldApply = false;
+    {
+        std::lock_guard<std::mutex> lock(m_mutex);
+        if (m_reapplyCountdown > 0 && --m_reapplyCountdown == 0) { shouldApply = true; }
+    }
+    if (shouldApply) { Apply(); }
 }
 
 void BorderlessWindow::SetMode(BorderlessMode mode) {

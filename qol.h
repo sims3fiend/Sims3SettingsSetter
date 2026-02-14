@@ -128,6 +128,7 @@ class BorderlessWindow {
     void SetMode(BorderlessMode mode);
     void Apply(); // Apply current state to window
     void SetWindowHandle(HWND hwnd);
+    void TickReapply(); // Call from EndScene each frame to handle deferred reapplication
 
     // TOML serialization (writes/reads qol.borderless_window section)
     void SaveToToml(toml::table& qolTable) const;
@@ -149,4 +150,5 @@ class BorderlessWindow {
     LONG m_originalExStyle;
     RECT m_originalRect;
     bool m_wasApplied;
+    int m_reapplyCountdown = 0;
 };

@@ -123,6 +123,9 @@ HRESULT __stdcall HookedEndScene(LPDIRECT3DDEVICE9 pDevice) {
         D3D9Hooks::Internal::Initialize(pDevice);
     }
 
+    // Handle deferred borderless reapplication (game may override window pos/size during startup)
+    BorderlessWindow::Get().TickReapply();
+
     if (g_imguiInitialized.load()) {
         try {
             ImGui_ImplDX9_NewFrame();

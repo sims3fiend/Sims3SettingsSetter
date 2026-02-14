@@ -85,6 +85,8 @@ class FloatSetting : public PatchSetting {
         // Render presets if available
         if (!presets.empty()) {
             ImGui::Text("Presets:");
+            float rowHeight = ImGui::GetFrameHeightWithSpacing() + ImGui::GetStyle().ScrollbarSize;
+            ImGui::BeginChild(("##presets_" + name).c_str(), ImVec2(0, rowHeight), ImGuiChildFlags_None, ImGuiWindowFlags_HorizontalScrollbar);
             for (const auto& [label, value] : presets) {
                 if (ImGui::Button(label.c_str())) {
                     *valuePtr = value;
@@ -92,32 +94,34 @@ class FloatSetting : public PatchSetting {
                 }
                 ImGui::SameLine();
             }
-            ImGui::NewLine();
+            ImGui::EndChild();
             ImGui::Separator();
             ImGui::Spacing();
         }
 
         // Render input widget based on UI type
+        // Use ##name as widget ID so the technical name doesn't appear as a label (the user-friendly description is already shown above)
+        std::string widgetId = "##" + name;
         ImGui::Text("Custom Value:");
+        ImGui::SetNextItemWidth(-FLT_MIN);
         switch (uiType) {
         case SettingUIType::Slider:
-            if (ImGui::SliderFloat(name.c_str(), valuePtr, minValue, maxValue, "%.5f")) { changed = true; }
+            if (ImGui::SliderFloat(widgetId.c_str(), valuePtr, minValue, maxValue, "%.5f")) { changed = true; }
             break;
 
         case SettingUIType::Drag:
-            if (ImGui::DragFloat(name.c_str(), valuePtr, (maxValue - minValue) / 100.0f, minValue, maxValue, "%.5f")) { changed = true; }
+            if (ImGui::DragFloat(widgetId.c_str(), valuePtr, (maxValue - minValue) / 100.0f, minValue, maxValue, "%.5f")) { changed = true; }
             break;
 
         case SettingUIType::InputBox:
         default:
-            if (ImGui::InputFloat(name.c_str(), valuePtr, 0.0f, 0.0f, "%.5f")) {
+            if (ImGui::InputFloat(widgetId.c_str(), valuePtr, 0.0f, 0.0f, "%.5f")) {
                 // Clamp to bounds
                 if (*valuePtr < minValue) *valuePtr = minValue;
                 if (*valuePtr > maxValue) *valuePtr = maxValue;
                 changed = true;
             }
-            ImGui::SameLine();
-            ImGui::TextDisabled("(%.5f - %.5f)", minValue, maxValue);
+            ImGui::TextDisabled("Range: %g - %g", minValue, maxValue);
             break;
         }
 
@@ -180,6 +184,8 @@ class IntSetting : public PatchSetting {
         // Render presets if available
         if (!presets.empty()) {
             ImGui::Text("Presets:");
+            float rowHeight = ImGui::GetFrameHeightWithSpacing() + ImGui::GetStyle().ScrollbarSize;
+            ImGui::BeginChild(("##presets_" + name).c_str(), ImVec2(0, rowHeight), ImGuiChildFlags_None, ImGuiWindowFlags_HorizontalScrollbar);
             for (const auto& [label, value] : presets) {
                 if (ImGui::Button(label.c_str())) {
                     *valuePtr = value;
@@ -187,29 +193,32 @@ class IntSetting : public PatchSetting {
                 }
                 ImGui::SameLine();
             }
-            ImGui::NewLine();
+            ImGui::EndChild();
             ImGui::Separator();
         }
 
-        // Render input based on UI type - TODO others xoxo
+        // Render input based on UI type
+        std::string widgetId = "##" + name;
         ImGui::Text("Custom Value:");
+        ImGui::SetNextItemWidth(-FLT_MIN);
         switch (uiType) {
         case SettingUIType::Slider:
-            if (ImGui::SliderInt(name.c_str(), valuePtr, minValue, maxValue)) { changed = true; }
+            if (ImGui::SliderInt(widgetId.c_str(), valuePtr, minValue, maxValue)) { changed = true; }
             break;
 
         case SettingUIType::Drag:
-            if (ImGui::DragInt(name.c_str(), valuePtr, (maxValue - minValue) / 100.0f, minValue, maxValue)) { changed = true; }
+            if (ImGui::DragInt(widgetId.c_str(), valuePtr, (maxValue - minValue) / 100.0f, minValue, maxValue)) { changed = true; }
             break;
 
         case SettingUIType::InputBox:
         default:
-            if (ImGui::InputInt(name.c_str(), valuePtr)) {
+            if (ImGui::InputInt(widgetId.c_str(), valuePtr)) {
                 // Clamp to bounds
                 if (*valuePtr < minValue) *valuePtr = minValue;
                 if (*valuePtr > maxValue) *valuePtr = maxValue;
                 changed = true;
             }
+            ImGui::TextDisabled("Range: %d - %d", minValue, maxValue);
             break;
         }
 
@@ -319,7 +328,9 @@ class EnumSetting : public PatchSetting {
         // Create combo box
         const char* currentChoice = (*valuePtr >= 0 && *valuePtr < static_cast<int>(choices.size())) ? choices[*valuePtr].c_str() : "Invalid";
 
-        if (ImGui::BeginCombo(name.c_str(), currentChoice)) {
+        std::string widgetId = "##" + name;
+        ImGui::SetNextItemWidth(-FLT_MIN);
+        if (ImGui::BeginCombo(widgetId.c_str(), currentChoice)) {
             for (size_t i = 0; i < choices.size(); i++) {
                 bool isSelected = (*valuePtr == static_cast<int>(i));
                 if (ImGui::Selectable(choices[i].c_str(), isSelected)) {
