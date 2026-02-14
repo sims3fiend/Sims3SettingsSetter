@@ -262,9 +262,7 @@ void BorderlessWindow::ApplyFullscreen() {
 
         // Move window to top-left of monitor and resize to cover full screen. This changes the window size, which may cause issues if the game
         // is using a spoofed resolution via ResolutionSpoofer. In that case, D3D backbuffer won't match the window size.
-        SetWindowPos(m_hwnd, HWND_TOPMOST, x, y, width, height, SWP_FRAMECHANGED | SWP_NOACTIVATE);
-        // Remove TOPMOST immediately after to avoid staying always-on-top
-        SetWindowPos(m_hwnd, HWND_NOTOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
+        SetWindowPos(m_hwnd, nullptr, x, y, width, height, SWP_FRAMECHANGED | SWP_NOACTIVATE | SWP_NOZORDER);
     } else {
         // Fallback: just update the frame without resizing
         SetWindowPos(m_hwnd, nullptr, 0, 0, 0, 0, SWP_FRAMECHANGED | SWP_NOACTIVATE | SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER);
