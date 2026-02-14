@@ -1,6 +1,7 @@
 #include "migration.h"
 #include "config_paths.h"
 #include "logger.h"
+#include "utils.h"
 #include "imgui.h"
 #include <toml++/toml.hpp>
 #include <fstream>
@@ -63,7 +64,7 @@ struct INIPatch {
 // Parser:
 
 static bool ParseOldINI(const std::string& iniPath, std::vector<INISetting>& outSettings, std::vector<INIConfigValue>& outConfigValues, INIQoLValues& outQoL, std::vector<INIPatch>& outPatches) {
-    std::ifstream file(iniPath);
+    std::ifstream file(Utils::ToPath(iniPath));
     if (!file.is_open()) return false;
 
     enum class Section { None, Setting, Config, QoL, Patch };

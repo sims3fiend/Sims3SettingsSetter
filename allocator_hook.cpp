@@ -134,9 +134,9 @@ void* __cdecl SafeRecalloc(void* p, size_t count, size_t size) {
 bool ShouldEnableAllocatorHooks() {
     // Try new TOML path first
     std::string tomlPath = ConfigPaths::GetConfigPath();
-    if (!tomlPath.empty() && std::filesystem::exists(tomlPath)) {
+    if (!tomlPath.empty() && std::filesystem::exists(Utils::ToPath(tomlPath))) {
         try {
-            toml::table root = toml::parse_file(tomlPath);
+            toml::table root = toml::parse_file(Utils::Utf8ToWide(tomlPath));
             auto enabled = root["patches"]["Mimalloc"]["enabled"].value<bool>();
             if (enabled.has_value()) { return enabled.value(); }
         } catch (...) {
@@ -146,7 +146,7 @@ bool ShouldEnableAllocatorHooks() {
 
     // Fall back to old INI path (first-run-after-update, before migration runs)
     std::string iniPath = Utils::GetDefaultINIPath();
-    std::ifstream file(iniPath);
+    std::ifstream file(Utils::ToPath(iniPath));
     if (!file.is_open()) { return false; }
 
     std::string line;

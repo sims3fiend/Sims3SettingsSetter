@@ -5,6 +5,7 @@
 #include "optimization.h"
 #include "qol.h"
 #include "logger.h"
+#include "utils.h"
 #include <toml++/toml.hpp>
 #include <filesystem>
 
@@ -65,12 +66,12 @@ bool ConfigStore::LoadAll(std::string* error) {
     try {
         std::string configPath = ConfigPaths::GetConfigPath();
 
-        if (!fs::exists(configPath)) {
+        if (!fs::exists(Utils::ToPath(configPath))) {
             LOG_DEBUG("[ConfigStore] No config file found at " + configPath + " (fresh install)");
             return true; // Not an error, just no config yet
         }
 
-        toml::table root = toml::parse_file(configPath);
+        toml::table root = toml::parse_file(Utils::Utf8ToWide(configPath));
 
         // Distribute to all subsystems
         SettingsManager::Get().LoadFromToml(root);
@@ -106,12 +107,12 @@ bool ConfigStore::LoadPatches(std::string* error) {
     try {
         std::string configPath = ConfigPaths::GetConfigPath();
 
-        if (!fs::exists(configPath)) {
+        if (!fs::exists(Utils::ToPath(configPath))) {
             LOG_DEBUG("[ConfigStore] No config file found, skipping patch loading");
             return true;
         }
 
-        toml::table root = toml::parse_file(configPath);
+        toml::table root = toml::parse_file(Utils::Utf8ToWide(configPath));
         OptimizationManager::Get().LoadFromToml(root);
 
         LOG_INFO("[ConfigStore] Loaded patches from " + configPath);
@@ -166,12 +167,12 @@ bool ConfigStore::LoadDefaults(std::string* error) {
     try {
         std::string defaultsPath = ConfigPaths::GetDefaultsPath();
 
-        if (!fs::exists(defaultsPath)) {
+        if (!fs::exists(Utils::ToPath(defaultsPath))) {
             LOG_DEBUG("[ConfigStore] No defaults file found at " + defaultsPath);
             return true;
         }
 
-        toml::table root = toml::parse_file(defaultsPath);
+        toml::table root = toml::parse_file(Utils::Utf8ToWide(defaultsPath));
         SettingsManager::Get().LoadDefaultsFromToml(root);
 
         LOG_DEBUG("[ConfigStore] Loaded defaults from " + defaultsPath);

@@ -17,8 +17,10 @@ namespace ConfigPaths {
 // base+1 = display name with TM, base+2 = folder name
 static std::wstring ResolveLocalizedGameFolder() {
     HMODULE exe = GetModuleHandle(NULL);
-    wchar_t sysLocale[LOCALE_NAME_MAX_LENGTH];
-    GetUserDefaultLocaleName(sysLocale, LOCALE_NAME_MAX_LENGTH);
+    if (!exe) return L"The Sims 3"; //bro idk
+
+    wchar_t sysLocale[LOCALE_NAME_MAX_LENGTH] = {};
+    if (GetUserDefaultLocaleName(sysLocale, LOCALE_NAME_MAX_LENGTH) == 0) { return L"The Sims 3"; }
     _wcslwr_s(sysLocale);
 
     // Extract language prefix (e.g. "en" from "en-au") for fallback matching, :)))))
@@ -33,20 +35,13 @@ static std::wstring ResolveLocalizedGameFolder() {
     for (UINT base = 1000; base < 3600; base += 100) {
         if (LoadStringW(exe, base, blockLocale, 16) > 0) {
             _wcslwr_s(blockLocale);
-            if (wcscmp(sysLocale, blockLocale) == 0 &&
-                LoadStringW(exe, base + 2, gameName, MAX_PATH) > 0) {
-                return gameName;
-            }
+            if (wcscmp(sysLocale, blockLocale) == 0 && LoadStringW(exe, base + 2, gameName, MAX_PATH) > 0) { return gameName; }
             // Track first language-prefix match as fallback (e.g. "en-au" → "en-us")
-            if (prefixMatch == 0 && wcsncmp(sysLang.c_str(), blockLocale, sysLang.size()) == 0) {
-                prefixMatch = base;
-            }
+            if (prefixMatch == 0 && wcsncmp(sysLang.c_str(), blockLocale, sysLang.size()) == 0) { prefixMatch = base; }
         }
     }
-    if (prefixMatch != 0 && LoadStringW(exe, prefixMatch + 2, gameName, MAX_PATH) > 0) {
-        return gameName;
-    }
-    //If this every happens I swear to GODDDDDDD
+    if (prefixMatch != 0 && LoadStringW(exe, prefixMatch + 2, gameName, MAX_PATH) > 0) { return gameName; }
+    //If this ever happens I swear to GODDDDDDD
     return L"The Sims 3";
 }
 
@@ -54,10 +49,7 @@ const std::wstring& GetS3SSDirectory() {
     static std::wstring s3ssDir;
     if (s3ssDir.empty()) {
         wchar_t docPath[MAX_PATH];
-        if (SUCCEEDED(SHGetFolderPathW(NULL, CSIDL_PERSONAL, NULL, 0, docPath))) {
-            s3ssDir = std::wstring(docPath) + L"\\Electronic Arts\\"
-                    + ResolveLocalizedGameFolder() + L"\\S3SS\\";
-        }
+        if (SUCCEEDED(SHGetFolderPathW(NULL, CSIDL_PERSONAL, NULL, 0, docPath))) { s3ssDir = std::wstring(docPath) + L"\\Electronic Arts\\" + ResolveLocalizedGameFolder() + L"\\S3SS\\"; }
     }
     return s3ssDir;
 }
@@ -79,7 +71,7 @@ std::string GetLegacyINIPath() {
 }
 
 bool NeedsMigration() {
-    return fs::exists(GetLegacyINIPath()) && !fs::exists(GetConfigPath());
+    return fs::exists(Utils::ToPath(GetLegacyINIPath())) && !fs::exists(Utils::ToPath(GetConfigPath()));
 }
 
 bool EnsureDirectoryExists() {
@@ -94,7 +86,7 @@ bool EnsureDirectoryExists() {
 bool AtomicWriteToml(const std::string& destPath, const toml::table& root, std::string* error) {
     std::string tempPath = destPath + ".tmp";
     {
-        std::ofstream out(tempPath, std::ios::binary);
+        std::ofstream out(Utils::ToPath(tempPath), std::ios::binary);
         if (!out.is_open()) {
             std::string msg = "Failed to open temp file for writing: " + tempPath;
             LOG_ERROR("[ConfigPaths] " + msg);

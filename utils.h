@@ -7,6 +7,7 @@
 #include <mutex>
 #include <ctime>
 #include <iomanip>
+#include <filesystem>
 
 extern HMODULE GetDllModuleHandle();
 
@@ -50,6 +51,11 @@ inline std::string WideToUtf8(const std::wstring& wstr) {
     std::string strTo(size_needed, 0);
     WideCharToMultiByte(CP_UTF8, 0, wstr.c_str(), (int)wstr.size(), &strTo[0], size_needed, nullptr, nullptr);
     return strTo;
+}
+
+// Convert a UTF-8 string to a filesystem path (handles non-Latin usernames on Windows)
+inline std::filesystem::path ToPath(const std::string& utf8) {
+    return std::filesystem::path(Utf8ToWide(utf8));
 }
 
 inline std::vector<std::string> SplitString(const std::string& str, char delim) {

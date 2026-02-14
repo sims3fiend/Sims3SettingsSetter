@@ -1,4 +1,5 @@
 #include "logger.h"
+#include "utils.h"
 
 namespace Logger {
 bool Handler::s_debugMode = false;
@@ -14,7 +15,7 @@ bool Handler::Initialize(const std::string& filename) {
         return true; // Already initialized
     }
 
-    s_logFile.open(filename, std::ios::out | std::ios::trunc);
+    s_logFile.open(Utils::ToPath(filename), std::ios::out | std::ios::trunc);
     if (!s_logFile.is_open()) { return false; }
 
     // Write header with timestamp
