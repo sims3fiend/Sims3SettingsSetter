@@ -140,6 +140,7 @@
     <ClCompile Include="memory_statistics.cpp" />
     <ClCompile Include="optimization.cpp" />
     <ClCompile Include="patches\adaptive_wait_patch.cpp" />
+    <ClCompile Include="patches\expanded_crash_logs_patch.cpp" />
     <ClCompile Include="patches\gc_finalize_throttle_patch.cpp" />
     <ClCompile Include="patches\gc_stop_world_patch.cpp" />
     <ClCompile Include="patches\map_view_lot_blocker_patch.cpp" />
