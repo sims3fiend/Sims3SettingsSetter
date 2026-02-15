@@ -681,6 +681,26 @@ void RenderUI() {
                 ImGui::EndTabItem();
             }
 
+// This is useful for testing/debugging the Expanded Crash Logs patch.
+#if 0
+            if (ImGui::BeginTabItem("Debug")) {
+                static char addressHex[9] = "00000000";
+                static uint32_t address = 0;
+
+                if (ImGui::InputText("Address", addressHex, 9, ImGuiInputTextFlags_CharsHexadecimal)) { std::from_chars(addressHex, addressHex + 8, address, 16); }
+
+                if (ImGui::Button("Break glass to crash game")) {
+                    if (address & 1) {
+                        *reinterpret_cast<volatile uint8_t*>(address) = 7;
+                    } else {
+                        *reinterpret_cast<volatile const uint8_t*>(address);
+                    }
+                }
+
+                ImGui::EndTabItem();
+            }
+#endif
+
             ImGui::EndTabBar();
         }
     }
