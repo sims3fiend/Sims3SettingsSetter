@@ -9,11 +9,28 @@
 #include <vector>
 #include <unordered_map>
 #include <toml++/toml.hpp>
+#include <winternl.h>
 
 MemoryMonitor& MemoryMonitor::Get() {
     static MemoryMonitor instance;
     return instance;
 }
+
+enum { ProcessVmCounters = 3 };
+
+struct VM_COUNTERS {
+    size_t PeakVirtualSize;
+    size_t VirtualSize;
+    uint32_t PageFaultCount;
+    size_t PeakWorkingSetSize;
+    size_t WorkingSetSize;
+    size_t QuotaPeakPagedPoolUsage;
+    size_t QuotaPagedPoolUsage;
+    size_t QuotaPeakNonPagedPoolUsage;
+    size_t QuotaNonPagedPoolUsage;
+    size_t PagefileUsage;
+    size_t PeakPagefileUsage;
+};
 
 void MemoryMonitor::Update() {
     if (!m_enabled) {
@@ -22,10 +39,10 @@ void MemoryMonitor::Update() {
         return;
     }
 
-    PROCESS_MEMORY_COUNTERS_EX pmc;
-    if (GetProcessMemoryInfo(GetCurrentProcess(), (PROCESS_MEMORY_COUNTERS*)&pmc, sizeof(pmc))) {
+    VM_COUNTERS memory;
+    if (!NtQueryInformationProcess(GetCurrentProcess(), static_cast<PROCESSINFOCLASS>(ProcessVmCounters), &memory, sizeof(memory), nullptr)) {
         // Convert to GB
-        m_currentMemoryGB = pmc.PrivateUsage / (1024.0f * 1024.0f * 1024.0f);
+        m_currentMemoryGB = memory.VirtualSize / (1024.0f * 1024.0f * 1024.0f);
 
         // Reset warning state if memory drops below threshold
         if (m_currentMemoryGB < m_warningThresholdGB * 0.9f) {
