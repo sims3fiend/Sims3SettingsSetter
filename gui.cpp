@@ -1,4 +1,5 @@
 #include "gui.h"
+#include "version.h"
 #include <d3d9.h>
 #include "imgui_impl_win32.h"
 #include "imgui_impl_dx9.h"
@@ -69,7 +70,7 @@ void RenderUI() {
     // Window title with unsaved indicator
     // ### gives a stable window ID so position/size persists when title changes :D I love ImGUI!!!!!!!!!!
     bool hasUnsaved = HasAnyUnsavedChanges();
-    const char* windowTitle = hasUnsaved ? "Sims 3 Settings | Unsaved Changes. Go to File -> Save Settings to save###S3SSWindow" : "Sims 3 Settings###S3SSWindow";
+    const char* windowTitle = hasUnsaved ? "Sims 3 Settings (v" S3SS_VERSION_STRING ") | Unsaved Changes. Go to File -> Save Settings to save###S3SSWindow" : "Sims 3 Settings (v" S3SS_VERSION_STRING ")###S3SSWindow";
 
     if (ImGui::Begin(windowTitle, &m_visible, ImGuiWindowFlags_MenuBar)) {
         if (ImGui::BeginMenuBar()) {
