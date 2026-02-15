@@ -116,6 +116,7 @@
     <ClInclude Include="settings.h" />
     <ClInclude Include="settings_gui.h" />
     <ClInclude Include="utils.h" />
+    <ClInclude Include="version.h" />
     <ClInclude Include="vtable_manager.h" />
     <ClInclude Include="config\migration.h" />
     <ClInclude Include="patch_system.h" />
