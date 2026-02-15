@@ -603,7 +603,7 @@ void RenderUI() {
                     ImGui::Text("Current Memory Usage: %.2f GB", currentUsage);
 
                     // Memory usage bar
-                    float progress = currentUsage / 4.0f; // 4GB is the max
+                    float progress = currentUsage / ((4294967296.0f - 131072.0f) / 1073741824.0f); // 4GB - 128KB is the max
                     ImGui::ProgressBar(progress, ImVec2(-1, 0), std::to_string(currentUsage).substr(0, 4).c_str());
 
                     if (progress > 0.9f) { ImGui::TextColored(ImVec4(1.0f, 0.0f, 0.0f, 1.0f), "Warning: Memory usage is very high!"); }
