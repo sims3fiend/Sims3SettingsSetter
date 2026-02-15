@@ -110,6 +110,7 @@
     <ClInclude Include="gui.h" />
     <ClInclude Include="intersection_patch.h" />
     <ClInclude Include="logger.h" />
+    <ClInclude Include="memory_statistics.h" />
     <ClInclude Include="optimization.h" />
     <ClInclude Include="pattern_scan.h" />
     <ClInclude Include="qol.h" />
@@ -136,6 +137,7 @@
     <ClCompile Include="hooks.cpp" />
     <ClCompile Include="intersection_patch.cpp" />
     <ClCompile Include="logger.cpp" />
+    <ClCompile Include="memory_statistics.cpp" />
     <ClCompile Include="optimization.cpp" />
     <ClCompile Include="patches\adaptive_wait_patch.cpp" />
     <ClCompile Include="patches\gc_finalize_throttle_patch.cpp" />
