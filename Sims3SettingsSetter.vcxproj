@@ -110,12 +110,14 @@
     <ClInclude Include="gui.h" />
     <ClInclude Include="intersection_patch.h" />
     <ClInclude Include="logger.h" />
+    <ClInclude Include="memory_statistics.h" />
     <ClInclude Include="optimization.h" />
     <ClInclude Include="pattern_scan.h" />
     <ClInclude Include="qol.h" />
     <ClInclude Include="settings.h" />
     <ClInclude Include="settings_gui.h" />
     <ClInclude Include="utils.h" />
+    <ClInclude Include="version.h" />
     <ClInclude Include="vtable_manager.h" />
     <ClInclude Include="config\migration.h" />
     <ClInclude Include="patch_system.h" />
@@ -135,8 +137,10 @@
     <ClCompile Include="hooks.cpp" />
     <ClCompile Include="intersection_patch.cpp" />
     <ClCompile Include="logger.cpp" />
+    <ClCompile Include="memory_statistics.cpp" />
     <ClCompile Include="optimization.cpp" />
     <ClCompile Include="patches\adaptive_wait_patch.cpp" />
+    <ClCompile Include="patches\expanded_crash_logs_patch.cpp" />
     <ClCompile Include="patches\gc_finalize_throttle_patch.cpp" />
     <ClCompile Include="patches\gc_stop_world_patch.cpp" />
     <ClCompile Include="patches\map_view_lot_blocker_patch.cpp" />

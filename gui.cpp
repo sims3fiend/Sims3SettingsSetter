@@ -1,4 +1,5 @@
 #include "gui.h"
+#include "version.h"
 #include <d3d9.h>
 #include "imgui_impl_win32.h"
 #include "imgui_impl_dx9.h"
@@ -14,6 +15,7 @@
 #include "intersection_patch.h"
 #include "cpu_optimization.h"
 #include "d3d9_hook.h"
+#include "memory_statistics.h"
 #include "config/config_store.h"
 #include "config/config_value_manager.h"
 #include "config/migration.h"
@@ -69,7 +71,7 @@ void RenderUI() {
     // Window title with unsaved indicator
     // ### gives a stable window ID so position/size persists when title changes :D I love ImGUI!!!!!!!!!!
     bool hasUnsaved = HasAnyUnsavedChanges();
-    const char* windowTitle = hasUnsaved ? "Sims 3 Settings | Unsaved Changes. Go to File -> Save Settings to save###S3SSWindow" : "Sims 3 Settings###S3SSWindow";
+    const char* windowTitle = hasUnsaved ? "Sims 3 Settings (v" S3SS_VERSION_STRING ") | Unsaved Changes. Go to File -> Save Settings to save###S3SSWindow" : "Sims 3 Settings (v" S3SS_VERSION_STRING ")###S3SSWindow";
 
     if (ImGui::Begin(windowTitle, &m_visible, ImGuiWindowFlags_MenuBar)) {
         if (ImGui::BeginMenuBar()) {
@@ -611,6 +613,159 @@ void RenderUI() {
 
                 ImGui::Separator();
 
+                if (ImGui::CollapsingHeader("Detailed Memory Statistics")) {
+                    DetailedMemoryReport report;
+                    uint32_t error = report.FillIn();
+
+                    if (error) { ImGui::TextColored(ImVec4(1.0f, 0.3f, 0.3f, 1.0f), "VirtualQuery failed! Error-code: %u", error); }
+
+                    if (ImGui::BeginTable("pageStatistics", 4, ImGuiTableFlags_SizingFixedFit)) {
+                        ImGui::TableSetupColumn("Page Type");
+                        ImGui::TableSetupColumn("Count");
+                        ImGui::TableSetupColumn("Total Size");
+                        ImGui::TableSetupColumn("Proportion of Address Space");
+                        ImGui::TableHeadersRow();
+
+                        auto pageRow = [&](const char* label, uint32_t pageCount) __declspec(noinline) {
+                            ImGui::TableNextRow();
+                            ImGui::TableNextColumn();
+                            ImGui::Text(label);
+                            ImGui::TableNextColumn();
+                            ImGui::Text("%u", pageCount);
+                            ImGui::TableNextColumn();
+                            float bytes = static_cast<float>(pageCount << pageSizeLog2);
+                            ImGui::Text("%.3f MB", bytes / 1048576.0f);
+                            ImGui::TableNextColumn();
+                            ImGui::Text("%.3f%%", bytes / addressSpace * 100.0f);
+                        };
+
+                        pageRow("Free", report.freePageCount);
+                        pageRow("Committed", report.committedPageCount);
+                        pageRow("Reserved", report.reservedPageCount);
+                        pageRow("Writeable Data", report.writeableDataPageCount);
+                        pageRow("Read-only Data", report.readOnlyDataPageCount);
+                        pageRow("Write-copy Data", report.writeCopyDataPageCount);
+                        pageRow("Inaccessible Data", report.inaccessibleDataPageCount);
+                        pageRow("Writeable Code", report.writeableCodePageCount);
+                        pageRow("Read-only Code", report.readOnlyCodePageCount);
+                        pageRow("Write-copy Code", report.writeCopyCodePageCount);
+                        pageRow("Inaccessible Code", report.inaccessibleCodePageCount);
+                        pageRow("Guard", report.guardPageCount);
+                        pageRow("Image", report.imagePageCount);
+                        pageRow("Mapped", report.mappedPageCount);
+                        pageRow("Private", report.privatePageCount);
+                        ImGui::EndTable();
+                    }
+
+                    ImGui::Separator();
+
+                    ImGui::Text("Free Span Histogram");
+                    ImGui::SameLine();
+                    ImGui::TextDisabled("(?)");
+                    if (ImGui::IsItemHovered()) {
+                        ImGui::SetTooltip(
+                            "This histogram aims to provide insight into the state of the game's address-space, namely: how fragmented it may be.\n"
+                            "Think of memory as a bookshelf: a shelf may have space for 3 books, but that does not guarantee that the shelf has space for 3 books in a row (without moving the books already on the shelf).\n"
+                            "In the same vein, the game having 128 MB of memory available does not guarantee that it has 128 MB of memory available _in a row_.\n\n"
+                            "The yellow bars in the histogram represent the number of regions of free-memory that can service an allocation of a given maximum size.\n"
+                            "The bright blue bars represent the number of allocations that could be serviced for a given size when including larger regions (the larger regions being the yellow bars in the following "
+                            "rows).\n"
+                            "The dark blue background represents currently-in-use memory which cannot serve allocations of any size.\n\n"
+                            "For a simple rule of thumb: you want as much bright blue as possible, and you want the yellow bars to congregate at the bottom and to stay away from the top.");
+                    }
+
+                    static bool logarithmic = false;
+                    ImGui::Checkbox("Logarithmic (log2) scale?)", &logarithmic);
+
+                    float (*scalingFunction)(float value) = logarithmic ? &std::log2f : [](float value) { return value; };
+                    uint32_t adjust = logarithmic ? 1 : 0;
+
+                    float scale = UISettings::Get().GetFontScale();
+
+                    float histogramWidth = ImGui::GetContentRegionAvail().x;
+                    float emHeight = ImGui::CalcTextSize("M").y;
+                    float labelWidth = ImGui::CalcTextSize("512 MB").x + 8.0f * scale;
+                    float barHeight = 24.0f * scale;
+                    float labelY = (barHeight - (barHeight <= emHeight ? barHeight : emHeight)) * 0.5f;
+                    float barWidth = histogramWidth - labelWidth;
+                    barWidth = barWidth <= 0.0f ? 0.0f : barWidth;
+                    float histogramHeight = barHeight * DetailedMemoryReport::freeSpanHistogramLevels;
+                    float measureThickness = 1.0f * scale;
+                    float measureThicknessHalf = measureThickness * 0.5f;
+                    float lineHeight = ImGui::GetTextLineHeight();
+
+                    ImVec2 position = ImGui::GetCursorScreenPos();
+                    float x = position.x;
+                    float y = position.y;
+                    ImDrawList* draw = ImGui::GetWindowDrawList();
+
+                    float hx0 = x + labelWidth;
+                    float hx1 = x + histogramWidth;
+
+                    char label[28];
+
+                    draw->AddRectFilled({x + labelWidth, y}, {x + histogramWidth, y + measureThickness}, ImGui::GetColorU32(ImGuiCol_Text));
+                    y += measureThickness;
+
+                    float unscaledBarWidth = barWidth / scale;
+                    uint32_t notchCount = unscaledBarWidth >= 1080.0f ? 16 : (unscaledBarWidth >= 540.f ? 8 : 4);
+                    float notchFraction = 1.0f / notchCount;
+
+                    for (uint32_t notch = 0; notch <= notchCount; ++notch) {
+                        float offsetX = notch == 0 ? +measureThicknessHalf : (notch == notchCount ? -measureThicknessHalf : 0);
+                        float nx0 = hx0 + barWidth * (notchFraction * notch) + offsetX;
+                        float nx1 = nx0 + measureThickness;
+                        draw->AddRectFilled({nx0, y}, {nx1, y + lineHeight + 2.0f * scale}, ImGui::GetColorU32(ImGuiCol_Text));
+
+                        if (!logarithmic) {
+                            float tx0 = notch != notchCount ? nx1 + 2.0f * scale : nx1 - 14.0f * scale;
+                            const char* labelEnd = std::format_to(label, "{:.4g}", notchFraction * notch);
+                            draw->AddText({tx0, y + 2.0f * scale}, ImGui::GetColorU32(ImGuiCol_Text), label, labelEnd);
+                        }
+                    }
+
+                    y += lineHeight + 4.0f * scale;
+
+                    uint32_t basedLevel = DetailedMemoryReport::freeSpanHistogramBaseLog2;
+
+                    for (uint32_t level = 0; level < DetailedMemoryReport::freeSpanHistogramLevels; ++level, ++basedLevel) {
+                        uint32_t freeSpanCount = report.freeSpanHistogram[level];
+                        uint32_t possibleFreeSpanCount = addressSpace >> basedLevel;
+                        uint32_t cascadingFreeSpanCount = freeSpanCount;
+
+                        for (uint32_t upperLevel = level + 1; upperLevel < DetailedMemoryReport::freeSpanHistogramLevels; ++upperLevel) {
+                            cascadingFreeSpanCount += report.freeSpanHistogram[upperLevel] << (upperLevel - level);
+                        }
+
+                        float ry0 = y + barHeight * level;
+                        float ry1 = y + barHeight * (level + 1);
+
+                        char prefix = basedLevel < 20 ? 'K' : (basedLevel < 30 ? 'M' : 'G');
+                        uint8_t shift = basedLevel < 20 ? 10 : (basedLevel < 30 ? 20 : 30);
+                        const char* labelEnd = std::format_to(label, "{} {}B", 1U << (basedLevel - shift), prefix);
+                        draw->AddText({x, ry0 + labelY}, ImGui::GetColorU32(ImGuiCol_Text), label, labelEnd);
+
+                        float cascadingProportion = scalingFunction(static_cast<float>(cascadingFreeSpanCount + adjust)) / scalingFunction(static_cast<float>(possibleFreeSpanCount + adjust));
+                        float proportion = scalingFunction(static_cast<float>(freeSpanCount + adjust)) / scalingFunction(static_cast<float>(possibleFreeSpanCount + adjust));
+
+                        draw->AddRectFilled({hx0, ry0}, {hx1, ry1}, ImGui::GetColorU32(ImGuiCol_FrameBg));
+                        draw->AddRectFilled({hx0, ry0}, {hx0 + barWidth * cascadingProportion, ry1}, ImGui::GetColorU32(ImGuiCol_FrameBgActive));
+                        draw->AddRectFilled({hx0, ry0}, {hx0 + barWidth * proportion, ry1}, ImGui::GetColorU32(ImGuiCol_PlotHistogram));
+
+                        labelEnd = std::format_to(label, "{} out of {} ({})", freeSpanCount, possibleFreeSpanCount, cascadingFreeSpanCount);
+                        ImVec2 textSize = ImGui::CalcTextSize(label, labelEnd);
+                        textSize.x = textSize.x <= barWidth ? textSize.x : barWidth;
+                        textSize.y = textSize.y <= barHeight ? textSize.y : barHeight;
+                        float tx = (barWidth - textSize.x) * 0.5f;
+                        float ty = (barHeight - textSize.y) * 0.5f;
+                        draw->AddText({hx0 + tx, ry0 + ty}, ImGui::GetColorU32(ImGuiCol_Text), label, labelEnd);
+                    }
+
+                    ImGui::SetCursorScreenPos({x, y + histogramHeight + ImGui::GetStyle().FramePadding.y});
+                }
+
+                ImGui::Separator();
+
                 // Borderless Window section
                 if (ImGui::CollapsingHeader("Borderless Window")) {
                     auto& borderless = BorderlessWindow::Get();
@@ -680,6 +835,26 @@ void RenderUI() {
 
                 ImGui::EndTabItem();
             }
+
+// This is useful for testing/debugging the Expanded Crash Logs patch.
+#if 0
+            if (ImGui::BeginTabItem("Debug")) {
+                static char addressHex[9] = "00000000";
+                static uint32_t address = 0;
+
+                if (ImGui::InputText("Address", addressHex, 9, ImGuiInputTextFlags_CharsHexadecimal)) { std::from_chars(addressHex, addressHex + 8, address, 16); }
+
+                if (ImGui::Button("Break glass to crash game")) {
+                    if (address & 1) {
+                        *reinterpret_cast<volatile uint8_t*>(address) = 7;
+                    } else {
+                        *reinterpret_cast<volatile const uint8_t*>(address);
+                    }
+                }
+
+                ImGui::EndTabItem();
+            }
+#endif
 
             ImGui::EndTabBar();
         }
