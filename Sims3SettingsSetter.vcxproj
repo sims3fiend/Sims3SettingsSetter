@@ -145,6 +145,7 @@
     <ClCompile Include="patches\gc_stop_world_patch.cpp" />
     <ClCompile Include="patches\map_view_lot_blocker_patch.cpp" />
     <ClCompile Include="patches\mimalloc_patch.cpp" />
+    <ClCompile Include="patches\oversized_thread_stack_fix_patch.cpp" />
     <ClCompile Include="patches\refpack_decompressor_patch.cpp" />
     <ClCompile Include="patches\resolution_spoofer_patch.cpp" />
     <ClCompile Include="patches\smooth_patch_classic.cpp" />
