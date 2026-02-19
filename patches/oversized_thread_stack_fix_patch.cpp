@@ -111,7 +111,7 @@ class OversizedThreadStackFix : public OptimizationPatch {
 
 REGISTER_PATCH(OversizedThreadStackFix,
     {.displayName = "Oversized Thread Stack Fix",
-        .description = "Reduces the memory used by background threads that the game creates several-dozen of for file IO.",
+        .description = "Reduces the memory used by background threads that the game creates several-dozen of for watching file changes.",
         .category = "Performance",
         .experimental = false,
         .supportedVersions = VERSION_ALL,
