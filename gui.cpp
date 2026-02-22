@@ -675,7 +675,7 @@ void RenderUI() {
                     }
 
                     static bool logarithmic = false;
-                    ImGui::Checkbox("Logarithmic (log2) scale?)", &logarithmic);
+                    ImGui::Checkbox("Logarithmic (log2) scale?", &logarithmic);
 
                     float (*scalingFunction)(float value) = logarithmic ? &std::log2f : [](float value) { return value; };
                     uint32_t adjust = logarithmic ? 1 : 0;
