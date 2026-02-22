@@ -75,6 +75,13 @@
     <ClCompile Include="patches\uncompressed_sim_textures_patch.cpp">
       <Filter>patches</Filter>
     </ClCompile>
+    <ClCompile Include="memory_statistics.cpp" />
+    <ClCompile Include="patches\expanded_crash_logs_patch.cpp" />
+    <ClCompile Include="patches\gc_finalize_throttle_patch.cpp" />
+    <ClCompile Include="patches\oversized_thread_stack_fix_patch.cpp" />
+    <ClCompile Include="patches\gc_try_to_collect_patch.cpp">
+      <Filter>patches</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="cpu_optimization.h" />
@@ -106,6 +113,9 @@
     <ClInclude Include="patch_helpers.h" />
     <ClInclude Include="d3d9_hook_registry.h" />
     <ClInclude Include="allocator_hook.h" />
+    <ClInclude Include="memory_statistics.h" />
+    <ClInclude Include="version.h" />
+    <ClInclude Include="patch_settings.h" />
   </ItemGroup>
   <ItemGroup>
     <Filter Include="patches">

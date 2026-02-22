@@ -143,6 +143,7 @@
     <ClCompile Include="patches\expanded_crash_logs_patch.cpp" />
     <ClCompile Include="patches\gc_finalize_throttle_patch.cpp" />
     <ClCompile Include="patches\gc_stop_world_patch.cpp" />
+    <ClCompile Include="patches\gc_try_to_collect_patch.cpp" />
     <ClCompile Include="patches\map_view_lot_blocker_patch.cpp" />
     <ClCompile Include="patches\mimalloc_patch.cpp" />
     <ClCompile Include="patches\oversized_thread_stack_fix_patch.cpp" />

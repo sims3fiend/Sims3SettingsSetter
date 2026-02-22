@@ -5,6 +5,7 @@
 #include "../memory_statistics.h"
 #include <bit>
 #include <functional>
+#include <intrin.h>
 
 // We're using `rep movsb` to minimise code size.
 #define PascalStringCopy(buffer, string) (__movsb(reinterpret_cast<unsigned char*>(buffer), reinterpret_cast<const unsigned char*>(string) + 1, *(string)), (buffer) += *(string))
