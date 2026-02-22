@@ -26,17 +26,17 @@ View and edit Config values from `GraphicsRules.sgr`. This shows what's actually
 The main point of the mod now. Collection of ASM patches for performance improvements. **All compatible with Steam, EA App/Origin and Retail versions! Woo!**
 There's also a lot of helper functions and easy to use things if you'd like to make your own, see **[patches/README.md](patches/README.md)** for technical details on how to write your own.
 
-**Performance Patches (⭐ - Recommended)**
-- **RefPack Decompressor Optimization ⭐⭐⭐** - Completely rewrote the game's refpack .package file decompressor with AVX2/SSE2 SIMD intrinsics. This is probably the most impactful patch, faster loading screens, less stuttering when streaming assets, optimises one of the heaviest functions in the game.
-- **Mimalloc Allocator ⭐** - Replaces the Sims 3's old crusty memory allocator with [mimalloc](https://github.com/microsoft/mimalloc) for better memory management and performance. Requires a restart to apply.
-- **Optimized Lot Streaming Settings ⭐** - Enables lot throttling and tweaks camera speed threshold settings so lots load more smoothly when you stop moving. Major improvement.
-- **Timer Optimization ⭐** - Increases (reduces?) timer resolution to 1ms, ~~optimizes critical sections with tiered spin counts~~ No longer does this as if 1.2.3.
-- **Smooth Patch (Precise Flavour) ⭐** - ["Just Harry"](https://github.com/just-harry)'s fully rewritten tick-rate limiter using a hybrid sleep/busy-wait approach. Sleeps via `NtDelayExecution` for sub-millisecond precision and finishes with a busy-wait spin loop for exact timing. Default tick rate raised to 480 TPS, with presets at multiples of 60 (480/960) for smoother frame-pacing. **Now includes a frame-rate limiter** (default 60 FPS) with a separate inactive window limit. Can be safely toggled on/off at any time. **It is recommended you still use the original [Smooth Patch's](https://modthesims.info/d/658759/smooth-patch-2-1.html) .package file**
+**Performance Patches**
+- **RefPack Decompressor Optimization ** - Completely rewrote the game's refpack .package file decompressor with AVX2/SSE2 SIMD intrinsics. This is probably the most impactful patch, faster loading screens, less stuttering when streaming assets, optimises one of the heaviest functions in the game.
+- **Mimalloc Allocator** - Replaces the Sims 3's old crusty memory allocator with [mimalloc](https://github.com/microsoft/mimalloc) for better memory management and performance. Requires a restart to apply.
+- **Optimized Lot Streaming Settings** - Enables lot throttling and tweaks camera speed threshold settings so lots load more smoothly when you stop moving. Major improvement.
+- **Timer Optimization** - Increases (reduces?) timer resolution to 1ms, ~~optimizes critical sections with tiered spin counts~~ No longer does this as if 1.2.3.
+- **Smooth Patch (Precise Flavour)** - ["Just Harry"](https://github.com/just-harry)'s fully rewritten tick-rate limiter using a hybrid sleep/busy-wait approach. Sleeps via `NtDelayExecution` for sub-millisecond precision and finishes with a busy-wait spin loop for exact timing. Default tick rate raised to 480 TPS, with presets at multiples of 60 (480/960) for smoother frame-pacing. **Now includes a frame-rate limiter** (default 60 FPS) with a separate inactive window limit. Can be safely toggled on/off at any time. **It is recommended you still use the original [Smooth Patch's](https://modthesims.info/d/658759/smooth-patch-2-1.html) .package file**
 - **Smooth Patch (Original Flavour)** - LazyDuchess's original Smooth Patch implementation in S3SS.
 - **Lot Visibility Camera Override** - Stops lot loading based on camera view, should make it so they only load around you. Might not do anything.
 - **CPU Thread Optimization** - Optimizes thread placement for modern CPUs with P/E-cores or multiple CCXs. This also doubles as an Alder Lake patch for people using that series of CPU.
 - **CreateFileW Random Access** - Improves file I/O performance by hinting random access pattern.
-- **Oversized Thread Stack Fix ⭐** - Reduces memory wasted by the game's file-watcher threads. The game creates several dozen of these with oversized 1 MB stacks when they need <64 KB. Saves ~80-170 MB of virtual address space depending on your setup. Requires a restart to apply. By ["Just Harry"](https://github.com/just-harry).
+- **Oversized Thread Stack Fix** - Reduces memory wasted by the game's file-watcher threads. The game creates several dozen of these with oversized 1 MB stacks when they need <64 KB. Saves ~80-170 MB of virtual address space depending on your setup. Requires a restart to apply. By ["Just Harry"](https://github.com/just-harry).
 - **GC_stop_world() Optimization** - Early exit for a GC function called ~once per frame, very minor improvement, driveby patch.
 
 **Graphics Patches**
