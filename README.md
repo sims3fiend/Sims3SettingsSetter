@@ -27,7 +27,7 @@ The main point of the mod now. Collection of ASM patches for performance improve
 There's also a lot of helper functions and easy to use things if you'd like to make your own, see **[patches/README.md](patches/README.md)** for technical details on how to write your own.
 
 **Performance Patches**
-- **RefPack Decompressor Optimization ** - Completely rewrote the game's refpack .package file decompressor with AVX2/SSE2 SIMD intrinsics. This is probably the most impactful patch, faster loading screens, less stuttering when streaming assets, optimises one of the heaviest functions in the game.
+- **RefPack Decompressor Optimization** - Completely rewrote the game's refpack .package file decompressor with AVX2/SSE2 SIMD intrinsics. This is probably the most impactful patch, faster loading screens, less stuttering when streaming assets, optimises one of the heaviest functions in the game.
 - **Mimalloc Allocator** - Replaces the Sims 3's old crusty memory allocator with [mimalloc](https://github.com/microsoft/mimalloc) for better memory management and performance. Requires a restart to apply.
 - **Optimized Lot Streaming Settings** - Enables lot throttling and tweaks camera speed threshold settings so lots load more smoothly when you stop moving. Major improvement.
 - **Timer Optimization** - Increases (reduces?) timer resolution to 1ms, ~~optimizes critical sections with tiered spin counts~~ No longer does this as if 1.2.3.
