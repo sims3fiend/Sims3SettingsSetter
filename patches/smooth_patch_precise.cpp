@@ -1,12 +1,18 @@
 #include "../patch_system.h"
 #include "../patch_helpers.h"
 #include "../logger.h"
+#include <atomic>
 #include <bit>
 
 #pragma comment(lib, "ntdll.lib")
 
 extern "C" __declspec(dllimport) NTSTATUS __stdcall NtDelayExecution(BOOLEAN Alertable, LARGE_INTEGER* Interval);
 extern "C" __declspec(dllimport) NTSTATUS __stdcall NtQueryTimerResolution(ULONG* MaximumTime, ULONG* MinimumTime, ULONG* CurrentTime);
+
+static std::atomic<bool> frameSimulate{false};
+
+static bool tickOnceSettingStorage;
+static bool tickOnce;
 
 static float tickRateLimitSettingStorage;
 static float tickRateLimit;
@@ -75,6 +81,12 @@ uint64_t ScriptHostBase::HookedIdleSimulationCycle() {
     // If we're on time, we'll wait for the ideal cycle-time to elapse.
     if (now < idealTimeForThisCycle) { now = WaitUntilPrecisely(idealTimeForThisCycle, now); }
 
+    // Busy wait for render thread.
+    if (tickOnce) {
+        while (frameSimulate.load() == false) {}
+        frameSimulate.store(false);
+    }
+
     // We'll round down the time so that if we're running late the next cycle will occur earlier.
     previousSimulationCycleTime = (now / idealTime) * idealTime;
 
@@ -82,6 +94,10 @@ uint64_t ScriptHostBase::HookedIdleSimulationCycle() {
 }
 
 void __stdcall DelayAfterFramePresentation(uintptr_t graphicsDeviceStructure) {
+
+    // Tell sim thread we're good to simulate.
+    if (tickOnce) frameSimulate.store(true);
+
     // This might actually denote if the graphics device is lost instead, I'm not sure.
     bool gameWindowIsNotForeground = *reinterpret_cast<const uint8_t*>(graphicsDeviceStructure + 0x8d);
 
@@ -136,6 +152,8 @@ class SmoothPatchPrecise : public OptimizationPatch {
 
   public:
     SmoothPatchPrecise() : OptimizationPatch("SmoothPatchPrecise", nullptr) {
+        RegisterBoolSetting(&tickOnceSettingStorage, "tickOnce", false, "Tick only once per frame (couples tick-rate to framerate)");
+
         RegisterFloatSetting(&tickRateLimitSettingStorage, "tickRateLimit", SettingUIType::InputBox,
             480.0f, // Most people will be using a 60 Hz display, so we default to a multiple of 60,
                     // 480 TPS should be fine for weaker processors.
@@ -206,6 +224,7 @@ class SmoothPatchPrecise : public OptimizationPatch {
         lastError.clear();
         LOG_INFO("[SmoothPatchPrecise] Installing...");
 
+        tickOnce = tickOnceSettingStorage;
         tickRateLimit = tickRateLimitSettingStorage;
         frameRateLimit = frameRateLimitSettingStorage;
         frameRateLimitInactive = frameRateLimitInactiveSettingStorage < 0.0f ? frameRateLimit : frameRateLimitInactiveSettingStorage;
@@ -221,9 +240,9 @@ class SmoothPatchPrecise : public OptimizationPatch {
 
         UpdateTimerFrequency();
 
-        LOG_INFO(std::format("[SmoothPatchPrecise] tickRateLimit: {}; frameRateLimit: {}; frameRateLimitInactive: {}; performanceFrequency: {}; idealSimulationCycleTime: {}; idealPresentationFrameTime: {}; "
+        LOG_INFO(std::format("[SmoothPatchPrecise] tickOnce: {}; tickRateLimit: {}; frameRateLimit: {}; frameRateLimitInactive: {}; performanceFrequency: {}; idealSimulationCycleTime: {}; idealPresentationFrameTime: {}; "
                              "idealPresentationFrameInactiveTime: {}; timerResolution: {}, timerFrequency: {}; qpcToHectonanosecondsMultiplier: {}; hectonanosecondsToQPCMultiplier: {}",
-            tickRateLimit, frameRateLimit, frameRateLimitInactive, performanceFrequency, idealSimulationCycleTime, idealPresentationFrameTime, idealPresentationFrameInactiveTime, timerResolution, timerFrequency,
+            tickOnce, tickRateLimit, frameRateLimit, frameRateLimitInactive, performanceFrequency, idealSimulationCycleTime, idealPresentationFrameTime, idealPresentationFrameInactiveTime, timerResolution, timerFrequency,
             qpcToHectonanosecondsMultiplier, hectonanosecondsToQPCMultiplier));
 
         auto idleSimulationCycleCallAddress = idleSimulationCycleCallAddressInfo.Resolve();
