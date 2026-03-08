@@ -77,7 +77,6 @@ uint64_t ScriptHostBase::HookedIdleSimulationCycle() {
     // so if it's zero we'll avoid sleeping.
     if ((idealTime == 0) || !*reinterpret_cast<const uint8_t*>((reinterpret_cast<uintptr_t>(this) + 0xa60))) {
         if (!tickOnce) return previousSimulationCycleTime;
-        if (!*reinterpret_cast<const uint8_t*>((reinterpret_cast<uintptr_t>(this) + 0xa60)))
         goto tickOnceBusyWait;
     }
 
