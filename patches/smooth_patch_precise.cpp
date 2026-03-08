@@ -75,7 +75,7 @@ uint64_t ScriptHostBase::HookedIdleSimulationCycle() {
 
     // I don't know what the boolean at 0xa60 is, but the game's code skips sleeping if it's zero,
     // so if it's zero we'll avoid sleeping.
-    if ((idealTime == 0) | !*reinterpret_cast<const uint8_t*>((reinterpret_cast<uintptr_t>(this) + 0xa60))) {
+    if ((idealTime == 0) || !*reinterpret_cast<const uint8_t*>((reinterpret_cast<uintptr_t>(this) + 0xa60))) {
         if (!tickOnce) return previousSimulationCycleTime;
         goto tickOnceBusyWait;
     }
