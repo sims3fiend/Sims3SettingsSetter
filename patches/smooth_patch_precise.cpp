@@ -69,19 +69,24 @@ uint64_t ScriptHostBase::HookedIdleSimulationCycle() {
     // so it's very important that we read this now so as to avoid a potential division-by-zero.
     uint64_t idealTime = idealSimulationCycleTime;
 
-    // I don't know what the boolean at 0xa60 is, but the game's code skips sleeping if it's zero,
-    // so if it's zero we'll avoid sleeping.
-    if ((idealTime == 0) | !*reinterpret_cast<const uint8_t*>((reinterpret_cast<uintptr_t>(this) + 0xa60))) { return previousSimulationCycleTime; }
-
     uint64_t idealTimeForThisCycle = previousSimulationCycleTime + idealTime;
 
     uint64_t now;
+
+    // I don't know what the boolean at 0xa60 is, but the game's code skips sleeping if it's zero,
+    // so if it's zero we'll avoid sleeping.
+    if ((idealTime == 0) | !*reinterpret_cast<const uint8_t*>((reinterpret_cast<uintptr_t>(this) + 0xa60))) {
+        if (!tickOnce) return previousSimulationCycleTime;
+        goto tickOnceBusyWait;
+    }
+
     QueryPerformanceCounter(reinterpret_cast<LARGE_INTEGER*>(&now));
 
     // If we're on time, we'll wait for the ideal cycle-time to elapse.
     if (now < idealTimeForThisCycle) { now = WaitUntilPrecisely(idealTimeForThisCycle, now); }
 
     // Busy wait for render thread.
+tickOnceBusyWait:
     if (tickOnce) {
         while (frameSimulate.load() == false) {}
         frameSimulate.store(false);
@@ -95,7 +100,6 @@ uint64_t ScriptHostBase::HookedIdleSimulationCycle() {
 }
 
 void __stdcall DelayAfterFramePresentation(uintptr_t graphicsDeviceStructure) {
-
     // Tell sim thread we're good to simulate.
     if (tickOnce) frameSimulate.store(true);
 
