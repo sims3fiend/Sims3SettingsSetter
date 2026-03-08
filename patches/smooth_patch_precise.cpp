@@ -85,6 +85,7 @@ uint64_t ScriptHostBase::HookedIdleSimulationCycle() {
     if (tickOnce) {
         while (frameSimulate.load() == false) {}
         frameSimulate.store(false);
+        QueryPerformanceCounter(reinterpret_cast<LARGE_INTEGER*>(&now));
     }
 
     // We'll round down the time so that if we're running late the next cycle will occur earlier.
