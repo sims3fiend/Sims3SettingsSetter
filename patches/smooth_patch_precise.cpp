@@ -71,12 +71,13 @@ uint64_t ScriptHostBase::HookedIdleSimulationCycle() {
 
     uint64_t idealTimeForThisCycle = previousSimulationCycleTime + idealTime;
 
-    uint64_t now;
+    uint64_t now = 0;
 
     // I don't know what the boolean at 0xa60 is, but the game's code skips sleeping if it's zero,
     // so if it's zero we'll avoid sleeping.
     if ((idealTime == 0) || !*reinterpret_cast<const uint8_t*>((reinterpret_cast<uintptr_t>(this) + 0xa60))) {
         if (!tickOnce) return previousSimulationCycleTime;
+        if (!*reinterpret_cast<const uint8_t*>((reinterpret_cast<uintptr_t>(this) + 0xa60)))
         goto tickOnceBusyWait;
     }
 
@@ -88,8 +89,7 @@ uint64_t ScriptHostBase::HookedIdleSimulationCycle() {
     // Busy wait for render thread.
 tickOnceBusyWait:
     if (tickOnce) {
-        while (frameSimulate.load() == false) {}
-        frameSimulate.store(false);
+        while (frameSimulate.exchange(false) == false) {}
         QueryPerformanceCounter(reinterpret_cast<LARGE_INTEGER*>(&now));
     }
 
@@ -157,7 +157,7 @@ class SmoothPatchPrecise : public OptimizationPatch {
 
   public:
     SmoothPatchPrecise() : OptimizationPatch("SmoothPatchPrecise", nullptr) {
-        RegisterBoolSetting(&tickOnceSettingStorage, "tickOnce", false, "Tick only once per frame (couples tick-rate to framerate)");
+        RegisterBoolSetting(&tickOnceSettingStorage, "Tick at most once per frame", false, "Avoids ticking more than once per frame, potentially alleviating hitching?");
 
         RegisterFloatSetting(&tickRateLimitSettingStorage, "tickRateLimit", SettingUIType::InputBox,
             480.0f, // Most people will be using a 60 Hz display, so we default to a multiple of 60,
