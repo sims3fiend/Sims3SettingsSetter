@@ -9,7 +9,7 @@
 extern "C" __declspec(dllimport) NTSTATUS __stdcall NtDelayExecution(BOOLEAN Alertable, LARGE_INTEGER* Interval);
 extern "C" __declspec(dllimport) NTSTATUS __stdcall NtQueryTimerResolution(ULONG* MaximumTime, ULONG* MinimumTime, ULONG* CurrentTime);
 
-static std::atomic<bool> frameSimulate{false};
+static std::atomic<bool> frameSimulate{true};
 
 static bool tickOnceSettingStorage;
 static bool tickOnce;
@@ -64,6 +64,24 @@ uint64_t WaitUntilPrecisely(uint64_t time, uint64_t now) {
     return now;
 }
 
+uint64_t BusyWaitForFrame(ScriptHostBase* scriptHost) {
+    uint64_t now = 0;
+    uint64_t beginWaitTime = 0;
+    QueryPerformanceCounter(reinterpret_cast<LARGE_INTEGER*>(&beginWaitTime));
+    now = beginWaitTime;
+    while (frameSimulate.exchange(false) == false) 
+    { 
+        if (*reinterpret_cast<const uint32_t*>((reinterpret_cast<uintptr_t>(scriptHost) + 0xc08)) != 1) break;
+        if (!*reinterpret_cast<const uint8_t*>((reinterpret_cast<uintptr_t>(scriptHost) + 0xa60))) break;
+        // Fallback in case the frame signal takes too long.
+        // TODO: find a reliable way to detect if the game is trying to close therefore not rendering.
+        QueryPerformanceCounter(reinterpret_cast<LARGE_INTEGER*>(&now));
+        double elapsed = (double)(now - beginWaitTime) / (double)performanceFrequency;
+        if (elapsed >= 1.0) { break; }
+    }
+    return now;
+}
+
 uint64_t ScriptHostBase::HookedIdleSimulationCycle() {
     // Note that idealSimulationCycleTime may change during the sleep performed later on,
     // so it's very important that we read this now so as to avoid a potential division-by-zero.
@@ -77,7 +95,7 @@ uint64_t ScriptHostBase::HookedIdleSimulationCycle() {
     // so if it's zero we'll avoid sleeping.
     if ((idealTime == 0) || !*reinterpret_cast<const uint8_t*>((reinterpret_cast<uintptr_t>(this) + 0xa60))) {
         if (!tickOnce) return previousSimulationCycleTime;
-        goto tickOnceBusyWait;
+        return BusyWaitForFrame(this);
     }
 
     QueryPerformanceCounter(reinterpret_cast<LARGE_INTEGER*>(&now));
@@ -86,11 +104,7 @@ uint64_t ScriptHostBase::HookedIdleSimulationCycle() {
     if (now < idealTimeForThisCycle) { now = WaitUntilPrecisely(idealTimeForThisCycle, now); }
 
     // Busy wait for render thread.
-tickOnceBusyWait:
-    if (tickOnce) {
-        while (frameSimulate.exchange(false) == false) {}
-        QueryPerformanceCounter(reinterpret_cast<LARGE_INTEGER*>(&now));
-    }
+    if (tickOnce) { now = BusyWaitForFrame(this); }
 
     // We'll round down the time so that if we're running late the next cycle will occur earlier.
     previousSimulationCycleTime = (now / idealTime) * idealTime;
