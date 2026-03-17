@@ -608,6 +608,9 @@ DWORD WINAPI HookThread(LPVOID lpParameter) {
             if (!ConfigStore::Get().LoadPatches(&error)) { LOG_WARNING("Failed to load patches: " + error); }
         }
 
+        // 10. Ensure that patches which are to be enabled by default are so.
+        OptimizationManager::Get().EnsureEnabledByDefaultPatchesAreEnabled();
+
         LOG_INFO("Starting message loop");
 
         // Message loop with timeout to prevent stack overflow

@@ -88,6 +88,7 @@ struct PatchMetadata {
     std::string description;
     std::string category = "General";
     bool experimental = false;
+    bool enabledByDefault = false;
     GameVersionMask supportedVersions = VERSION_ALL;
     std::vector<std::string> technicalDetails;
 };

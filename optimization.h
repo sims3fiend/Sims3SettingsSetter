@@ -31,6 +31,7 @@ class OptimizationPatch {
     void* originalFunc;
     std::string patchName;
     std::atomic<bool> isEnabled{false};
+    bool enablementLoadedFromConfig = false;
     double lastSampleRate = 0.0;
     PatchMetadata* metadata = nullptr;
     std::string lastError;
@@ -131,6 +132,7 @@ class OptimizationPatch {
 
     const std::string& GetName() const { return patchName; }
     bool IsEnabled() const { return isEnabled.load(); }
+    bool EnablementLoadedFromConfig() const { return enablementLoadedFromConfig; }
     double GetLastSampleRate() const { return lastSampleRate; }
     const std::string& GetLastError() const { return lastError; }
     bool PendingReinstall() const { return pendingReinstall; }
@@ -139,6 +141,7 @@ class OptimizationPatch {
     // Metadata management
     void SetMetadata(const PatchMetadata& meta);
     const PatchMetadata* GetMetadata() const { return metadata; }
+    bool IsEnabledByDefault() const;
 
     // Version compatibility check
     bool IsCompatibleWithCurrentVersion() const;
@@ -173,6 +176,7 @@ class OptimizationPatch {
         // Then handle Enabled state
         auto enabled = patchTable["enabled"].value<bool>();
         if (enabled.has_value()) {
+            enablementLoadedFromConfig = true;
             bool currentlyEnabled = isEnabled.load();
             if (enabled.value() && !currentlyEnabled) {
                 return Install();
@@ -211,6 +215,8 @@ class OptimizationManager {
     // TOML serialization
     void SaveToToml(toml::table& root);
     void LoadFromToml(const toml::table& root);
+
+    void EnsureEnabledByDefaultPatchesAreEnabled();
 
     // Unsaved changes tracking
     bool HasUnsavedChanges() const { return m_hasUnsavedChanges; }

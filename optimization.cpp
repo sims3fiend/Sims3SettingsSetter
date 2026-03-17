@@ -31,6 +31,10 @@ bool OptimizationPatch::IsCompatibleWithCurrentVersion() const {
     return IsVersionSupported(metadata->supportedVersions);
 }
 
+bool OptimizationPatch::IsEnabledByDefault() const {
+    return metadata->enabledByDefault;
+}
+
 void OptimizationPatch::MaybeSampleMinimal(LONG currentCalls) {
     auto now = std::chrono::steady_clock::now();
     if (now - currentWindow.start >= SAMPLE_INTERVAL) {
@@ -182,4 +186,10 @@ void OptimizationManager::RegisterPatch(std::unique_ptr<OptimizationPatch> patch
     // If we get here, this is a new patch
     patches.push_back(std::move(patch));
     LOG_DEBUG("[PatchSystem] Registered patch: " + patchName);
+}
+
+void OptimizationManager::EnsureEnabledByDefaultPatchesAreEnabled() {
+    for (const auto& patch : patches) {
+        if ((!patch->EnablementLoadedFromConfig() & !patch->IsEnabled()) && patch->IsEnabledByDefault()) { patch->Install(); }
+    }
 }
