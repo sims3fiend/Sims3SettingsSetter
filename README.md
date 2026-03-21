@@ -42,6 +42,9 @@ There's also a lot of helper functions and easy to use things if you'd like to m
 **Graphics Patches**
 - **Uncompressed Sim Textures** - Forces textures for Sims to be uncompressed during gameplay, like they are in CAS. It is not recommended to use this patch unless you are also using DXVK, as otherwise the game may run out of memory or experience Error 12. This improves the graphical fidelity of Sims by avoiding lossy compression and by preventing compression artefacts.
 
+**Bug Fix Patches**
+- **Startup Warning Dialog Fix** - Fixes a dialog that either fails to be created or fails to appear. By ["Just Harry"](https://github.com/just-harry).
+
 **Diagnostic Patches**
 - **Expanded Crash Logs** - Enhances the game's crash logs (`xcpt...txt`) with much more diagnostic information. Adds detailed access violation info (memory state, protection flags, read/write/DEP), S3SS version, and a full virtual memory statistics breakdown. No performance impact during normal gameplay. Enable this when reporting crashes! By ["Just Harry"](https://github.com/just-harry).
 
@@ -59,6 +62,9 @@ There's also a lot of helper functions and easy to use things if you'd like to m
   - May increase memory usage
 - **Map View Lot Streaming Blocker** - Prevents lot streaming while in map view, makes going in and out of map a lot less stuttery.
   - Experimental as it has a known issue where the toggle gets stuck on the "don't load" path. If your lots aren't loading in, try disabling this first
+- **Disable Online Features** - Prevents the game from initializing online service jobs (SIGS/FolderManager) entirely. This means that the FeaturedItems folder no longer fills up, however some online things still remain active. I may revist this in the future to do a proper patch.
+- **Uncompressed Compositor Textures** - Forces material compositor textures to use uncompressed A8R8G8B8 instead of DXT1/DXT5. Similar to the Sim Textures patch but for other things, DXVK is recommended to avoid memory issues.
+- **Lighting Quality** - Improves interior lighting, higher lightmap resolution, softer shadows, blur and a janky multisampler. Highly recommend playing with the various lighting settings in the settings tab alongside this patch. Requires updating lighting to see changes (go into map and out or turn lights on/off), some parts require restarting to take effect or will crash your game.
 
 ### Quality of Life / Settings
 - **Memory Monitor**: Get warned when approaching the 4GB limit (Error 12) so you can save before you crash and lose it all. Now uses `NtQueryInformationProcess` for more accurate virtual address space tracking. Choose between an auto-dismiss overlay or a modal dialog that pauses gameplay. Includes detailed live memory statistics (page counts, protection flags, free span histogram) in a collapsible section.

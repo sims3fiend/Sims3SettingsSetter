@@ -69,15 +69,16 @@ uint64_t BusyWaitForFrame(ScriptHostBase* scriptHost) {
     uint64_t beginWaitTime = 0;
     QueryPerformanceCounter(reinterpret_cast<LARGE_INTEGER*>(&beginWaitTime));
     now = beginWaitTime;
-    while (frameSimulate.exchange(false) == false) 
-    { 
+    while (frameSimulate.exchange(false, std::memory_order_acq_rel) == false)
+    {
+        // 0xc08 is the simulation running flag, set to 1 when Simulate starts, 0 to stop.
         if (*reinterpret_cast<const uint32_t*>((reinterpret_cast<uintptr_t>(scriptHost) + 0xc08)) != 1) break;
         if (!*reinterpret_cast<const uint8_t*>((reinterpret_cast<uintptr_t>(scriptHost) + 0xa60))) break;
         // Fallback in case the frame signal takes too long.
         // TODO: find a reliable way to detect if the game is trying to close therefore not rendering.
         QueryPerformanceCounter(reinterpret_cast<LARGE_INTEGER*>(&now));
-        double elapsed = (double)(now - beginWaitTime) / (double)performanceFrequency;
-        if (elapsed >= 1.0) { break; }
+        uint64_t elapsed = now - beginWaitTime;
+        if (elapsed >= performanceFrequency) { break; }
     }
     return now;
 }
@@ -91,9 +92,9 @@ uint64_t ScriptHostBase::HookedIdleSimulationCycle() {
 
     uint64_t now = 0;
 
-    // I don't know what the boolean at 0xa60 is, but the game's code skips sleeping if it's zero,
+    // 0xa60 is mbIdlingEnabled, the game's code skips sleeping if it's zero, 
     // so if it's zero we'll avoid sleeping.
-    if ((idealTime == 0) || !*reinterpret_cast<const uint8_t*>((reinterpret_cast<uintptr_t>(this) + 0xa60))) {
+    if ((idealTime == 0) | !*reinterpret_cast<const uint8_t*>((reinterpret_cast<uintptr_t>(this) + 0xa60))) {
         if (!tickOnce) return previousSimulationCycleTime;
         return BusyWaitForFrame(this);
     }
@@ -114,7 +115,7 @@ uint64_t ScriptHostBase::HookedIdleSimulationCycle() {
 
 void __stdcall DelayAfterFramePresentation(uintptr_t graphicsDeviceStructure) {
     // Tell sim thread we're good to simulate.
-    if (tickOnce) frameSimulate.store(true);
+    if (tickOnce) frameSimulate.store(true, std::memory_order_acq_rel);
 
     // This might actually denote if the graphics device is lost instead, I'm not sure.
     bool gameWindowIsNotForeground = *reinterpret_cast<const uint8_t*>(graphicsDeviceStructure + 0x8d);
@@ -243,6 +244,7 @@ class SmoothPatchPrecise : public OptimizationPatch {
         LOG_INFO("[SmoothPatchPrecise] Installing...");
 
         tickOnce = tickOnceSettingStorage;
+        frameSimulate.store(true, std::memory_order_acq_rel);
         tickRateLimit = tickRateLimitSettingStorage;
         frameRateLimit = frameRateLimitSettingStorage;
         frameRateLimitInactive = frameRateLimitInactiveSettingStorage < 0.0f ? frameRateLimit : frameRateLimitInactiveSettingStorage;
@@ -365,7 +367,7 @@ REGISTER_PATCH(SmoothPatchPrecise, {.displayName = "Smooth Patch (Precise Flavou
                                        .supportedVersions = VERSION_ALL,
                                        .technicalDetails = {
                                            "Credit goes to LazyDuchess for the original Smooth Patch.",
-                                           "This patch was authored by \"Just Harry\".",
+                                           "This patch was authored by \"Just Harry\", with contributions from LazyDuchess.",
                                            "Unlike the original Smooth Patch, this patch does not alter sleep-durations unrelated to the game's simulator.",
                                            "Additionally, this patch can sleep for sub-millisecond durations, so there is a difference, for example, between 750 TPS and 1,000 TPS.",
                                            "The game's original tick-rate limiter is bypassed entirely, in favour of a bespoke implementation that uses both a sleep function and a busy wait for enhanced precision.",
