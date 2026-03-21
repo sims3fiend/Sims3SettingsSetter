@@ -10,41 +10,40 @@ Contact me on [Tumblr](https://sims3fiend.tumblr.com/) | [Discord](https://disco
 
 ## Patches (\* - enabled by default) 
 
-What you probably came here for. A collection of ASM patches to not only improve performance, but also fix bugs, enhance the game's diagnostics and tweak the graphics.   
-<sub>See **[patches/README.md](patches/README.md)** for technical details on how to write your own. There's a lot of easy-to-use helper functions.</sub>   
+What you probably came here for. A collection of ASM patches to not only improve performance, but also fix bugs, enhance the game’s diagnostics and tweak the graphics.   
+<sub>See **[patches/README.md](patches/README.md)** for technical details on how to write your own. There’s a lot of easy-to-use helper functions.</sub>   
 
 ### Performance Patches
-- **RefPack Decompressor Optimization** - Completely rewrote the game's refpack .package file decompressor with AVX2/SSE2 SIMD intrinsics.
-  - This is probably the most impactful patch - faster loading screens, less stuttering when streaming assets, optimisation of one of the heaviest functions in the game.
-- **Mimalloc Allocator** - Replaces the Sims 3's old crusty memory allocator with [mimalloc](https://github.com/microsoft/mimalloc) for better memory management and performance.
+- **Mimalloc Allocator** - Replaces the Sims 3’s old crusty memory allocator with [mimalloc](https://github.com/microsoft/mimalloc) for better memory management and performance.
   - Requires a restart to apply.
-- **Optimized Lot Streaming Settings** - Enables lot throttling and tweaks camera speed threshold settings so lots load more smoothly when you stop moving. Major improvement.
-- **Timer Optimization** - Increases/reduces timer resolution to 1ms.
-- **Smooth Patch (Precise Flavour)** - ["Just Harry"](https://github.com/just-harry)'s fully rewritten tick-rate limiter using a hybrid sleep/busy-wait approach.
-  - Sleeps via `NtDelayExecution` for sub-millisecond precision and finishes with a busy-wait spin loop for exact timing.
-  - Default tick rate raised to 480 TPS, with presets at multiples of 60 (480/960) for smoother frame-pacing.
-  - **Now includes a frame-rate limiter** (default: 60 FPS) with a separate inactive window limit. Can be safely toggled on/off at any time.
-  - **It is recommended you still use the original [Smooth Patch's](https://modthesims.info/d/658759/smooth-patch-2-1.html) .package file**
-- **Smooth Patch (Original Flavour)** - LazyDuchess's original Smooth Patch implementation ported to S3SS.
-- **Lot Visibility Camera Override** - Stops lot loading based on camera view, should make it so they only load around you. Might not do anything.
-- **CPU Thread Optimization\*** - Optimizes thread placement for modern CPUs with P/E-cores or multiple CCXs.
-  - This also doubles as an 'Alder Lake patch' for people using that series of CPU, so it is enabled by default.
-  - Requires a restart to apply.
-- **CreateFileW Random Access** - Improves file I/O performance by hinting random access pattern.
-  - Requires a restart to apply. 
-- **Oversized Thread Stack Fix** - Reduces memory wasted by the game's file-watcher threads. By ["Just Harry"](https://github.com/just-harry).
+- **Oversized Thread Stack Fix** - Reduces memory wasted by the game’s file-watcher threads. By ["Just Harry"](https://github.com/just-harry).
   - The game creates several dozen of these with oversized 1 MB stacks when they need <64 KB.
   - Saves ~80-170 MB of virtual address space in the memory, depending on how many packs you have, how your mods/CC are setup and what your game version is.
   - Requires a restart to apply.
-- **GC_stop_world() Optimization** - Early exit for a GC function called ~once per frame, very minor improvement, driveby patch.
+- **RefPack Decompressor Optimization** - Completely rewrote the game’s refpack .package file decompressor with AVX2/SSE2 SIMD intrinsics.
+  - This is probably the most impactful patch - faster loading screens, less stuttering when streaming assets, optimisation of one of the heaviest functions in the game.
+- **Smooth Patch (Original Flavour)** - LazyDuchess’s original Smooth Patch implementation ported to S3SS.
+- **Smooth Patch (Precise Flavour)** - ["Just Harry"](https://github.com/just-harry)’s fully rewritten tick-rate limiter using a hybrid sleep/busy-wait approach.
+  - Sleeps via `NtDelayExecution` for sub-millisecond precision and finishes with a busy-wait spin loop for exact timing.
+  - Default tick rate raised to 480 TPS, with presets at multiples of 60 (480/960) for smoother frame-pacing.
+  - **Now includes a frame-rate limiter** (default: 60 FPS) with a separate inactive window limit. Can be safely toggled on/off at any time.
+  - **It is recommended you still use the original [Smooth Patch’s](https://modthesims.info/d/658759/smooth-patch-2-1.html) .package file**
+- **Timer Optimization** - Increases/reduces timer resolution to 1ms.
+- **Optimized Lot Streaming Settings**  -Enables lot throttling and tweaks camera speed threshold settings so lots load more smoothly when you stop moving. Major improvement.
+- **Lot Visibility Camera Override** - Stops lot loading based on camera view, should make it so they only load around you. Might not do anything.
+- **CPU Thread Optimization\*** - Optimizes thread placement for modern CPUs with P/E-cores or multiple CCXs.
+  - This also doubles as an ’Alder Lake patch’ for people using that series of CPU, so it is enabled by default.
+  - Requires a restart to apply.
+- **CreateFileW Random Access** - Improves file I/O performance by hinting random access pattern.
+  - Requires a restart to apply. 
 
 ### Bug Fix Patches
 - **Startup Warning Dialog Fix\*** - Fixes a mod-related dialog so it always shows up correctly. By ["Just Harry"](https://github.com/just-harry).
-  - If you didn't see the dialog before and see it now, this is unrelated to the patch. You likely have a core mod for a slightly different version of the game. (Steam, EA App and Retail each have different internal version numbers.)
-  - The issues with this dialog were intensified by the Windows 11 25H2 update. If the patch isn't enabled on this version, you'd potentially get a black screen and be unable to enter the game, without the dialog showing up at all.
+  - If you didn’t see the dialog before and see it now, this is unrelated to the patch. You likely have a core mod for a slightly different version of the game. (Steam, EA App and Retail each have different internal version numbers.)
+  - The issues with this dialog were intensified by the Windows 11 25H2 update. If the patch isn’t enabled on this version, you’d potentially get a black screen and be unable to enter the game, without the dialog showing up at all.
 
 ### Diagnostic Patches
-- **Expanded Crash Logs\*** - Enhances the game's crash logs (`xcpt...txt`) with much deeper diagnostic information. By ["Just Harry"](https://github.com/just-harry).
+- **Expanded Crash Logs\*** - Enhances the game’s crash logs (`xcpt...txt`) with much deeper diagnostic information. By ["Just Harry"](https://github.com/just-harry).
   - Adds detailed access violation info (memory state, protection flags, read/write/DEP), S3SS version, and a full virtual memory statistics breakdown.
   - No performance impact during normal gameplay.
   - Enabled by default. Keep this enabled when reporting a crash!
@@ -61,11 +60,11 @@ What you probably came here for. A collection of ASM patches to not only improve
 - **Chunky Patch - Disable GC_try_to_collect()** - Removes the explicit garbage collection call from the simulation loop. GC profiling shows this function dominates simulation thread time. Should improve Simulate calls quite dramatically. Relies on `GC_malloc` to trigger collection naturally when memory pressure requires it.
   - May increase memory usage
 - **Map View Lot Streaming Blocker** - Prevents lot streaming while in map view, makes going in and out of map a lot less stuttery.
-  - Experimental as it has a known issue where the toggle gets stuck on the "don't load" path. If your lots aren't loading in, try disabling this first
+  - Experimental as it has a known issue where the toggle gets stuck on the "don’t load" path. If your lots aren’t loading in, try disabling this first
 - **Disable Online Features** - Prevents the game from initializing online service jobs (SIGS/FolderManager) entirely.
   - **This means that the FeaturedItems folder no longer fills up**, but other online functionality still remains active. I may revisit this in the future to do a proper patch.
 - **Resolution Spoofer** - Injects fake resolutions (1440p, 4K, 5K, 6K) for downsampling. Makes the game look real good!
-  - You'll want a [mod to fix the UI scaling](https://github.com/just-harry/tiny-ui-fix-for-ts3) as well.
+  - You’ll want a [mod to fix the UI scaling](https://github.com/just-harry/tiny-ui-fix-for-ts3) as well.
 - **Uncompressed Compositor Textures** - Forces material compositor textures to use uncompressed A8R8G8B8 instead of DXT1/DXT5. Similar to the Sim Textures patch but for other things, like objects. DXVK is recommended to avoid memory issues.
 - **Lighting Quality** - Improves interior lighting, higher lightmap resolution, softer shadows, blur and a janky multisampler.
   - I highly recommend playing with the various lighting settings in the settings tab alongside this patch.
@@ -74,7 +73,7 @@ What you probably came here for. A collection of ASM patches to not only improve
 - **WorldCache Size Uncap** - Removes the 512MB limit on WorldCache files. May help with large CC worlds as it prevents cache-churning.
   - May require you to increase the `WorldCompositorCacheSize` and `SimWorldCompositorCacheSize` in `[Your Latest EP install directory (base-game if you have none)]/Default.ini` to have any effect.
   - Might have issues once the cache exceeds 2GB. Let me know if you get a crash when this happens.
-  - Still working on this, may replace with a more targeted patch that shouldn't require a UI mod (using the pseudoresolution setting). This can also crash your game when set too high for your setup. It **may also crash when using other Borderless Fullscreen implementations**, but there's some special handling to prevent this.
+  - Still working on this, may replace with a more targeted patch that shouldn’t require a UI mod (using the pseudoresolution setting). This can also crash your game when set too high for your setup. It **may also crash when using other Borderless Fullscreen implementations**, but there’s some special handling to prevent this.
 - **Intersection Optimization** - SIMD optimization for navmesh/pathing calculations, a lot faster but rarely called in normal gameplay, is called very heavily when loading CC/uncached worlds though. May cause issues with sims entering rabitholes, still need to investigate
 
 ## Variable Settings Editor
@@ -88,11 +87,11 @@ Change things like:
 - Sunlight brightness
 - And much more - organized by category with search
 
-**Note:** Some settings may have unexpected effects. None are likely/able to corrupt your game, and all are temporary (since I removed the Options heading ones). If you find anything that seems wrong/doesn't work how you think it does, send me a message!
+**Note:** Some settings may have unexpected effects. None are likely/able to corrupt your game, and all are temporary (since I removed the Options heading ones). If you find anything that seems wrong/doesn’t work how you think it does, send me a message!
 
 ## Config Values Editor
 View and edit config values from `GraphicsRules.sgr`.   
-This shows what's actually loaded in memory (not just what's in the file which can sometimes be wrong/changed after init) and includes hidden settings that don't appear in the original files.
+This shows what’s actually loaded in memory (not just what’s in the file which can sometimes be wrong/changed after init) and includes hidden settings that don’t appear in the original files.
 
 ## Quality of Life / Settings
 - **Memory Monitor**: Get warned when approaching the ~4GB limit (Error 12) so you can save before you crash and lose it all.
@@ -121,7 +120,7 @@ Press **Insert** to open the UI (change this in Other/QoL tab)
 *Yellow text* - Modified but not saved for future restarts.   
 
 Settings are stored in `Documents\Electronic Arts\The Sims 3\S3SS\S3SS.toml` (or the localized equivalent, e.g. `Die Sims 3`).   
-<sub>If you're upgrading from an older version that used an INI file, your settings *should* be automatically migrated on first launch.</sub>
+<sub>If you’re upgrading from an older version that used an INI file, your settings *should* be automatically migrated on first launch.</sub>
 
 ## Settings Tab
 - Only becomes available after loading into a world
@@ -142,14 +141,14 @@ Settings are stored in `Documents\Electronic Arts\The Sims 3\S3SS\S3SS.toml` (or
 
 # Troubleshooting
 
-**UI doesn't open?**
+**UI doesn’t open?**
 - Check for `S3SS_LOG.txt` in the S3SS user folder (`Documents\Electronic Arts\The Sims 3\S3SS`) - send it to me if it exists
 - You can also try changing the keybind in `Documents\Electronic Arts\The Sims 3\S3SS\S3SS.toml` by modifying the `UIToggleKey` value (See for IDs: https://docs.microsoft.com/en-us/windows/win32/inputdev/virtual-key-codes)
-- If there is no log file, your ASI loader isn't working.
+- If there is no log file, your ASI loader isn’t working.
 
-**Settings tab stuck on 'Initializing'?**
-- Wait until you're fully in-game (past loading screen)
-- If it doesn't auto-initialize, use the manual initialize button.
+**Settings tab stuck on ‘Initializing’?**
+- Wait until you’re fully in-game (past loading screen)
+- If it doesn’t auto-initialize, use the manual initialize button.
 - Send me your `S3SS_LOG.txt`.
 
 **I get crashes when I use specific patches?**
@@ -157,12 +156,12 @@ Settings are stored in `Documents\Electronic Arts\The Sims 3\S3SS\S3SS.toml` (or
 
 **My settings keep resetting every time I restart the game?**
 - Settings are now saved to `Documents\Electronic Arts\The Sims 3\S3SS\S3SS.toml` which should hopefuly resolve this.
-- Check that this file exists and that S3SS has write permissions to your Documents folder. If it's not appearing, you may need to run the game executable as an administrator.
+- Check that this file exists and that S3SS has write permissions to your Documents folder. If it’s not appearing, you may need to run the game executable as an administrator.
 
 # For Developers
 ## Building from source
 
-You'll need [vcpkg](https://github.com/microsoft/vcpkg), and to run `vcpkg install --triplet=x86-windows-static`.   
+You’ll need [vcpkg](https://github.com/microsoft/vcpkg), and to run `vcpkg install --triplet=x86-windows-static`.   
 Build from `Sims3SettingsSetter.sln`.
 
 ## Making new patches
@@ -173,10 +172,10 @@ See **[patches/README.md](patches/README.md)** for the full guide and breakdown.
 
 # Coming Soon
 **Working on:**
-- Folder-ization of the codebase... desparately needed but I've muscle memories where everything is...
+- Folder-ization of the codebase... desparately needed but I’ve muscle memories where everything is...
 - UI improvements/features
-- D3D9 fun things, I have some stuff using it but it's very janky so maybe next revision
-- More config values/settings outside of the debugUI ones, things like AA, etc.. There's no convenient hook point for those however so I'll have to manually do it... which kind of stinks.
+- D3D9 fun things, I have some stuff using it but it’s very janky so maybe next revision
+- More config values/settings outside of the debugUI ones, things like AA, etc.. There’s no convenient hook point for those however so I’ll have to manually do it... which kind of stinks.
 - More patches, more. more. more. Main one is object throttling. A way to slow down the object loading would be very very very good.
 - Mono....
 - More.
