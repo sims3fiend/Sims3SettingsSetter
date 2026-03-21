@@ -140,12 +140,14 @@
     <ClCompile Include="memory_statistics.cpp" />
     <ClCompile Include="optimization.cpp" />
     <ClCompile Include="patches\adaptive_wait_patch.cpp" />
+    <ClCompile Include="patches\camera_smoother_patch.cpp" />
     <ClCompile Include="patches\expanded_crash_logs_patch.cpp" />
     <ClCompile Include="patches\gc_finalize_throttle_patch.cpp" />
     <ClCompile Include="patches\gc_stop_world_patch.cpp" />
     <ClCompile Include="patches\gc_try_to_collect_patch.cpp" />
     <ClCompile Include="patches\map_view_lot_blocker_patch.cpp" />
     <ClCompile Include="patches\mimalloc_patch.cpp" />
+    <ClCompile Include="patches\online_nuke_patch.cpp" />
     <ClCompile Include="patches\oversized_thread_stack_fix_patch.cpp" />
     <ClCompile Include="patches\refpack_decompressor_patch.cpp" />
     <ClCompile Include="patches\resolution_spoofer_patch.cpp" />
@@ -154,6 +156,8 @@
     <ClCompile Include="patches\startup_warning_dialog_fix_patch.cpp" />
     <ClCompile Include="patches\timer_optimization_patch.cpp" />
     <ClCompile Include="patches\uncompressed_sim_textures_patch.cpp" />
+    <ClCompile Include="patches\uncompressed_lot_textures_patch.cpp" />
+    <ClCompile Include="patches\lighting_quality_patch.cpp" />
     <ClCompile Include="patches\worldcache_uncap_patch.cpp" />
     <ClCompile Include="config\migration.cpp" />
     <ClCompile Include="pattern_scan.cpp" />

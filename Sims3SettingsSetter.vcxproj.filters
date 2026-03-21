@@ -75,6 +75,9 @@
     <ClCompile Include="patches\uncompressed_sim_textures_patch.cpp">
       <Filter>patches</Filter>
     </ClCompile>
+    <ClCompile Include="patches\uncompressed_lot_textures_patch.cpp">
+      <Filter>patches</Filter>
+    </ClCompile>
     <ClCompile Include="memory_statistics.cpp" />
     <ClCompile Include="patches\expanded_crash_logs_patch.cpp" />
     <ClCompile Include="patches\gc_finalize_throttle_patch.cpp" />
@@ -83,6 +86,15 @@
       <Filter>patches</Filter>
     </ClCompile>
     <ClCompile Include="patches\startup_warning_dialog_fix_patch.cpp">
+      <Filter>patches</Filter>
+    </ClCompile>
+    <ClCompile Include="patches\camera_smoother_patch.cpp">
+      <Filter>patches</Filter>
+    </ClCompile>
+    <ClCompile Include="patches\lighting_quality_patch.cpp">
+      <Filter>patches</Filter>
+    </ClCompile>
+    <ClCompile Include="patches\online_nuke_patch.cpp">
       <Filter>patches</Filter>
     </ClCompile>
   </ItemGroup>
