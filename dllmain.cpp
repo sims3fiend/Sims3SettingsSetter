@@ -1,5 +1,6 @@
 ﻿#include <windows.h>
 #include <detours/detours.h>
+#include <bit>
 #include <sstream>
 #include <string>
 #include <vector>
@@ -119,7 +120,7 @@ class VariableRegistryHook : public SettingsHook {
     typedef void(__thiscall* FuncType)(void* thisPtr, int param2, void* ptr, const wchar_t* name, int type, int param5, int param6, float param7, float param8, float param9);
     static inline VariableRegistryHook* instance = nullptr;
 
-    static void __fastcall HookFunc(void* thisPtr, void* edx, int param2, void* ptr, const wchar_t* name, int type, int param5, int param6, float param7, float param8, float param9) {
+    void HookFunc(int param2, void* ptr, const wchar_t* name, int type, int param5, int param6, float param7, float param8, float param9) {
 
         // Determine actual type based on the parameters
         SettingType actualType;
@@ -196,7 +197,7 @@ class VariableRegistryHook : public SettingsHook {
 
         // Call original function
         auto original = reinterpret_cast<FuncType>(instance->originalFunc);
-        original(thisPtr, param2, ptr, name, type, param5, param6, param7, param8, param9);
+        original(this, param2, ptr, name, type, param5, param6, param7, param8, param9);
 
         // Check if this is the "MT Time Step" setting, which is typically one of the last settings to be registered
         // BZZTTTT wrong, someone reported it never getting initialized, dunno why so we added a manual button to initialize it... should check that it has stuff tho I guess
@@ -222,19 +223,19 @@ class VariableRegistryHook : public SettingsHook {
   public:
     VariableRegistryHook(void* original) : SettingsHook(original, "VariableRegistry") { instance = this; }
 
-    void Install() override { DetourAttach(&originalFunc, HookFunc); }
-    void Uninstall() override { DetourDetach(&originalFunc, HookFunc); }
+    void Install() override { DetourAttach(&originalFunc, std::bit_cast<void*>(&VariableRegistryHook::HookFunc)); }
+    void Uninstall() override { DetourDetach(&originalFunc, std::bit_cast<void*>(&VariableRegistryHook::HookFunc)); }
 };
 
 // Config retrieval hook
 class ConfigRetrievalHook : public SettingsHook {
-    typedef int(__fastcall* FuncType)(void* param1, void* edx, wchar_t* param2, wchar_t* param3, wchar_t** param4);
+    typedef uint8_t(__thiscall* FuncType)(void* thisPtr, wchar_t* param2, wchar_t* param3, wchar_t** param4);
     static inline ConfigRetrievalHook* instance = nullptr;
 
-    static int __fastcall HookFunc(void* param1, void* edx, wchar_t* category, wchar_t* key, wchar_t** outValue) {
+    uint8_t HookFunc(wchar_t* category, wchar_t* key, wchar_t** outValue) {
         // Call original first to get game's value
         auto original = (FuncType)instance->originalFunc;
-        int result = original(param1, edx, category, key, outValue);
+        uint8_t result = original(this, category, key, outValue);
 
         // Process if we have valid strings
         if (category && key && IsSafeToRead<wchar_t>(category) && IsSafeToRead<wchar_t>(key)) {
@@ -383,15 +384,15 @@ class ConfigRetrievalHook : public SettingsHook {
         instance = this;
     }
 
-    void Install() override { DetourAttach(&originalFunc, HookFunc); }
-    void Uninstall() override { DetourDetach(&originalFunc, HookFunc); }
+    void Install() override { DetourAttach(&originalFunc, std::bit_cast<void*>(&ConfigRetrievalHook::HookFunc)); }
+    void Uninstall() override { DetourDetach(&originalFunc, std::bit_cast<void*>(&ConfigRetrievalHook::HookFunc)); }
 };
 
 class CustomDebugVarHook : public SettingsHook {
     typedef void(__thiscall* FuncType)(void* thisPtr, int param2, int param3, wchar_t* name, int param5, int param6, float param7, float param8, float param9);
     static inline CustomDebugVarHook* instance = nullptr;
 
-    static void __fastcall HookFunc(void* thisPtr, void* edx, int param2, int param3, wchar_t* name, int param5, int param6, float param7, float param8, float param9) {
+    void HookFunc(int param2, int param3, wchar_t* name, int param5, int param6, float param7, float param8, float param9) {
 
         // Log raw parameters
         std::stringstream rawLog;
@@ -404,7 +405,7 @@ class CustomDebugVarHook : public SettingsHook {
 
         // Log basic info
         std::stringstream log;
-        instance->LogBasicInfo(log, thisPtr, valueAddr, name);
+        instance->LogBasicInfo(log, this, valueAddr, name);
         LOG_DEBUG(log.str());
 
         // Register the setting
@@ -452,14 +453,14 @@ class CustomDebugVarHook : public SettingsHook {
 
         // Call original function
         auto original = reinterpret_cast<FuncType>(instance->originalFunc);
-        original(thisPtr, param2, param3, name, param5, param6, param7, param8, param9);
+        original(this, param2, param3, name, param5, param6, param7, param8, param9);
     }
 
   public:
     CustomDebugVarHook(void* original) : SettingsHook(original, "CustomDebugVar") { instance = this; }
 
-    void Install() override { DetourAttach(&originalFunc, HookFunc); }
-    void Uninstall() override { DetourDetach(&originalFunc, HookFunc); }
+    void Install() override { DetourAttach(&originalFunc, std::bit_cast<void*>(&CustomDebugVarHook::HookFunc)); }
+    void Uninstall() override { DetourDetach(&originalFunc, std::bit_cast<void*>(&CustomDebugVarHook::HookFunc)); }
 };
 
 // Updated HookManager with simplified vtable offsets
