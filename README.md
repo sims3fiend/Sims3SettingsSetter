@@ -28,8 +28,10 @@ What you probably came here for. A collection of ASM patches to not only improve
 - **Smooth Patch (Original Flavour)** - LazyDuchess's original Smooth Patch implementation ported to S3SS.
 - **Lot Visibility Camera Override** - Stops lot loading based on camera view, should make it so they only load around you. Might not do anything.
 - **CPU Thread Optimization\*** - Optimizes thread placement for modern CPUs with P/E-cores or multiple CCXs.
-  - This also doubles as an 'Alder Lake patch' for people using that series of CPU, so it is enabled by default. 
+  - This also doubles as an 'Alder Lake patch' for people using that series of CPU, so it is enabled by default.
+  - Requires a restart to apply.
 - **CreateFileW Random Access** - Improves file I/O performance by hinting random access pattern.
+  - Requires a restart to apply. 
 - **Oversized Thread Stack Fix** - Reduces memory wasted by the game's file-watcher threads. By ["Just Harry"](https://github.com/just-harry).
   - The game creates several dozen of these with oversized 1 MB stacks when they need <64 KB.
   - Saves ~80-170 MB of virtual address space in the memory, depending on how many packs you have, how your mods/CC are setup and what your game version is.
@@ -112,12 +114,13 @@ This shows what's actually loaded in memory (not just what's in the file which c
 
 # Usage
 
-**Press Insert** to open the UI (change this in Other/QoL tab)
-**File → Save Settings** to make changes persistent. Some settings (QoL, patches) auto-save when changed. Some patches require a restart to apply. (CPU Thread, CreateFileW)   
-Green settings - Modified from the default and saved.   
-Yellow text - Modified but not saved for future restarts.   
+Press **Insert** to open the UI (change this in Other/QoL tab)
+**File → Save Settings** to make changes persistent. Some settings (QoL, patches) auto-save when changed. Some patches require a restart to apply, as listed above.   
+*Green settings* - Modified from the default and saved.   
+*Yellow text* - Modified but not saved for future restarts.   
 
-Settings are stored in `Documents\Electronic Arts\The Sims 3\S3SS\S3SS.toml` (or the localized equivalent, e.g. `Die Sims 3`, die for German). Non-ASCII/Unicode usernames are supported. If you're upgrading from an older version that used an INI file, your settings *should* be automatically migrated on first launch.
+Settings are stored in `Documents\Electronic Arts\The Sims 3\S3SS\S3SS.toml` (or the localized equivalent, e.g. `Die Sims 3`).   
+<sub>If you're upgrading from an older version that used an INI file, your settings *should* be automatically migrated on first launch.</sub>
 
 ## Settings Tab
 - Only becomes available after loading into a world
