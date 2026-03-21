@@ -127,8 +127,8 @@ Settings are stored in `Documents\Electronic Arts\The Sims 3\S3SS\S3SS.toml` (or
 - Right-click any setting to:
   - Edit beyond min/max bounds
   - Reset to default
-  - Clear override (remove from config)
-  - Copy address for if you're REing
+  - Clear override (removes it from the config)
+  - Copy address for reverse-engineering
 
 ## Patches Tab
 - Toggle patches on/off
@@ -158,14 +158,16 @@ Settings are stored in `Documents\Electronic Arts\The Sims 3\S3SS\S3SS.toml` (or
 - Settings are now saved to `Documents\Electronic Arts\The Sims 3\S3SS\S3SS.toml` which should hopefuly resolve this.
 - Check that this file exists and that S3SS has write permissions to your Documents folder. If it's not appearing, you may need to run the game executable as an administrator.
 
-# Building from Source
+# For Developers
+## Building from source
 
 You'll need [vcpkg](https://github.com/microsoft/vcpkg), and to run `vcpkg install --triplet=x86-windows-static`.   
 Build from `Sims3SettingsSetter.sln`.
 
-# For Developers
+## Making new patches
+This tool features a modular patch system that makes adding custom patches very easy.   
+All patches auto-register and appear in the GUI, the system handles memory protection, change tracking, and restoration automatically, which makes reverse engineering and patching much simpler. 
 
-This tool features a modular patch system that makes adding custom patches very easy. All patches auto-register and appear in the GUI, the system handles memory protection, change tracking, and restoration automatically, which makes reverse engineering and patching much simpler.
 See **[patches/README.md](patches/README.md)** for the full guide and breakdown.
 
 # Coming Soon
