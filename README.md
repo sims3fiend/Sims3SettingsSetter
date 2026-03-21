@@ -86,7 +86,8 @@ Change things like:
 - Weather and time of day (snow in summer!)
 - Shadow distances and quality
 - Sunlight brightness
-- And much more - organized by category with search   
+- And much more - organized by category with search
+
 **Note:** Some settings may have unexpected effects. None are likely/able to corrupt your game, and all are temporary (since I removed the Options heading ones). If you find anything that seems wrong/doesn't work how you think it does, send me a message!
 
 ## Config Values Editor
