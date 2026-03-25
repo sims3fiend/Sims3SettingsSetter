@@ -407,6 +407,7 @@ REGISTER_PATCH(
                            .description = "Expands the game's crash log writer to include more information.",
                            .category = "Diagnostic",
                            .experimental = false,
+                           .enabledByDefault = true,
                            .supportedVersions = VERSION_ALL,
                            .technicalDetails = {
                                "This patch was authored by \"Just Harry\".",

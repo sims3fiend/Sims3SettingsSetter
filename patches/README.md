@@ -1,5 +1,5 @@
 # Patches System
-The /patches folder contains all game patches organized in a modular way. Each patch automatically registers itself and appears in the GUI, there's also a bunch of helper functions to make life easier. I've made this system to make developing patches for the game easier for me and hopefuly YOU 🫵, if you can think of anything to change or add lmk!
+The /patches folder contains all game patches organized in a modular way. Each patch automatically registers itself and appears in the GUI, there's also a bunch of helper functions to make life easier. I've made this system to make developing patches for the game easier for me and hopefully YOU. 🫵 If you can think of anything to change or add, lmk!
 
 ## Adding a new patch
 ### Simple Byte Patches
@@ -327,7 +327,7 @@ REGISTER_PATCH(CustomUIPatch, {
 
 ### Registering Existing Classes
 
-If you have an existing patch class in another file (like my old patches I cba porting):
+If you have an existing patch class in another file (like my old patches I cba to port):
 
 ```cpp
 #include "../patch_system.h"
