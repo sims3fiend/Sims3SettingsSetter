@@ -12,7 +12,6 @@
 #include "pattern_scan.h"
 #include "vtable_manager.h"
 #include "optimization.h"
-#include "intersection_patch.h"
 #include "utils.h"
 #include <iomanip>
 #include <strsafe.h>

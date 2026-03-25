@@ -108,7 +108,6 @@
     <ClInclude Include="d3d9_hook_registry.h" />
     <ClInclude Include="framework.h" />
     <ClInclude Include="gui.h" />
-    <ClInclude Include="intersection_patch.h" />
     <ClInclude Include="logger.h" />
     <ClInclude Include="memory_statistics.h" />
     <ClInclude Include="optimization.h" />
@@ -135,7 +134,6 @@
     <ClCompile Include="dllmain.cpp" />
     <ClCompile Include="gui.cpp" />
     <ClCompile Include="hooks.cpp" />
-    <ClCompile Include="intersection_patch.cpp" />
     <ClCompile Include="logger.cpp" />
     <ClCompile Include="memory_statistics.cpp" />
     <ClCompile Include="optimization.cpp" />
@@ -166,7 +164,6 @@
     <ClCompile Include="patches\lot_streaming_settings_patch.cpp" />
     <ClCompile Include="patches\lot_visibility_camera_patch.cpp" />
     <ClCompile Include="patches\cpu_optimization_patch_register.cpp" />
-    <ClCompile Include="patches\intersection_patch_register.cpp" />
     <ClCompile Include="patches\createfileW_patch.cpp" />
   </ItemGroup>
   <ItemGroup>

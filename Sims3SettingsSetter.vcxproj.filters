@@ -6,7 +6,6 @@
     <ClCompile Include="d3d9_hook.cpp" />
     <ClCompile Include="gui.cpp" />
     <ClCompile Include="hooks.cpp" />
-    <ClCompile Include="intersection_patch.cpp" />
     <ClCompile Include="optimization.cpp" />
     <ClCompile Include="pattern_scan.cpp" />
     <ClCompile Include="config\config_store.cpp">
@@ -26,9 +25,6 @@
     <ClCompile Include="vtable_manager.cpp" />
     <ClCompile Include="logger.cpp" />
     <ClCompile Include="patches\cpu_optimization_patch_register.cpp">
-      <Filter>patches</Filter>
-    </ClCompile>
-    <ClCompile Include="patches\intersection_patch_register.cpp">
       <Filter>patches</Filter>
     </ClCompile>
     <ClCompile Include="patches\createfileW_patch.cpp">
@@ -103,7 +99,6 @@
     <ClInclude Include="d3d9_hook.h" />
     <ClInclude Include="framework.h" />
     <ClInclude Include="gui.h" />
-    <ClInclude Include="intersection_patch.h" />
     <ClInclude Include="optimization.h" />
     <ClInclude Include="pattern_scan.h" />
     <ClInclude Include="config\config_store.h">

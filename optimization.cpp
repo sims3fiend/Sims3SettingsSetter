@@ -4,7 +4,6 @@
 #include <format>
 #include <unordered_map>
 #include <detours/detours.h>
-#include "intersection_patch.h"
 #include "cpu_optimization.h"
 #include "utils.h"
 #include "logger.h"

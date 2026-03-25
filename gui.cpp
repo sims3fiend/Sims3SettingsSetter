@@ -12,7 +12,6 @@
 #include "optimization.h"
 #include "patch_system.h"
 #include "qol.h"
-#include "intersection_patch.h"
 #include "cpu_optimization.h"
 #include "d3d9_hook.h"
 #include "memory_statistics.h"
