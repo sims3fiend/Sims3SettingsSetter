@@ -74,7 +74,6 @@ What you probably came here for. A collection of ASM patches to not only improve
   - May require you to increase the `WorldCompositorCacheSize` and `SimWorldCompositorCacheSize` in `[Your Latest EP install directory (base-game if you have none)]/Default.ini` to have any effect.
   - Might have issues once the cache exceeds 2GB. Let me know if you get a crash when this happens.
   - Still working on this, may replace with a more targeted patch that shouldn’t require a UI mod (using the pseudoresolution setting). This can also crash your game when set too high for your setup. It **may also crash when using other Borderless Fullscreen implementations**, but there’s some special handling to prevent this.
-- **Intersection Optimization** - SIMD optimization for navmesh/pathing calculations, a lot faster but rarely called in normal gameplay, is called very heavily when loading CC/uncached worlds though. May cause issues with sims entering rabitholes, still need to investigate
 
 ## Variable Settings Editor
 Edit "Variable" settings in **real-time** without needing to restart the game.   
