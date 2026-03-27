@@ -14,16 +14,35 @@
 // floor lock at +0x1C4/+0x1C8, ceiling at +0x2B4/+0x2B8, object at +0x3A4/+0x3A8.
 typedef void(__fastcall* FinalizePrime_t)(void* thisPtr, void* edx);
 static FinalizePrime_t originalFinalizePrime = nullptr;
-static int g_floorCeilBlurPasses = 0;
+static float g_floorCeilBlurStrength = 0.0f;
+static float g_objectBlurStrength = 0.0f;
 
 typedef void(__thiscall* GetVisibleRes_t)(void* lodParams, int* outWidth, int* outHeight, char flag);
 static GetVisibleRes_t getVisibleResFunc = nullptr;
 
-// Bidirectional box blur on locked ARGB8 texture, 4 sweeps per pass.
-static void BlurLockedTexture(BYTE* pixels, int pitch, int width, int height, int passes) {
-    if (!pixels || width <= 1 || height <= 1 || passes <= 0) return;
+// Blend pixel toward the average of itself and neighbor, scaled by alpha (0-256).
+static inline DWORD BlendTowardAvg(DWORD a, DWORD b, int alpha256) {
+    DWORD result = 0;
+    for (int s = 0; s < 32; s += 8) {
+        int ca = (a >> s) & 0xFF;
+        int cb = (b >> s) & 0xFF;
+        int avg = (ca + cb) >> 1;
+        int blended = ca + ((alpha256 * (avg - ca)) >> 8);
+        result |= (static_cast<DWORD>(blended & 0xFF)) << s;
+    }
+    return result;
+}
 
-    for (int pass = 0; pass < passes; pass++) {
+// Bidirectional box blur on locked ARGB8 texture.
+// strength: integer part = full-strength passes, fractional part = one additional partial-strength pass.
+static void BlurLockedTexture(BYTE* pixels, int pitch, int width, int height, float strength) {
+    if (!pixels || width <= 1 || height <= 1 || strength <= 0.0f) return;
+
+    int fullPasses = static_cast<int>(strength);
+    float frac = strength - static_cast<float>(fullPasses);
+
+    // Full-strength passes using fast bitwise average
+    for (int pass = 0; pass < fullPasses; pass++) {
         // Horizontal left-to-right
         for (int y = 0; y < height; y++) {
             DWORD* row = reinterpret_cast<DWORD*>(pixels + y * pitch);
@@ -59,10 +78,37 @@ static void BlurLockedTexture(BYTE* pixels, int pitch, int width, int height, in
             }
         }
     }
+
+    // Fractional pass with weighted blend
+    if (frac > 0.001f) {
+        int alpha = static_cast<int>(frac * 256.0f);
+        // Horizontal left-to-right
+        for (int y = 0; y < height; y++) {
+            DWORD* row = reinterpret_cast<DWORD*>(pixels + y * pitch);
+            for (int x = 0; x < width - 1; x++) { row[x] = BlendTowardAvg(row[x], row[x + 1], alpha); }
+        }
+        // Horizontal right-to-left
+        for (int y = 0; y < height; y++) {
+            DWORD* row = reinterpret_cast<DWORD*>(pixels + y * pitch);
+            for (int x = width - 1; x > 0; x--) { row[x] = BlendTowardAvg(row[x], row[x - 1], alpha); }
+        }
+        // Vertical top-to-bottom
+        for (int y = 0; y < height - 1; y++) {
+            DWORD* row0 = reinterpret_cast<DWORD*>(pixels + y * pitch);
+            DWORD* row1 = reinterpret_cast<DWORD*>(pixels + (y + 1) * pitch);
+            for (int x = 0; x < width; x++) { row0[x] = BlendTowardAvg(row0[x], row1[x], alpha); }
+        }
+        // Vertical bottom-to-top
+        for (int y = height - 1; y > 0; y--) {
+            DWORD* row0 = reinterpret_cast<DWORD*>(pixels + y * pitch);
+            DWORD* row1 = reinterpret_cast<DWORD*>(pixels + (y - 1) * pitch);
+            for (int x = 0; x < width; x++) { row0[x] = BlendTowardAvg(row0[x], row1[x], alpha); }
+        }
+    }
 }
 
 static void __fastcall HookedFinalizePrime(void* thisPtr, void* edx) {
-    if (g_floorCeilBlurPasses > 0 && getVisibleResFunc) {
+    if ((g_floorCeilBlurStrength > 0.0f || g_objectBlurStrength > 0.0f) && getVisibleResFunc) {
         auto base = reinterpret_cast<uintptr_t>(thisPtr);
         int lod = *reinterpret_cast<int*>(base + 0xF4);
         void* lodParams = reinterpret_cast<void*>(*reinterpret_cast<uintptr_t*>(base + 0x04) + lod * 0x40);
@@ -71,17 +117,21 @@ static void __fastcall HookedFinalizePrime(void* thisPtr, void* edx) {
         getVisibleResFunc(lodParams, &visW, &visH, '\0');
 
         if (visW > 0 && visH > 0) {
-            BYTE* floorData = *reinterpret_cast<BYTE**>(base + 0x1C4);
-            int floorPitch = *reinterpret_cast<int*>(base + 0x1C8);
-            if (floorData && floorPitch > 0) { BlurLockedTexture(floorData, floorPitch, visW, visH, g_floorCeilBlurPasses); }
+            if (g_floorCeilBlurStrength > 0.0f) {
+                BYTE* floorData = *reinterpret_cast<BYTE**>(base + 0x1C4);
+                int floorPitch = *reinterpret_cast<int*>(base + 0x1C8);
+                if (floorData && floorPitch > 0) { BlurLockedTexture(floorData, floorPitch, visW, visH, g_floorCeilBlurStrength); }
 
-            BYTE* ceilData = *reinterpret_cast<BYTE**>(base + 0x2B4);
-            int ceilPitch = *reinterpret_cast<int*>(base + 0x2B8);
-            if (ceilData && ceilPitch > 0) { BlurLockedTexture(ceilData, ceilPitch, visW, visH, g_floorCeilBlurPasses); }
+                BYTE* ceilData = *reinterpret_cast<BYTE**>(base + 0x2B4);
+                int ceilPitch = *reinterpret_cast<int*>(base + 0x2B8);
+                if (ceilData && ceilPitch > 0) { BlurLockedTexture(ceilData, ceilPitch, visW, visH, g_floorCeilBlurStrength); }
+            }
 
-            BYTE* objData = *reinterpret_cast<BYTE**>(base + 0x3A4);
-            int objPitch = *reinterpret_cast<int*>(base + 0x3A8);
-            if (objData && objPitch > 0) { BlurLockedTexture(objData, objPitch, visW, visH, g_floorCeilBlurPasses); }
+            if (g_objectBlurStrength > 0.0f) {
+                BYTE* objData = *reinterpret_cast<BYTE**>(base + 0x3A4);
+                int objPitch = *reinterpret_cast<int*>(base + 0x3A8);
+                if (objData && objPitch > 0) { BlurLockedTexture(objData, objPitch, visW, visH, g_objectBlurStrength); }
+            }
         }
     }
 
@@ -274,7 +324,8 @@ class LightingQualityPatch : public OptimizationPatch {
     int diagonalWallOcclusion = 0;
     int adaptiveSampling = 1;
     int wallBlur = 0;
-    int lightmapBlur = 0;
+    float floorBlur = 0.0f;
+    float objectBlur = 0.0f;
     float softShadowWidth = 0.5f;
     static constexpr int kMultiplierValues[] = {1, 2, 4, 8};
     static constexpr int kWallMultiplierValues[] = {1, 2, 4};
@@ -414,8 +465,8 @@ class LightingQualityPatch : public OptimizationPatch {
             LOG_INFO(std::format("[LightingQualityPatch] LightPointWithAllLights at {:#010x}", lightPointWithAllLightsAddr));
         }
 
-        // Find FinalizePrime and GetVisibleRes (for floor/ceiling blur)
-        if (lightmapBlur > 0) {
+        // Find FinalizePrime and GetVisibleRes (for floor/ceiling/object blur)
+        if (floorBlur > 0.0f || objectBlur > 0.0f) {
             finalizePrimeAddr = PatchHelper::ScanPattern(baseAddr, imageSize, kFinalizePrimePattern);
             if (!finalizePrimeAddr) { return Fail("Could not find FinalizePrime pattern"); }
             LOG_INFO(std::format("[LightingQualityPatch] FinalizePrime at {:#010x}", finalizePrimeAddr));
@@ -512,8 +563,14 @@ class LightingQualityPatch : public OptimizationPatch {
             "Additional blur passes for wall lightmaps (added to engine's base of 2).\n"
             "Less effective at higher wall lightmap resolution.");
 
-        RegisterIntSetting(&lightmapBlur, "lightmapBlur", 0, 0, 16,
-            "Blur passes for floor/ceiling lightmaps.\n"
+        RegisterFloatSetting(&floorBlur, "floorBlur", SettingUIType::InputBox, 0.0f, 0.0f, 16.0f,
+            "Blur strength for floor/ceiling lightmaps.\n"
+            "Fractional values (e.g. 0.25) give a gentle blur; integer values are full-strength passes.\n"
+            "Less effective at higher floor subdivision.");
+
+        RegisterFloatSetting(&objectBlur, "objectBlur", SettingUIType::InputBox, 0.0f, 0.0f, 16.0f,
+            "Blur strength for object shadow lightmaps.\n"
+            "Separate from floor/ceiling so you can keep sharp object shadows while smoothing the floor.\n"
             "Less effective at higher floor subdivision.");
 
         RegisterFloatSetting(&softShadowWidth, "softShadowWidth", SettingUIType::Slider, 0.5f, 0.5f, 4.0f,
@@ -673,14 +730,15 @@ class LightingQualityPatch : public OptimizationPatch {
             LOG_INFO(std::format("[LightingQualityPatch] Shadow multi-sampling: {}x samples, radius {:.3f}", g_shadowSampleCount, g_shadowJitterRadius));
         }
 
-        // Hook: floor/ceiling blur via FinalizePrime
-        if (lightmapBlur > 0 && finalizePrimeAddr != 0 && getVisibleResAddr != 0) {
-            g_floorCeilBlurPasses = lightmapBlur;
+        // Hook: floor/ceiling/object blur via FinalizePrime
+        if ((floorBlur > 0.0f || objectBlur > 0.0f) && finalizePrimeAddr != 0 && getVisibleResAddr != 0) {
+            g_floorCeilBlurStrength = floorBlur;
+            g_objectBlurStrength = objectBlur;
             getVisibleResFunc = reinterpret_cast<GetVisibleRes_t>(getVisibleResAddr);
 
             originalFinalizePrime = reinterpret_cast<FinalizePrime_t>(finalizePrimeAddr);
             hooks.push_back({reinterpret_cast<void**>(&originalFinalizePrime), reinterpret_cast<void*>(&HookedFinalizePrime)});
-            LOG_INFO(std::format("[LightingQualityPatch] Floor/ceiling blur: {} passes", g_floorCeilBlurPasses));
+            LOG_INFO(std::format("[LightingQualityPatch] Floor/ceiling blur: {:.2f}, object blur: {:.2f}", g_floorCeilBlurStrength, g_objectBlurStrength));
         }
 
         // Install all Detours hooks in one transaction
@@ -711,7 +769,8 @@ class LightingQualityPatch : public OptimizationPatch {
             g_adaptiveSampling = false;
             g_fuzzyEdgeWidth = 0.5f;
             originalFinalizePrime = nullptr;
-            g_floorCeilBlurPasses = 0;
+            g_floorCeilBlurStrength = 0.0f;
+            g_objectBlurStrength = 0.0f;
             getVisibleResFunc = nullptr;
         }
 
@@ -736,4 +795,4 @@ REGISTER_PATCH(LightingQualityPatch,
         .technicalDetails = {"Modifies kBaseSubdivision array to increase floor texels-per-tile at all LODs", "Increases wall lightmap dimensions (at kBaseSubdivision+0x30/+0x3C)",
             "Zeroes kSeparateDiagonals[2] to fix UV scale mismatch", "NOPs JZ in CacheLightingParams to force UV cache refresh", "Patches kSoftWallShadows {0,0,1} -> {1,1,1} for soft shadows at all LODs",
             "Hooks LightPointWithAllLights to add multi-sample jittered lighting with per-texel rotation", "NextHigherPow2 patch raises max texture dim to 4096",
-            "Wall blur patches engine's BlurWallLightmaps numBlurs global", "Floor/ceiling blur hooks FinalizePrime for box blur before texture unlock", "Soft shadow width redirects FLD operand in RayCheckOccluders2D"}})
+            "Wall blur patches engine's BlurWallLightmaps numBlurs global", "Floor/ceiling/object blur hooks FinalizePrime with separate strength controls and weighted fractional passes", "Soft shadow width redirects FLD operand in RayCheckOccluders2D"}})
