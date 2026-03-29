@@ -61,8 +61,7 @@ What you probably came here for. A collection of ASM patches to not only improve
   - May increase memory usage
 - **Map View Lot Streaming Blocker** - Prevents lot streaming while in map view, makes going in and out of map a lot less stuttery.
   - Experimental as it has a known issue where the toggle gets stuck on the "don’t load" path. If your lots aren’t loading in, try disabling this first
-- **Disable Online Features** - Prevents the game from initializing online service jobs (SIGS/FolderManager) entirely.
-  - **This means that the FeaturedItems folder no longer fills up**, but other online functionality still remains active. I may revisit this in the future to do a proper patch.
+- **Disable Store Featured Items Download** - Blocks the game from downloading featured store items listings, preventing hte FeaturedItems folder from filling up.
 - **Resolution Spoofer** - Injects fake resolutions (1440p, 4K, 5K, 6K) for downsampling. Makes the game look real good!
   - You’ll want a [mod to fix the UI scaling](https://github.com/just-harry/tiny-ui-fix-for-ts3) as well.
 - **Uncompressed Compositor Textures** - Forces material compositor textures to use uncompressed A8R8G8B8 instead of DXT1/DXT5. Similar to the Sim Textures patch but for other things, like objects. DXVK is recommended to avoid memory issues.
