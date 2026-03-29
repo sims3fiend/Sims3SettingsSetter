@@ -1,6 +1,6 @@
 
 #define S3SS_VERSION_MAJOR 1
-#define S3SS_VERSION_MINOR 4
+#define S3SS_VERSION_MINOR 5
 #define S3SS_VERSION_PATCH 0
 
 // Uncomment this as needed.
