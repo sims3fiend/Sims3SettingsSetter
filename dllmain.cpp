@@ -21,6 +21,7 @@
 #include "config/config_store.h"
 #include "config/migration.h"
 #include "patch_system.h"
+#include "patch_helpers.h"
 
 //Avert thine gaze, I said I was going to make the code clean and I lied
 //https://www.youtube.com/watch?v=C6iAzyhm0p0
@@ -685,6 +686,47 @@ BOOL APIENTRY DllMain(HMODULE hModule, DWORD reason, LPVOID lpReserved) {
         }
 
         LOG_INFO("S3SS: Successfully injected into " + std::string(fileName));
+
+        // CPUID topology fix gotta happen ASAP (synchronously on main thread) before game code can call its CPU topology detection.
+        // The game's detection uses SAR instead of SHR to extract CPUID fields, causing INT_DIVIDE_BY_ZERO on Intel hybrid CPUs (Alder Lake+), very cool!!!!
+        {
+            MODULEINFO modInfo;
+            HMODULE hExe = GetModuleHandleW(nullptr);
+            if (GetModuleInformation(GetCurrentProcess(), hExe, &modInfo, sizeof(modInfo))) {
+                BYTE* base = static_cast<BYTE*>(modInfo.lpBaseOfDll);
+                size_t imgSize = modInfo.SizeOfImage;
+
+                // Replace CALL to CPUID(4) helper with MOV EAX, 1
+                if (auto addr = PatchHelper::ScanPattern(base, imgSize, "89 56 ?? E8 ?? ?? ?? ?? 8B C8 0F B6 44 24 ?? 33 D2 F7 F1")) {
+                    uintptr_t callAddr = addr + 3;
+                    BYTE expected = 0xE8;
+                    if (PatchHelper::ValidateBytes(reinterpret_cast<LPVOID>(callAddr), &expected, 1)) {
+                        BYTE movEax1[] = {0xB8, 0x01, 0x00, 0x00, 0x00};
+                        PatchHelper::WriteProtectedMemory(reinterpret_cast<LPVOID>(callAddr), movEax1, sizeof(movEax1));
+                    }
+                }
+
+                // SAR EAX, 0x1A -> SHR EAX, 0x1A in the helper function
+                if (auto addr = PatchHelper::ScanPattern(base, imgSize, "B8 04 00 00 00 33 C9 0F A2 89 44 24 ?? 8B 44 24 ?? C1 F8 1A")) {
+                    uintptr_t sarAddr = addr + 18;
+                    BYTE expected = 0xF8;
+                    if (PatchHelper::ValidateBytes(reinterpret_cast<LPVOID>(sarAddr), &expected, 1)) {
+                        BYTE shr = 0xE8;
+                        PatchHelper::WriteProtectedMemory(reinterpret_cast<LPVOID>(sarAddr), &shr, 1);
+                    }
+                }
+
+                // SAR EDX, 0x18 -> SHR EDX, 0x18 in the APIC ID extraction loop
+                if (auto addr = PatchHelper::ScanPattern(base, imgSize, "51 C1 FA 18 F6 D0 22 D0")) {
+                    uintptr_t sarAddr = addr + 2;
+                    BYTE expected = 0xFA;
+                    if (PatchHelper::ValidateBytes(reinterpret_cast<LPVOID>(sarAddr), &expected, 1)) {
+                        BYTE shr = 0xEA;
+                        PatchHelper::WriteProtectedMemory(reinterpret_cast<LPVOID>(sarAddr), &shr, 1);
+                    }
+                }
+            }
+        }
 
         g_ThreadHandle = CreateThread(NULL, 0, HookThread, NULL, 0, &g_ThreadId);
         if (g_ThreadHandle == NULL) {

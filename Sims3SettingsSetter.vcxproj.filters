@@ -84,9 +84,6 @@
     <ClCompile Include="patches\startup_warning_dialog_fix_patch.cpp">
       <Filter>patches</Filter>
     </ClCompile>
-    <ClCompile Include="patches\camera_smoother_patch.cpp">
-      <Filter>patches</Filter>
-    </ClCompile>
     <ClCompile Include="patches\lighting_quality_patch.cpp">
       <Filter>patches</Filter>
     </ClCompile>
