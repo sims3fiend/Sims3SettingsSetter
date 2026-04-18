@@ -21,16 +21,25 @@ typedef void(__thiscall* GetVisibleRes_t)(void* lodParams, int* outWidth, int* o
 static GetVisibleRes_t getVisibleResFunc = nullptr;
 
 // Blend pixel toward the average of itself and neighbor, scaled by alpha (0-256).
+// Uses rounded division to avoid systematic darkening bias from truncation.
 static inline DWORD BlendTowardAvg(DWORD a, DWORD b, int alpha256) {
     DWORD result = 0;
     for (int s = 0; s < 32; s += 8) {
         int ca = (a >> s) & 0xFF;
         int cb = (b >> s) & 0xFF;
-        int avg = (ca + cb) >> 1;
-        int blended = ca + ((alpha256 * (avg - ca)) >> 8);
-        result |= (static_cast<DWORD>(blended & 0xFF)) << s;
+        int avg = (ca + cb + 1) >> 1;
+        int diff = avg - ca;
+        int blended = ca + ((alpha256 * diff + 128) >> 8);
+        if (blended < 0) blended = 0;
+        if (blended > 255) blended = 255;
+        result |= (static_cast<DWORD>(blended)) << s;
     }
     return result;
+}
+
+// SWAR floor-average: floor((a+b)/2) per byte, no cross-byte bleed.
+static inline DWORD FloorAvg(DWORD a, DWORD b) {
+    return (a & b) + (((a ^ b) >> 1) & 0x7F7F7F7F);
 }
 
 // Bidirectional box blur on locked ARGB8 texture.
@@ -41,41 +50,29 @@ static void BlurLockedTexture(BYTE* pixels, int pitch, int width, int height, fl
     int fullPasses = static_cast<int>(strength);
     float frac = strength - static_cast<float>(fullPasses);
 
-    // Full-strength passes using fast bitwise average
+    // Full-strength passes using floor-average to avoid brightness drift
     for (int pass = 0; pass < fullPasses; pass++) {
         // Horizontal left-to-right
         for (int y = 0; y < height; y++) {
             DWORD* row = reinterpret_cast<DWORD*>(pixels + y * pitch);
-            for (int x = 0; x < width - 1; x++) {
-                DWORD a = row[x], b = row[x + 1];
-                row[x] = (a | b) - (((a ^ b) >> 1) & 0x7F7F7F7F);
-            }
+            for (int x = 0; x < width - 1; x++) { row[x] = FloorAvg(row[x], row[x + 1]); }
         }
         // Horizontal right-to-left
         for (int y = 0; y < height; y++) {
             DWORD* row = reinterpret_cast<DWORD*>(pixels + y * pitch);
-            for (int x = width - 1; x > 0; x--) {
-                DWORD a = row[x], b = row[x - 1];
-                row[x] = (a | b) - (((a ^ b) >> 1) & 0x7F7F7F7F);
-            }
+            for (int x = width - 1; x > 0; x--) { row[x] = FloorAvg(row[x], row[x - 1]); }
         }
         // Vertical top-to-bottom
         for (int y = 0; y < height - 1; y++) {
             DWORD* row0 = reinterpret_cast<DWORD*>(pixels + y * pitch);
             DWORD* row1 = reinterpret_cast<DWORD*>(pixels + (y + 1) * pitch);
-            for (int x = 0; x < width; x++) {
-                DWORD a = row0[x], b = row1[x];
-                row0[x] = (a | b) - (((a ^ b) >> 1) & 0x7F7F7F7F);
-            }
+            for (int x = 0; x < width; x++) { row0[x] = FloorAvg(row0[x], row1[x]); }
         }
         // Vertical bottom-to-top
         for (int y = height - 1; y > 0; y--) {
             DWORD* row0 = reinterpret_cast<DWORD*>(pixels + y * pitch);
             DWORD* row1 = reinterpret_cast<DWORD*>(pixels + (y - 1) * pitch);
-            for (int x = 0; x < width; x++) {
-                DWORD a = row0[x], b = row1[x];
-                row0[x] = (a | b) - (((a ^ b) >> 1) & 0x7F7F7F7F);
-            }
+            for (int x = 0; x < width; x++) { row0[x] = FloorAvg(row0[x], row1[x]); }
         }
     }
 
@@ -107,6 +104,71 @@ static void BlurLockedTexture(BYTE* pixels, int pitch, int width, int height, fl
     }
 }
 
+// Per-channel brightness sums for energy preservation.
+struct ChannelSums {
+    uint64_t r, g, b;
+};
+
+static ChannelSums ComputeChannelSums(BYTE* pixels, int pitch, int width, int height) {
+    ChannelSums sums = {0, 0, 0};
+    for (int y = 0; y < height; y++) {
+        DWORD* row = reinterpret_cast<DWORD*>(pixels + y * pitch);
+        for (int x = 0; x < width; x++) {
+            DWORD px = row[x];
+            sums.r += (px >> 16) & 0xFF;
+            sums.g += (px >> 8) & 0xFF;
+            sums.b += px & 0xFF;
+        }
+    }
+    return sums;
+}
+
+// Apply per-channel correction to restore pre-blur average brightness.
+static void ApplyBrightnessCorrection(BYTE* pixels, int pitch, int width, int height, const ChannelSums& pre, const ChannelSums& post) {
+    if (post.r == 0 && post.g == 0 && post.b == 0) return;
+
+    // Fixed-point correction factors (256 = 1.0), clamped to avoid extreme corrections
+    auto safeCorr = [](uint64_t preSum, uint64_t postSum) -> uint32_t {
+        if (postSum == 0) return 256;
+        uint32_t corr = static_cast<uint32_t>((preSum * 256 + postSum / 2) / postSum);
+        if (corr > 320) corr = 320; // cap at 1.25x
+        if (corr < 204) corr = 204; // floor at 0.80x
+        return corr;
+    };
+
+    uint32_t corrR = safeCorr(pre.r, post.r);
+    uint32_t corrG = safeCorr(pre.g, post.g);
+    uint32_t corrB = safeCorr(pre.b, post.b);
+
+    if (corrR == 256 && corrG == 256 && corrB == 256) return;
+
+    for (int y = 0; y < height; y++) {
+        DWORD* row = reinterpret_cast<DWORD*>(pixels + y * pitch);
+        for (int x = 0; x < width; x++) {
+            DWORD px = row[x];
+            uint32_t a = (px >> 24) & 0xFF;
+            uint32_t r = (((px >> 16) & 0xFF) * corrR + 128) >> 8;
+            uint32_t g = (((px >> 8) & 0xFF) * corrG + 128) >> 8;
+            uint32_t b = ((px & 0xFF) * corrB + 128) >> 8;
+            if (r > 255) r = 255;
+            if (g > 255) g = 255;
+            if (b > 255) b = 255;
+            row[x] = (a << 24) | (r << 16) | (g << 8) | b;
+        }
+    }
+}
+
+// Energy-preserving blur: applies blur then corrects average brightness to prevent drift.
+static void BlurLockedTexturePreserved(BYTE* pixels, int pitch, int width, int height, float strength) {
+    if (!pixels || width <= 1 || height <= 1 || strength <= 0.0f) return;
+
+    ChannelSums pre = ComputeChannelSums(pixels, pitch, width, height);
+    BlurLockedTexture(pixels, pitch, width, height, strength);
+    ChannelSums post = ComputeChannelSums(pixels, pitch, width, height);
+
+    ApplyBrightnessCorrection(pixels, pitch, width, height, pre, post);
+}
+
 static void __fastcall HookedFinalizePrime(void* thisPtr, void* edx) {
     if ((g_floorCeilBlurStrength > 0.0f || g_objectBlurStrength > 0.0f) && getVisibleResFunc) {
         auto base = reinterpret_cast<uintptr_t>(thisPtr);
@@ -120,17 +182,17 @@ static void __fastcall HookedFinalizePrime(void* thisPtr, void* edx) {
             if (g_floorCeilBlurStrength > 0.0f) {
                 BYTE* floorData = *reinterpret_cast<BYTE**>(base + 0x1C4);
                 int floorPitch = *reinterpret_cast<int*>(base + 0x1C8);
-                if (floorData && floorPitch > 0) { BlurLockedTexture(floorData, floorPitch, visW, visH, g_floorCeilBlurStrength); }
+                if (floorData && floorPitch > 0) { BlurLockedTexturePreserved(floorData, floorPitch, visW, visH, g_floorCeilBlurStrength); }
 
                 BYTE* ceilData = *reinterpret_cast<BYTE**>(base + 0x2B4);
                 int ceilPitch = *reinterpret_cast<int*>(base + 0x2B8);
-                if (ceilData && ceilPitch > 0) { BlurLockedTexture(ceilData, ceilPitch, visW, visH, g_floorCeilBlurStrength); }
+                if (ceilData && ceilPitch > 0) { BlurLockedTexturePreserved(ceilData, ceilPitch, visW, visH, g_floorCeilBlurStrength); }
             }
 
             if (g_objectBlurStrength > 0.0f) {
                 BYTE* objData = *reinterpret_cast<BYTE**>(base + 0x3A4);
                 int objPitch = *reinterpret_cast<int*>(base + 0x3A8);
-                if (objData && objPitch > 0) { BlurLockedTexture(objData, objPitch, visW, visH, g_objectBlurStrength); }
+                if (objData && objPitch > 0) { BlurLockedTexturePreserved(objData, objPitch, visW, visH, g_objectBlurStrength); }
             }
         }
     }
@@ -314,7 +376,7 @@ class LightingQualityPatch : public OptimizationPatch {
   private:
     std::vector<PatchHelper::PatchLocation> patchedLocations;
     std::vector<DetourHelper::Hook> hooks;
-    
+
     int subdivisionMultiplier = 0;
     int wallLightmapMultiplier = 0;
     int softShadows = 0;
@@ -795,4 +857,5 @@ REGISTER_PATCH(LightingQualityPatch,
         .technicalDetails = {"Modifies kBaseSubdivision array to increase floor texels-per-tile at all LODs", "Increases wall lightmap dimensions (at kBaseSubdivision+0x30/+0x3C)",
             "Zeroes kSeparateDiagonals[2] to fix UV scale mismatch", "NOPs JZ in CacheLightingParams to force UV cache refresh", "Patches kSoftWallShadows {0,0,1} -> {1,1,1} for soft shadows at all LODs",
             "Hooks LightPointWithAllLights to add multi-sample jittered lighting with per-texel rotation", "NextHigherPow2 patch raises max texture dim to 4096",
-            "Wall blur patches engine's BlurWallLightmaps numBlurs global", "Floor/ceiling/object blur hooks FinalizePrime with separate strength controls and weighted fractional passes", "Soft shadow width redirects FLD operand in RayCheckOccluders2D"}})
+            "Wall blur patches engine's BlurWallLightmaps numBlurs global", "Floor/ceiling/object blur hooks FinalizePrime with separate strength controls and weighted fractional passes",
+            "Soft shadow width redirects FLD operand in RayCheckOccluders2D"}})
