@@ -14,6 +14,10 @@ class StartupWarningDialogFix : public OptimizationPatch {
         .pattern = "FF 15 ?? ?? ?? ?? 50 FF 15 ?? ?? ?? ?? 8B F0 56 FF 15 ?? ?? ?? ?? E8 ?? ?? ?? ?? 80 B8 A8 02 00 00 00",
         .patternOffset = 7};
 
+    // Wrapper that the game's "unofficial modification" scanner invokes as a callback
+    static inline const AddressInfo warningCallbackWrapperAddressInfo = {
+        .name = "StartupWarningDialogFix::warningCallbackWrapper", .pattern = "83 EC 44 56 8B 74 24 4C 85 F6 0F 84 ?? ?? ?? ?? 53 55 57 6A 01 8D 44 24 48 50 8B CE E8", .expectedBytes = {0x83, 0xEC, 0x44}};
+
     static constexpr uintptr_t offsetOfMessageBoxWCall = 34;
     static constexpr uintptr_t offsetOfPushDialogProcedureAddress = 81;
 
@@ -24,6 +28,7 @@ class StartupWarningDialogFix : public OptimizationPatch {
     static inline int(__stdcall* originalMessageBoxW)(HWND window, const WCHAR* text, const WCHAR* caption, uint32_t flags) = nullptr;
     static inline int(__stdcall* hookedMessageBoxW)(HWND window, const WCHAR* text, const WCHAR* caption, uint32_t flags) = nullptr;
 
+    bool hideDialogue;
     std::vector<PatchHelper::PatchLocation> patchedLocations;
 
     static HWND __stdcall HijackedGetTopWindow(HWND ignoredDesktopWindow) {
@@ -67,12 +72,37 @@ class StartupWarningDialogFix : public OptimizationPatch {
     }
 
   public:
-    StartupWarningDialogFix() : OptimizationPatch("StartupWarningDialogFix", nullptr) {}
+    StartupWarningDialogFix() : OptimizationPatch("StartupWarningDialogFix", nullptr) {
+        RegisterBoolSetting(&hideDialogue, "Hide Dialogue", false, "When enabled, the warning dialog is prevented from appearing at all, rather than being made visible. ");
+    }
+
+    bool InstallHideDialogue() {
+        auto wrapperAddress = warningCallbackWrapperAddressInfo.Resolve();
+        if (!wrapperAddress) { return Fail("Could not resolve warningCallbackWrapper address"); }
+
+        // xor eax, eax ; ret the callback is __cdecl so the caller cleans its one argument
+        const std::vector<BYTE> stub = {0x33, 0xC0, 0xC3};
+
+        auto tx = PatchHelper::BeginTransaction();
+        bool successful = PatchHelper::WriteBytes(*wrapperAddress, stub, &tx.locations);
+
+        if (!successful || !PatchHelper::CommitTransaction(tx)) {
+            PatchHelper::RollbackTransaction(tx);
+            return Fail("Failed to install");
+        }
+
+        patchedLocations = tx.locations;
+        isEnabled = true;
+        LOG_INFO("[StartupWarningDialogFix] Successfully installed (hideDialogue)");
+        return true;
+    }
 
     bool Install() override {
         if (isEnabled) return true;
         lastError.clear();
-        LOG_INFO("[StartupWarningDialogFix] Installing...");
+        LOG_INFO(std::format("[StartupWarningDialogFix] Installing (hideDialogue={})...", hideDialogue));
+
+        if (hideDialogue) { return InstallHideDialogue(); }
 
         auto getTopWindowCallAddress = getTopWindowCallAddressInfo.Resolve();
         if (!getTopWindowCallAddress) { return Fail("Could not resolve getTopWindowCall address"); }
@@ -144,4 +174,5 @@ REGISTER_PATCH(StartupWarningDialogFix, {.displayName = "Startup Warning Dialog 
                                                 "And then even if the dialog is successfully created it may not be visible, or it may be initially hidden behind the game's window.",
                                                 "This patch overrides the logic for selecting the parent window such that either the game's window is the parent, or there is no parent.",
                                                 "Additionally, when the dialog is shown it is made topmost, to ensure that it is visible.",
+                                                "Enable \"Hide Dialogue\" to patch the scanner's callback wrapper to `xor eax, eax; ret`, which prevents the dialog from ever being created.",
                                             }})
