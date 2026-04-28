@@ -155,6 +155,7 @@
     <ClCompile Include="patches\uncompressed_sim_textures_patch.cpp" />
     <ClCompile Include="patches\uncompressed_compositor_patch.cpp" />
     <ClCompile Include="patches\lighting_quality_patch.cpp" />
+    <ClCompile Include="patches\mirror_settings_patch.cpp" />
     <ClCompile Include="patches\worldcache_uncap_patch.cpp" />
     <ClCompile Include="config\migration.cpp" />
     <ClCompile Include="pattern_scan.cpp" />
