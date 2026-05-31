@@ -73,7 +73,7 @@ class StartupWarningDialogFix : public OptimizationPatch {
 
   public:
     StartupWarningDialogFix() : OptimizationPatch("StartupWarningDialogFix", nullptr) {
-        RegisterBoolSetting(&hideDialogue, "Hide Dialogue", false, "When enabled, the warning dialog is prevented from appearing at all, rather than being made visible. ");
+        RegisterBoolSetting(&hideDialogue, "Hide Dialogue", true, "When enabled, the warning dialog is prevented from appearing at all, rather than being made visible. ");
     }
 
     bool InstallHideDialogue() {

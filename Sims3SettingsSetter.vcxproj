@@ -166,6 +166,9 @@
     <ClCompile Include="patches\lot_visibility_camera_patch.cpp" />
     <ClCompile Include="patches\cpu_optimization_patch_register.cpp" />
     <ClCompile Include="patches\createfileW_patch.cpp" />
+    <ClCompile Include="patches\animation_blend_patch.cpp" />
+    <ClCompile Include="patches\split_level_lighting_fix_patch.cpp" />
+    <ClCompile Include="patches\brady_bunch_begone_patch.cpp" />
   </ItemGroup>
   <ItemGroup>
     <None Include="packages.config" />

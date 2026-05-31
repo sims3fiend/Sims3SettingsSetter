@@ -1,4 +1,4 @@
-# Sims 3 Settings Setter v1.5.0
+# Sims 3 Settings Setter v1.6.0
 
 Performance patcher and setting editor for The Sims 3.
 
@@ -41,6 +41,7 @@ What you probably came here for. A collection of ASM patches to not only improve
 - **Startup Warning Dialog Fix\*** - Fixes a mod-related dialog so it always shows up correctly. By ["Just Harry"](https://github.com/just-harry).
   - If you didn’t see the dialog before and see it now, this is unrelated to the patch. You likely have a core mod for a slightly different version of the game. (Steam, EA App and Retail each have different internal version numbers.)
   - The issues with this dialog were intensified by the Windows 11 25H2 update. If the patch isn’t enabled on this version, you’d potentially get a black screen and be unable to enter the game, without the dialog showing up at all.
+  - **Hide Dialogue\*** sub-option patches the scanner callback so the dialog never gets created at all. Enabled by default. If you actually want to see the warning, turn this off and the patch will fall back to just making sure the dialog appears correctly.
 
 ### Diagnostic Patches
 - **Expanded Crash Logs\*** - Enhances the game’s crash logs (`xcpt...txt`) with much deeper diagnostic information. By ["Just Harry"](https://github.com/just-harry).
@@ -52,6 +53,8 @@ What you probably came here for. A collection of ASM patches to not only improve
 - **Uncompressed Sim Textures** - Forces textures for Sims to be uncompressed during gameplay, like they are in CAS.
   - This improves the graphical fidelity of Sims by avoiding lossy compression and by preventing compression artefacts.
   - It is not recommended to use this patch unless you are also using [DXVK](https://github.com/doitsujin/dxvk/releases/latest), as otherwise the game may run out of memory or experience Error 12.
+- **Mirror Reflection Settings** - Tunes how far away mirror reflections stay visible (base distance + size-scaled falloff).
+  - Each visible mirror is its own camera render, so pushing the range out with lots of mirrors in scene will impact performance. Batching patch in the future maybe. Patch idea from [Boring Bones](https://www.tumblr.com/boringbones)
 
 ### Experimental Patches
 - **GC Finalizer Throttle** - Prevents (or tries to) the garbage collector finalizer loop from blocking the simulation thread, reducing large stutters. Increases the frame threshold before triggering the blocking loop and caps it to one batch of finalizers per frame instead of an infinite loop.
@@ -69,10 +72,20 @@ What you probably came here for. A collection of ASM patches to not only improve
   - I highly recommend playing with the various lighting settings in the settings tab alongside this patch.
   - Requires updating lighting to see changes (e.g. by going in/out of map view or turning lights on/off).
   - Some parts require a restart to take effect or will crash if changed in-game.
+- **Split-Level Lighting Fix** - Makes lighting not stop at a single level. Lot-bound lights now contribute across lot/level boundaries in outdoor lighting and terrain lightmaps.
+  - May potentially cause some light near walls/floors to bleed through.
+  - Reload the lot or restart to see the change after toggling.
+  - All credits to Arro on Discord / [Tumblr](https://arro-now.tumblr.com/)!
+  - **Brady Bunch BEGONE** - The engine fills unlit/dim rooms with a fake blue ambient (AKA "Brady Bunch Blue"). This allows it to be tweaked (default patch set it to zero)
+  - Reload the lot or toggle lights for rooms to refresh.
+  - Patch idea from Arro on Discord / [Tumblr](https://arro-now.tumblr.com/)!
 - **WorldCache Size Uncap** - Removes the 512MB limit on WorldCache files. May help with large CC worlds as it prevents cache-churning.
   - May require you to increase the `WorldCompositorCacheSize` and `SimWorldCompositorCacheSize` in `[Your Latest EP install directory (base-game if you have none)]/Default.ini` to have any effect.
   - Might have issues once the cache exceeds 2GB. Let me know if you get a crash when this happens.
   - Still working on this, may replace with a more targeted patch that shouldn’t require a UI mod (using the pseudoresolution setting). This can also crash your game when set too high for your setup. It **may also crash when using other Borderless Fullscreen implementations**, but there’s some special handling to prevent this.
+- **Animation Blend Tuning** - Clamps animation blend (transition) durations to a min/max so transitions that snap can be smoothed out, or slow blends made snappier. Optional `forceBlendOut` makes the engine resolve a blend-out for every animation instead of just ones with the controller's flag set.
+  - Clamps only touch positive durations, the engine's "no override" sentinel passes through untouched.
+  - All credits to @thepancake1!
 
 ## Variable Settings Editor
 Edit "Variable" settings in **real-time** without needing to restart the game.   
@@ -167,13 +180,3 @@ This tool features a modular patch system that makes adding custom patches very 
 All patches auto-register and appear in the GUI, the system handles memory protection, change tracking, and restoration automatically, which makes reverse engineering and patching much simpler. 
 
 See **[patches/README.md](patches/README.md)** for the full guide and breakdown.
-
-# Coming Soon
-**Working on:**
-- Folder-ization of the codebase... desparately needed but I’ve muscle memories where everything is...
-- UI improvements/features
-- D3D9 fun things, I have some stuff using it but it’s very janky so maybe next revision
-- More config values/settings outside of the debugUI ones, things like AA, etc.. There’s no convenient hook point for those however so I’ll have to manually do it... which kind of stinks.
-- More patches, more. more. more. Main one is object throttling. A way to slow down the object loading would be very very very good.
-- Mono....
-- More.

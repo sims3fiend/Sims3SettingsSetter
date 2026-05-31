@@ -90,6 +90,15 @@
     <ClCompile Include="patches\online_nuke_patch.cpp">
       <Filter>patches</Filter>
     </ClCompile>
+    <ClCompile Include="patches\animation_blend_patch.cpp">
+      <Filter>patches</Filter>
+    </ClCompile>
+    <ClCompile Include="patches\split_level_lighting_fix_patch.cpp">
+      <Filter>patches</Filter>
+    </ClCompile>
+    <ClCompile Include="patches\brady_bunch_begone_patch.cpp">
+      <Filter>patches</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="cpu_optimization.h" />
