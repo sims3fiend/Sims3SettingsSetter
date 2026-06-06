@@ -1,6 +1,7 @@
 ﻿#include <windows.h>
 #include <detours/detours.h>
 #include <bit>
+#include <intrin.h>
 #include <sstream>
 #include <string>
 #include <vector>
@@ -532,6 +533,14 @@ HANDLE g_ThreadHandle = NULL;
 DWORD g_ThreadId = 0;
 HMODULE g_hModule = NULL; // Store the DLL module handle
 
+// The CPUID topology fix runs in DllMain, which is before the logger exists, so we strash them here in the interim
+// I should do this for the other logging but probably unneeded...R-right?
+struct DeferredLogEntry {
+    bool isWarning;
+    std::string message;
+};
+static std::vector<DeferredLogEntry> g_deferredTopologyLog;
+
 // Function to get the DLL module handle
 HMODULE GetDllModuleHandle() {
     return g_hModule;
@@ -551,6 +560,16 @@ DWORD WINAPI HookThread(LPVOID lpParameter) {
 #endif
 
         LOG_INFO("Hook thread started");
+
+        // Replay any messages stashed by the CPUID topology fix (ran in DllMain before the logger existed)
+        for (const auto& entry : g_deferredTopologyLog) {
+            if (entry.isWarning) {
+                LOG_WARNING(entry.message);
+            } else {
+                LOG_INFO(entry.message);
+            }
+        }
+        g_deferredTopologyLog.clear();
 
         // 2. Detect game version from PE timestamp
         if (DetectGameVersion()) {
@@ -657,6 +676,78 @@ DWORD WINAPI HookThread(LPVOID lpParameter) {
 
 #include "allocator_hook.h"
 
+// Detect Intel hybrid CPUs (Alder Lake+) — the only parts where the game's CPUID topology extraction trips INT_DIVIDE_BY_ZERO
+// Means it's also the only place the topology fix is actually needed.
+static bool IsIntelHybridCPU() {
+    int regs[4] = {0};
+    __cpuid(regs, 0);
+    unsigned int maxBasic = static_cast<unsigned int>(regs[0]);
+
+    char vendor[13] = {0};
+    std::memcpy(vendor + 0, &regs[1], 4); // EBX
+    std::memcpy(vendor + 4, &regs[3], 4); // EDX
+    std::memcpy(vendor + 8, &regs[2], 4); // ECX
+    if (std::strncmp(vendor, "GenuineIntel", 12) != 0) return false;
+
+    // CPUID.07H:ECX[0]=0 -> EDX[15] is the "Hybrid" flag
+    if (maxBasic >= 7) {
+        __cpuidex(regs, 7, 0);
+        if ((regs[3] >> 15) & 0x1) return true;
+    }
+
+    // Fallback heuristic for old toolchains/microcode. family 6, model >= 0x97 (Alder Lake).
+    __cpuid(regs, 1);
+    int family = ((regs[0] >> 8) & 0xF) + ((regs[0] >> 20) & 0xFF);
+    int model = ((regs[0] >> 4) & 0xF) + ((regs[0] >> 12) & 0xF0);
+    return (family == 6 && model >= 0x97);
+}
+
+namespace { //yuck
+
+// The game's CPU topology detector (FUN_006135e0) extracts unsigned CPUID bitfields with SAR instead of SHR.
+// On Intel hybrid parts cpuid(4).EAX has bit 31 set, so the arithmetic shift sign-extends and the cores-per-package divisor comes out 0 -> INT_DIVIDE_BY_ZERO.
+// Which is not good FYI.
+// Fix is to make those shifts logical. SAR r/m32,imm8 is C1 /7, SHR is C1 /5 - same opcode; the reg field of the ModRM byte differs by bit 0x10 (F8->E8, FA->EA).
+
+// Do NOT patch the CALL->MOV EAX,1 (the old ""fix"").
+// It bypasses the helper, hardcodes the SMT divisor to 1, and silently undercounts cores (even on the hybrid parts!!!)
+// The SHR is the real fix and makes it redundant ;( woops
+
+// :))))
+struct TopologyPatch {
+    const char* pattern;       // signature to locate the patch site
+    size_t offset;             // bytes from match start to the byte to patch
+    std::vector<BYTE> expect;  // sanity-check byte(s) expected at the site
+    std::vector<BYTE> replace; // byte(s) to write
+    const char* desc;
+};
+
+const TopologyPatch kTopologyPatches[] = {
+    // SAR EAX, 0x1A -> SHR EAX, 0x1A  (cores-per-package divisor in the helper)
+    {"B8 04 00 00 00 33 C9 0F A2 89 44 24 ?? 8B 44 24 ?? C1 F8 1A", 18, {0xF8}, {0xE8}, "SAR EAX,0x1A -> SHR (topology divisor)"},
+    // SAR EDX, 0x18 -> SHR EDX, 0x18  (initial APIC ID extraction)
+    {"51 C1 FA 18 F6 D0 22 D0", 2, {0xFA}, {0xEA}, "SAR EDX,0x18 -> SHR (APIC ID)"},
+};
+
+static void ApplyCpuidTopologyFix(BYTE* base, size_t size) {
+    for (const auto& p : kTopologyPatches) {
+        uintptr_t addr = PatchHelper::ScanPattern(base, size, p.pattern);
+        if (!addr) {
+            g_deferredTopologyLog.push_back({true, std::string("CPUID topology fix: pattern NOT found, skipping (") + p.desc + ")"});
+            continue;
+        }
+        // WriteBytes validates `expect` before writing (its own LOG_ERROR on mismatch only hits
+        // OutputDebugString this early, so we also record the outcome here for the log file).
+        if (PatchHelper::WriteBytes(addr + p.offset, p.replace, nullptr, &p.expect)) {
+            g_deferredTopologyLog.push_back({false, std::string("CPUID topology fix: applied ") + p.desc});
+        } else {
+            g_deferredTopologyLog.push_back({true, std::string("CPUID topology fix: write/validate FAILED (") + p.desc + ")"});
+        }
+    }
+}
+
+} // namespace
+
 BOOL APIENTRY DllMain(HMODULE hModule, DWORD reason, LPVOID lpReserved) {
     switch (reason) {
     case DLL_PROCESS_ATTACH: {
@@ -687,45 +778,11 @@ BOOL APIENTRY DllMain(HMODULE hModule, DWORD reason, LPVOID lpReserved) {
 
         LOG_INFO("S3SS: Successfully injected into " + std::string(fileName));
 
-        // CPUID topology fix gotta happen ASAP (synchronously on main thread) before game code can call its CPU topology detection.
-        // The game's detection uses SAR instead of SHR to extract CPUID fields, causing INT_DIVIDE_BY_ZERO on Intel hybrid CPUs (Alder Lake+), very cool!!!!
-        {
+        // CPUID topology fix gotta happen ASAP (synchronously on main thread) before game code can call its CPU topology detection. Gated on hybrid parts since only they can hit the bug.
+        if (IsIntelHybridCPU()) {
+            g_deferredTopologyLog.push_back({false, "S3SS: Intel hybrid CPU detected, applying CPUID topology fix"});
             MODULEINFO modInfo;
-            HMODULE hExe = GetModuleHandleW(nullptr);
-            if (GetModuleInformation(GetCurrentProcess(), hExe, &modInfo, sizeof(modInfo))) {
-                BYTE* base = static_cast<BYTE*>(modInfo.lpBaseOfDll);
-                size_t imgSize = modInfo.SizeOfImage;
-
-                // Replace CALL to CPUID(4) helper with MOV EAX, 1
-                if (auto addr = PatchHelper::ScanPattern(base, imgSize, "89 56 ?? E8 ?? ?? ?? ?? 8B C8 0F B6 44 24 ?? 33 D2 F7 F1")) {
-                    uintptr_t callAddr = addr + 3;
-                    BYTE expected = 0xE8;
-                    if (PatchHelper::ValidateBytes(reinterpret_cast<LPVOID>(callAddr), &expected, 1)) {
-                        BYTE movEax1[] = {0xB8, 0x01, 0x00, 0x00, 0x00};
-                        PatchHelper::WriteProtectedMemory(reinterpret_cast<LPVOID>(callAddr), movEax1, sizeof(movEax1));
-                    }
-                }
-
-                // SAR EAX, 0x1A -> SHR EAX, 0x1A in the helper function
-                if (auto addr = PatchHelper::ScanPattern(base, imgSize, "B8 04 00 00 00 33 C9 0F A2 89 44 24 ?? 8B 44 24 ?? C1 F8 1A")) {
-                    uintptr_t sarAddr = addr + 18;
-                    BYTE expected = 0xF8;
-                    if (PatchHelper::ValidateBytes(reinterpret_cast<LPVOID>(sarAddr), &expected, 1)) {
-                        BYTE shr = 0xE8;
-                        PatchHelper::WriteProtectedMemory(reinterpret_cast<LPVOID>(sarAddr), &shr, 1);
-                    }
-                }
-
-                // SAR EDX, 0x18 -> SHR EDX, 0x18 in the APIC ID extraction loop
-                if (auto addr = PatchHelper::ScanPattern(base, imgSize, "51 C1 FA 18 F6 D0 22 D0")) {
-                    uintptr_t sarAddr = addr + 2;
-                    BYTE expected = 0xFA;
-                    if (PatchHelper::ValidateBytes(reinterpret_cast<LPVOID>(sarAddr), &expected, 1)) {
-                        BYTE shr = 0xEA;
-                        PatchHelper::WriteProtectedMemory(reinterpret_cast<LPVOID>(sarAddr), &shr, 1);
-                    }
-                }
-            }
+            if (GetModuleInformation(GetCurrentProcess(), GetModuleHandleW(nullptr), &modInfo, sizeof(modInfo))) { ApplyCpuidTopologyFix(static_cast<BYTE*>(modInfo.lpBaseOfDll), modInfo.SizeOfImage); }
         }
 
         g_ThreadHandle = CreateThread(NULL, 0, HookThread, NULL, 0, &g_ThreadId);
