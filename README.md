@@ -55,6 +55,8 @@ What you probably came here for. A collection of ASM patches to not only improve
   - Each visible mirror is its own camera render, so pushing the range out with lots of mirrors in scene will impact performance. Batching patch in the future maybe. Patch idea from [Boring Bones](https://www.tumblr.com/boringbones)
 
 ### Experimental Patches
+- **Adaptive Thread Waiting** - Hybrid spin-wait that adapts between 50-500μs based on success rate. Trades a bit of CPU usage for lower frame time variance.
+  - This should be safe but may need adjusting to make more performant, also not really sure it's worth the hassle but it's done now so might as well include it, may re-add stat tracking also
 - **GC Finalizer Throttle** - Prevents (or tries to) the garbage collector finalizer loop from blocking the simulation thread, reducing large stutters. Increases the frame threshold before triggering the blocking loop and caps it to one batch of finalizers per frame instead of an infinite loop.
   - May slightly increase memory usage on very long play sessions
 - **GC_stop_world() Optimization** - Early exit for a GC function called ~once per frame, very minor improvement, driveby patch.
