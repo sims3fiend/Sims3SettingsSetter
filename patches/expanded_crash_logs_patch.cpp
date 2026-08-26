@@ -261,26 +261,48 @@ class ExpandedCrashLogs : public OptimizationPatch {
 
         void AcceptString(const char*) {}
 
+        // writeLine (vtable slot 0x20) takes two arguments instead of just one; every call-site
+        // in the game pushes two and doesn't clean up afterwards, so it's a __thiscall ending in
+        // `ret 8` (0x004d6042 on the EA build). Calling it one argument short leaves ESP skewed
+        // for the rest of the caller. openSection (0x18) and closeSection (0x1C) really are
+        // one-argument, so those were already fine.
+        void AcceptStringAndFlag(const char*, uint32_t) {}
+
+        // What the game passes for an ordinary content line.
+        static constexpr uint32_t ordinaryLine = 1;
+
         void HookedEndOfExceptionReportSections() {
             WriteS3SSSectionsInCrashLog();
+            CallEndOfExceptionReportSectionsChain();
+        }
 
-            uintptr_t nextInChain;
+        void CallEndOfExceptionReportSectionsChain() {
+            // The guard covers the whole dispatch, not just the `unknown5` read. We run at the
+            // tail of the exception-report writer, after the game has dropped its own try-level
+            // to -1, and its handler still has the native minidump to write after we return. Thus
+            // anything escaping here costs the .dmp as well as the end of the log. Unpatched, a
+            // fault here is fatal in the same place anyway, which makes swallowing it strictly
+            // more diagnostics than dying. It can be narrowed to just the read if that trade ever
+            // stops being worth it.
+            __try {
+                uintptr_t nextInChain;
 
-            if (endOfExceptionReportSectionsChain == 0) {
-                nextInChain = this->vtable->unknown5;
-            } else {
-                nextInChain = endOfExceptionReportSectionsChain;
-            }
+                if (endOfExceptionReportSectionsChain == 0) {
+                    nextInChain = this->vtable->unknown5;
+                } else {
+                    nextInChain = endOfExceptionReportSectionsChain;
+                }
 
-            // I hate __thiscall and it hates me!
-            std::mem_fn(std::bit_cast<decltype(&CrashLogObject::HookedEndOfExceptionReportSections)>(nextInChain))(this);
+                // I hate __thiscall and it hates me!
+                std::mem_fn(std::bit_cast<decltype(&CrashLogObject::HookedEndOfExceptionReportSections)>(nextInChain))(this);
+            } __except (EXCEPTION_EXECUTE_HANDLER) {}
         }
 
         void WriteS3SSSectionsInCrashLog() {
             __try {
                 const VTable* vtable = this->vtable;
 
-                std::mem_fn(std::bit_cast<decltype(&CrashLogObject::AcceptString)>(vtable->writeLine))(this, "");
+                std::mem_fn(std::bit_cast<decltype(&CrashLogObject::AcceptStringAndFlag)>(vtable->writeLine))(this, "", ordinaryLine);
                 std::mem_fn(std::bit_cast<decltype(&CrashLogObject::AcceptString)>(vtable->openSection))(this, "S3SS memory statistics");
 
                 char buffer[2048];
@@ -290,12 +312,12 @@ class ExpandedCrashLogs : public OptimizationPatch {
                 buffer[0] = '\r';
                 buffer[1] = '\n';
                 FormatDetailedMemoryReport(buffer + 2, memoryReport);
-                std::mem_fn(std::bit_cast<decltype(&CrashLogObject::AcceptString)>(vtable->writeLine))(this, buffer);
+                std::mem_fn(std::bit_cast<decltype(&CrashLogObject::AcceptStringAndFlag)>(vtable->writeLine))(this, buffer, ordinaryLine);
 
                 std::mem_fn(std::bit_cast<decltype(&CrashLogObject::AcceptString)>(vtable->closeSection))(this, "S3SS memory statistics");
             } __except (EXCEPTION_EXECUTE_HANDLER) {
                 __try {
-                    std::mem_fn(std::bit_cast<decltype(&CrashLogObject::AcceptString)>(this->vtable->writeLine))(this, "<An exception was encountered while writing this section.>");
+                    std::mem_fn(std::bit_cast<decltype(&CrashLogObject::AcceptStringAndFlag)>(this->vtable->writeLine))(this, "<An exception was encountered while writing this section.>", ordinaryLine);
                 } __except (EXCEPTION_EXECUTE_HANDLER) {}
             }
         }
