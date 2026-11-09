@@ -316,6 +316,11 @@ class LotStreamingOptimizationsPatch : public OptimizationPatch {
     bool lsThresholdDone = false;
     bool lsCameraDone = false;
 
+    // Each maintained live setting with the address we last wrote it at (guarded by maintainedWritesMutex).
+    // The game can re-register a setting at a new address: "Camera speed threshold" is a WorldManager member, and the
+    // WorldManager is deleted (unregistering it) and re-created between game sessions, which frees the old address.
+    std::vector<std::pair<const wchar_t*, uintptr_t>> liveSettingAddresses;
+
     bool InstallThrottle() {
         auto entry = addLotObjectsToScene.Resolve();
         auto node = updateObjectSceneNode.Resolve();
@@ -419,7 +424,42 @@ class LotStreamingOptimizationsPatch : public OptimizationPatch {
         return std::vector<BYTE>(b, b + n);
     }
     void MaintainLiveSetting(const wchar_t* name, std::vector<BYTE> desiredBytes) {
-        if (void* addr = LiveSetting::GetAddress(name)) { AddMaintainedWrite(reinterpret_cast<uintptr_t>(addr), std::move(desiredBytes)); }
+        if (void* addr = LiveSetting::GetAddress(name)) {
+            AddMaintainedWrite(reinterpret_cast<uintptr_t>(addr), std::move(desiredBytes));
+            std::lock_guard<std::mutex> lk(maintainedWritesMutex);
+            liveSettingAddresses.push_back({name, reinterpret_cast<uintptr_t>(addr)});
+        }
+    }
+
+    // Follow re-registered live settings to their current address before re-asserting, so we never write to (or later
+    // restore into) the address a setting had when we first applied it.
+    void OnSettingsRefired() override {
+        if (!isEnabled.load()) return;
+        {
+            std::scoped_lock lk(maintainedWritesMutex, PatchHelper::g_patchLocationMutex);
+            for (auto& [name, oldAddr] : liveSettingAddresses) {
+                const uintptr_t newAddr = reinterpret_cast<uintptr_t>(LiveSetting::GetAddress(name));
+                if (newAddr == oldAddr) continue;
+                LOG_INFO(std::format("[LotStreamingOpt] '{}' moved {:#010x} -> {:#010x}", Utils::WideToUtf8(name), oldAddr, newAddr));
+
+                for (auto it = maintainedWrites.begin(); it != maintainedWrites.end();) {
+                    if (it->address != oldAddr) { ++it; continue; }
+                    if (!newAddr) { it = maintainedWrites.erase(it); continue; } // setting gone: stop maintaining it
+                    it->address = newAddr;
+                    ++it;
+                }
+                for (auto it = patchedLocations.begin(); it != patchedLocations.end();) {
+                    if (it->address != oldAddr) { ++it; continue; }
+                    if (!newAddr) { it = patchedLocations.erase(it); continue; }
+                    // Uninstall restores the new object's own value, not the one read from the old object.
+                    it->address = newAddr;
+                    std::memcpy(it->originalBytes.data(), reinterpret_cast<const void*>(newAddr), it->size);
+                    ++it;
+                }
+                oldAddr = newAddr;
+            }
+        }
+        OptimizationPatch::OnSettingsRefired();
     }
 
   public:
@@ -463,6 +503,10 @@ class LotStreamingOptimizationsPatch : public OptimizationPatch {
         LOG_INFO("[LotStreamingOpt] Uninstalling...");
 
         ClearMaintainedWrites(); // stop re-asserting live settings before we restore their originals
+        {
+            std::lock_guard<std::mutex> lk(maintainedWritesMutex);
+            liveSettingAddresses.clear();
+        }
 
         if (!mapViewHooks.empty()) {
             DetourHelper::RemoveHooks(mapViewHooks);
